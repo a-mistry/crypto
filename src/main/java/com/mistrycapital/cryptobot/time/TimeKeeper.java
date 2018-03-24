@@ -9,7 +9,14 @@ public interface TimeKeeper {
 	 * @return Current instant. Implementing classes should choose whether this is real time or simulated
 	 */
 	Instant now();
-	
+
+	/**
+	 * @return Current time in milliseconds since epoch
+	 */
+	default long epochMs() {
+		return now().toEpochMilli();
+	}
+
 	/**
 	 * @return Current time in ISO 8601 format
 	 */
@@ -22,7 +29,7 @@ public interface TimeKeeper {
 			now.getHour(),
 			now.getMinute(),
 			now.getSecond(),
-			now.getNano()/1000L
+			now.getNano() / 1000L
 		);
 	}
 }

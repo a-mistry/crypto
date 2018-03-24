@@ -4,7 +4,12 @@ import java.time.Instant;
 
 public class SystemTimeKeeper implements TimeKeeper {
 	@Override
-	public Instant now() {
+	public final Instant now() {
 		return Instant.now();
+	}
+
+	@Override
+	public final long epochMs() {
+		return System.currentTimeMillis();
 	}
 }

@@ -31,10 +31,12 @@ import jdk.incubator.http.HttpResponse;
 public class TradeCrypto {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
-    private static final String DATA_FILE_NAME = "gdax-orders";
-    private static final String DATA_FILE_EXTENSION = ".json";
+	private static final String DATA_FILE_NAME = "gdax-orders";
+	private static final String DATA_FILE_EXTENSION = ".json";
 
-	public static void main(String[] args) throws Exception {
+	public static void main(String[] args)
+		throws Exception
+	{
 		HttpClient client = HttpClient.newHttpClient();
 		HttpRequest request = HttpRequest.newBuilder()
 			.uri(new URI("https://api.gdax.com/products"))
@@ -51,17 +53,18 @@ public class TradeCrypto {
 		}
 		TimeKeeper timeKeeper = new SystemTimeKeeper();
 		OrderBookManager orderBookManager = new OrderBookManager(timeKeeper);
-		
+
 		WebSocketClient socketClient = new WebSocketClient(new SslContextFactory());
 		final String dataDirString = MCProperties.getProperty("dataDir");
 		log.debug("Saving message data to " + dataDirString);
 		Path dataDir = Paths.get(dataDirString);
-    	FileAppender fileAppender = GdaxMessageAppender.create(dataDir, DATA_FILE_NAME, DATA_FILE_EXTENSION, orderBookManager);
+		FileAppender fileAppender =
+			GdaxMessageAppender.create(dataDir, DATA_FILE_NAME, DATA_FILE_EXTENSION, timeKeeper, orderBookManager);
 		GdaxWebSocket socket = new GdaxWebSocket(timeKeeper, fileAppender);
-		
-		socket.subscribe(new Subscriber<GdaxMessage>() {
+
+		socket.subscribe(new Subscriber<>() {
 			Subscription subscription;
-			
+
 			@Override
 			public void onComplete() {
 			}
@@ -83,22 +86,22 @@ public class TradeCrypto {
 		});
 		socket.subscribe(orderBookManager);
 
-        socketClient.start();
-        URI echoUri = new URI("wss://ws-feed.gdax.com");
-        ClientUpgradeRequest upgradeRequest = new ClientUpgradeRequest();
-        socketClient.connect(socket, echoUri, upgradeRequest);
-        System.out.printf("Connecting to : %s%n", echoUri);
-        
-        //long startMs = System.currentTimeMillis();
-        //while(System.currentTimeMillis() - startMs < 60000L) {
-        while(true) {
-        	Thread.sleep(1000);
+		socketClient.start();
+		URI echoUri = new URI("wss://ws-feed.gdax.com");
+		ClientUpgradeRequest upgradeRequest = new ClientUpgradeRequest();
+		socketClient.connect(socket, echoUri, upgradeRequest);
+		System.out.printf("Connecting to : %s%n", echoUri);
+
+		//long startMs = System.currentTimeMillis();
+		//while(System.currentTimeMillis() - startMs < 60000L) {
+		while(true) {
+			Thread.sleep(1000);
 //        	OrderBook btcBook = orderBookManager.getBook(Product.BTC_USD);
 //        	BBO bbo = btcBook.getBBO();
 //        	log.debug("BTC " + bbo.bidPrice + " (" + bbo.bidSize + ") " + bbo.askPrice + " (" + bbo.askSize + ") ");
-        }
-        //socket.close();
-        //System.exit(0);
+		}
+		//socket.close();
+		//System.exit(0);
 	}
 
 }
