@@ -62,28 +62,6 @@ public class TradeCrypto {
 			new GdaxMessageAppender(dataDir, DATA_FILE_NAME, DATA_FILE_EXTENSION, timeKeeper, orderBookManager);
 		GdaxWebSocket socket = new GdaxWebSocket(timeKeeper, fileAppender);
 
-		socket.subscribe(new Subscriber<>() {
-			Subscription subscription;
-
-			@Override
-			public void onComplete() {
-			}
-
-			@Override
-			public void onError(Throwable e) {
-			}
-
-			@Override
-			public void onNext(GdaxMessage msg) {
-				subscription.request(1);
-			}
-
-			@Override
-			public void onSubscribe(Subscription subscription) {
-				this.subscription = subscription;
-				subscription.request(1);
-			}
-		});
 		socket.subscribe(orderBookManager);
 
 		socketClient.start();
@@ -92,16 +70,10 @@ public class TradeCrypto {
 		socketClient.connect(socket, echoUri, upgradeRequest);
 		System.out.printf("Connecting to : %s%n", echoUri);
 
-		//long startMs = System.currentTimeMillis();
-		//while(System.currentTimeMillis() - startMs < 60000L) {
 		while(true) {
-			Thread.sleep(1000);
-//        	OrderBook btcBook = orderBookManager.getBook(Product.BTC_USD);
-//        	BBO bbo = btcBook.getBBO();
-//        	log.debug("BTC " + bbo.bidPrice + " (" + bbo.bidSize + ") " + bbo.askPrice + " (" + bbo.askSize + ") ");
+			Thread.sleep(60000);
+			log.debug("Heartbeat");
 		}
-		//socket.close();
-		//System.exit(0);
 	}
 
 }

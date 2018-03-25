@@ -25,7 +25,7 @@ class TestOrderBook {
 
 	@Test
 	void shouldCreateGdaxSnapshot() {
-		TimeKeeper timeKeeper = new FakeTimeKeeper(System.currentTimeMillis());
+		TimeKeeper timeKeeper = new FakeTimeKeeper();
 		OrderBook book = new OrderBook(timeKeeper, Product.BTC_USD);
 		GdaxMessageProcessor processor = book.getBookProcessor();
 
@@ -85,7 +85,7 @@ class TestOrderBook {
 
 	@Test
 	void shouldBuildBookAndReadLineData() {
-		TimeKeeper timeKeeper = new FakeTimeKeeper(System.currentTimeMillis());
+		TimeKeeper timeKeeper = new FakeTimeKeeper();
 		OrderBook book = new OrderBook(timeKeeper, Product.BTC_USD);
 		GdaxMessageProcessor processor = book.getBookProcessor();
 

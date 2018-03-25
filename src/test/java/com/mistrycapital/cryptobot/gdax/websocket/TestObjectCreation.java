@@ -35,7 +35,7 @@ class TestObjectCreation {
 		Path logDir = fs.getPath("/logs");
 		Files.createDirectory(logDir);
 
-		TimeKeeper timeKeeper = new FakeTimeKeeper(System.currentTimeMillis());
+		TimeKeeper timeKeeper = new FakeTimeKeeper();
 		GdaxMessageAppender fileAppender =
 			new GdaxMessageAppender(logDir, "orders", "json", timeKeeper, new OrderBookManager(timeKeeper));
 		webSocket = new GdaxWebSocket(timeKeeper, fileAppender);

@@ -58,7 +58,7 @@ class TestGdaxMessageAppender {
 		Path logDir = fs.getPath("/logs");
 		Files.createDirectory(logDir);
 
-		TimeKeeper timeKeeper = new FakeTimeKeeper(System.currentTimeMillis());
+		TimeKeeper timeKeeper = new FakeTimeKeeper();
 		GdaxMessageAppender appender =
 			new GdaxMessageAppender(logDir, "base", ".txt", timeKeeper, new OrderBookManager(timeKeeper));
 		Path logFile = logDir.resolve(appender.getLogFileNameForCurrentTime());
