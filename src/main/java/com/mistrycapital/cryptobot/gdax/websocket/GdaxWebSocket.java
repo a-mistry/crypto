@@ -29,8 +29,6 @@ import jdk.incubator.http.HttpResponse;
 public class GdaxWebSocket extends SubmissionPublisher<GdaxMessage> {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
-	private Session session;
-
 	private final TimeKeeper timeKeeper;
 	private final FileAppender fileAppender;
 	private final HttpClient httpClient;
@@ -39,6 +37,9 @@ public class GdaxWebSocket extends SubmissionPublisher<GdaxMessage> {
 	private final Queue<GdaxMessage>[] pending;
 	private final AtomicBoolean[] building;
 	private final AtomicLong[] sequence;
+
+	private Session session;
+	private volatile boolean connected;
 
 	@SuppressWarnings("unchecked")
 	public GdaxWebSocket(final TimeKeeper timeKeeper, final FileAppender fileAppender) {
@@ -55,19 +56,21 @@ public class GdaxWebSocket extends SubmissionPublisher<GdaxMessage> {
 			building[index] = new AtomicBoolean(false);
 			sequence[index] = new AtomicLong(0L);
 		}
+		connected = false;
 	}
 
-	public void close() {
+	public boolean isConnected() {
+		return connected;
+	}
+
+	public void disconnect() {
 		session.close();
-		try {
-			fileAppender.close();
-		} catch(IOException e) {
-			log.error("Could not close file appender for gdax messages", e);
-		}
+		connected = false;
 	}
 
 	@OnWebSocketConnect
 	public void onConnect(Session session) {
+		connected = true;
 		this.session = session;
 		log.info("Connected to gdax websocket feed");
 		try {
@@ -227,7 +230,7 @@ public class GdaxWebSocket extends SubmissionPublisher<GdaxMessage> {
 	public void onClose(int statusCode, String reason) {
 		log.info("Gdax websocket connection closed " + statusCode + ": " + reason);
 		session = null;
-		System.exit(1);
+		connected = false;
 	}
 
 	public void subscribe(GdaxMessageProcessor processor) {

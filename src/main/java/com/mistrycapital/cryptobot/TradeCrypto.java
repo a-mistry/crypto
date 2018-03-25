@@ -3,8 +3,6 @@ package com.mistrycapital.cryptobot;
 import java.net.URI;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.concurrent.Flow.Subscriber;
-import java.util.concurrent.Flow.Subscription;
 
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.websocket.client.ClientUpgradeRequest;
@@ -13,12 +11,8 @@ import org.slf4j.Logger;
 
 import com.mistrycapital.cryptobot.appender.FileAppender;
 import com.mistrycapital.cryptobot.appender.GdaxMessageAppender;
-import com.mistrycapital.cryptobot.book.BBO;
-import com.mistrycapital.cryptobot.book.OrderBook;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
-import com.mistrycapital.cryptobot.gdax.websocket.GdaxMessage;
 import com.mistrycapital.cryptobot.gdax.websocket.GdaxWebSocket;
-import com.mistrycapital.cryptobot.gdax.websocket.Product;
 import com.mistrycapital.cryptobot.time.SystemTimeKeeper;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
@@ -60,19 +54,35 @@ public class TradeCrypto {
 		Path dataDir = Paths.get(dataDirString);
 		FileAppender fileAppender =
 			new GdaxMessageAppender(dataDir, DATA_FILE_NAME, DATA_FILE_EXTENSION, timeKeeper, orderBookManager);
-		GdaxWebSocket socket = new GdaxWebSocket(timeKeeper, fileAppender);
+		GdaxWebSocket gdaxWebSocket = new GdaxWebSocket(timeKeeper, fileAppender);
 
-		socket.subscribe(orderBookManager);
+		gdaxWebSocket.subscribe(orderBookManager);
 
-		socketClient.start();
-		URI echoUri = new URI("wss://ws-feed.gdax.com");
-		ClientUpgradeRequest upgradeRequest = new ClientUpgradeRequest();
-		socketClient.connect(socket, echoUri, upgradeRequest);
-		System.out.printf("Connecting to : %s%n", echoUri);
+		URI gdaxWebSocketURI = new URI("wss://ws-feed.gdax.com");
 
 		while(true) {
-			Thread.sleep(60000);
-			log.debug("Heartbeat");
+			if(!gdaxWebSocket.isConnected()) {
+				socketClient.stop();
+				socketClient.start();
+				ClientUpgradeRequest upgradeRequest = new ClientUpgradeRequest();
+				socketClient.connect(gdaxWebSocket, gdaxWebSocketURI, upgradeRequest);
+				log.info("Connecting to gdax feed: " + gdaxWebSocketURI);
+				final long startMs = timeKeeper.epochMs();
+				final long timeout = 30000L; // 30 seconds
+				while(!gdaxWebSocket.isConnected() && timeKeeper.epochMs()-startMs<timeout) {
+					Thread.sleep(100);
+				}
+				if(!gdaxWebSocket.isConnected()) {
+					log.error("Timed out trying to connect to gdax websocket feed. Trying again in 5 seconds");
+					Thread.sleep(5000L);
+				}
+			} else {
+				Thread.sleep(1000);
+			}
+//			// kill connection after 10s to test
+//			Thread.sleep(10000L);
+//			gdaxWebSocket.disconnect();
+//			Thread.sleep(5000L);
 		}
 	}
 
