@@ -2,16 +2,13 @@ package com.mistrycapital.cryptobot.book;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.mistrycapital.cryptobot.gdax.websocket.Book;
+import com.mistrycapital.cryptobot.gdax.websocket.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.mistrycapital.cryptobot.gdax.websocket.GdaxMessageProcessor;
-import com.mistrycapital.cryptobot.gdax.websocket.Open;
-import com.mistrycapital.cryptobot.gdax.websocket.Product;
 import com.mistrycapital.cryptobot.time.FakeTimeKeeper;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 
@@ -147,7 +144,98 @@ class TestOrderBook {
 
 	@Test
 	void shouldModifyBook() {
-		// need to test open, change size, change funds, cancel
-		fail("not yet implemented");
+		TimeKeeper timeKeeper = new FakeTimeKeeper();
+		OrderBook book = new OrderBook(timeKeeper, Product.BTC_USD);
+		GdaxMessageProcessor processor = book.getBookProcessor();
+
+		UUID orderId1 = UUID.randomUUID();
+		UUID orderId2 = UUID.randomUUID();
+		UUID orderId3 = UUID.randomUUID();
+		UUID orderId4 = UUID.randomUUID();
+
+		JsonObject msgJson = new JsonObject();
+		msgJson.addProperty("side", "buy");
+		msgJson.addProperty("product_id", "BTC-USD");
+		msgJson.addProperty("time", "2014-11-07T08:19:27.028459Z");
+		msgJson.addProperty("sequence", 10L);
+		msgJson.addProperty("order_id", orderId1.toString());
+		msgJson.addProperty("price", 20.0);
+		msgJson.addProperty("remaining_size", 1.0);
+		processor.process(new Open(msgJson));
+
+		msgJson.addProperty("side", "sell");
+		msgJson.addProperty("order_id", orderId2.toString());
+		msgJson.addProperty("price", 22.0);
+		msgJson.addProperty("remaining_size", 2.0);
+		processor.process(new Open(msgJson));
+		msgJson.addProperty("order_id", orderId3.toString());
+		msgJson.addProperty("price", 22.0);
+		msgJson.addProperty("remaining_size", 0.5);
+		processor.process(new Open(msgJson));
+		msgJson.addProperty("order_id", orderId4.toString());
+		msgJson.addProperty("price", 23.0);
+		msgJson.addProperty("remaining_size", 3.14);
+		processor.process(new Open(msgJson));
+
+		BBO bbo = book.getBBO();
+		assertEquals(20.0, bbo.bidPrice, EPSILON);
+		assertEquals(22.0, bbo.askPrice, EPSILON);
+		assertEquals(1.0, bbo.bidSize, EPSILON);
+		assertEquals(2.5, bbo.askSize, EPSILON);
+
+		// modify size on top of book
+		msgJson = new JsonObject();
+		msgJson.addProperty("side", "sell");
+		msgJson.addProperty("product_id", "BTC-USD");
+		msgJson.addProperty("time", "2014-11-07T08:19:27.028459Z");
+		msgJson.addProperty("sequence", 10L);
+		msgJson.addProperty("order_id", orderId2.toString());
+		msgJson.addProperty("price", 22.0);
+		msgJson.addProperty("old_size", 2.0);
+		msgJson.addProperty("new_size", 3.0);
+		processor.process(new ChangeSize(msgJson));
+
+		bbo = new BBO();
+		book.recordBBO(bbo);
+		assertEquals(20.0, bbo.bidPrice, EPSILON);
+		assertEquals(22.0, bbo.askPrice, EPSILON);
+		assertEquals(1.0, bbo.bidSize, EPSILON);
+		assertEquals(3.5, bbo.askSize, EPSILON);
+		assertEquals(21.0, bbo.midPrice(), EPSILON);
+		assertEquals(3.5+3.14, book.getAskSize(), EPSILON);
+
+		// fill order
+		msgJson = new JsonObject();
+		msgJson.addProperty("side", "sell");
+		msgJson.addProperty("product_id", "BTC-USD");
+		msgJson.addProperty("time", "2014-11-07T08:19:27.028459Z");
+		msgJson.addProperty("sequence", 10L);
+		msgJson.addProperty("order_id", orderId2.toString());
+		msgJson.addProperty("price", 22.0);
+		msgJson.addProperty("remaining_size", 0.0);
+		msgJson.addProperty("reason", "filled");
+		processor.process(new Done(msgJson));
+
+		book.recordBBO(bbo);
+		assertEquals(20.0, bbo.bidPrice, EPSILON);
+		assertEquals(22.0, bbo.askPrice, EPSILON);
+		assertEquals(1.0, bbo.bidSize, EPSILON);
+		assertEquals(0.5, bbo.askSize, EPSILON);
+		assertEquals(21.0, bbo.midPrice(), EPSILON);
+		assertEquals(0.5+3.14, book.getAskSize(), EPSILON);
+
+		// cancel order
+		msgJson.addProperty("order_id", orderId3.toString());
+		msgJson.addProperty("remaining_size", 0.5);
+		msgJson.addProperty("reason", "canceled");
+		processor.process(new Done(msgJson));
+
+		book.recordBBO(bbo);
+		assertEquals(20.0, bbo.bidPrice, EPSILON);
+		assertEquals(23.0, bbo.askPrice, EPSILON);
+		assertEquals(1.0, bbo.bidSize, EPSILON);
+		assertEquals(3.14, bbo.askSize, EPSILON);
+		assertEquals(21.5, bbo.midPrice(), EPSILON);
+		assertEquals(3.14, book.getAskSize(), EPSILON);
 	}
 }

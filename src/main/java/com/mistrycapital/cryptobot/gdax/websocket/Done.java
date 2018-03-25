@@ -12,7 +12,7 @@ public class Done extends OrderGdaxMessage {
 	/** Reason done - cancelled or filled */
 	private final Reason reason;
 
-	Done(JsonObject json) {
+	public Done(JsonObject json) {
 		super(json);
 		isLimitOrder = json.has("price");
 		if(isLimitOrder) {

@@ -10,7 +10,7 @@ public class ChangeSize extends OrderGdaxMessage {
 	/** New size */
 	private final double newSize;
 
-	ChangeSize(JsonObject json) {
+	public ChangeSize(JsonObject json) {
 		super(json);
 		if(json.has("price")) {
 			price = Double.parseDouble(json.get("price").getAsString());
