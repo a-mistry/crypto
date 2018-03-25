@@ -27,7 +27,24 @@ public class GdaxMessageAppender implements FileAppender {
 	private long nextHourMillis;
 	private BufferedWriter writer;
 
-	private GdaxMessageAppender(final Path logDir, final String baseFilename, String extension,
+	/**
+	 * Creates a new appender and opens the output file for writing. This appender will
+	 * <ul>
+	 * <li>Write a new file every hour</li>
+	 * <li>New files start with the order book snapshot for each product</li>
+	 * <li>Archive old files into one zip per date</li>
+	 * <li>The filename of the log is baseFilename-yyyy-mm-dd-HH-extension</li>
+	 * <li>The zip file per day will be baseFilename-yyyy-mm-dd.zip</li>
+	 * </ul>
+	 *
+	 * @param logDir           Directory to put the log file
+	 * @param baseFilename     Filename to append to
+	 * @param extension        Extension of the file (can include or exclude the period)
+	 * @param timeKeeper       Used to keep track of what file to write to
+	 * @param orderBookManager Used to get order book snapshots at the start of a new file
+	 * @throws IOException
+	 */
+	public GdaxMessageAppender(final Path logDir, final String baseFilename, String extension,
 		final TimeKeeper timeKeeper, final OrderBookManager orderBookManager)
 		throws IOException
 	{
@@ -40,13 +57,6 @@ public class GdaxMessageAppender implements FileAppender {
 		this.timeKeeper = timeKeeper;
 		this.orderBookManager = orderBookManager;
 		openNewHourFile();
-	}
-
-	public static GdaxMessageAppender create(final Path logDir, final String baseFilename, final String extension,
-		final TimeKeeper timeKeeper, final OrderBookManager orderBookManager)
-		throws IOException
-	{
-		return new GdaxMessageAppender(logDir, baseFilename, extension, timeKeeper, orderBookManager);
 	}
 
 	/**
@@ -71,10 +81,10 @@ public class GdaxMessageAppender implements FileAppender {
 	 *
 	 * @return true if we rolled to a new file
 	 */
-	private boolean rollIfNeeded()
+	public boolean rollIfNeeded()
 		throws IOException
 	{
-		if(System.currentTimeMillis() < nextHourMillis) {
+		if(timeKeeper.epochMs() < nextHourMillis) {
 			return false;
 		}
 
@@ -97,19 +107,15 @@ public class GdaxMessageAppender implements FileAppender {
 			writer.close();
 		}
 
-		final long curMillis = System.currentTimeMillis();
-		final Path logFile = logDir.resolve(getLogFileName(curMillis));
-		writer = Files
-			.newBufferedWriter(logFile, StandardCharsets.UTF_8, StandardOpenOption.CREATE,
-				StandardOpenOption.APPEND,
-				StandardOpenOption.WRITE);
+		final Path logFile = logDir.resolve(getLogFileNameForCurrentTime());
+		writer = Files.newBufferedWriter(logFile, StandardCharsets.UTF_8, StandardOpenOption.CREATE,
+			StandardOpenOption.APPEND, StandardOpenOption.WRITE);
 
-		nextHourMillis = calcNextHourMillis(curMillis);
+		nextHourMillis = calcNextHourMillis(timeKeeper.epochMs());
 	}
 
-	String getLogFileName(long timeInMillis) {
-		final Instant instant = Instant.ofEpochMilli(timeInMillis);
-		ZonedDateTime dateTime = ZonedDateTime.ofInstant(instant, ZoneOffset.UTC);
+	String getLogFileNameForCurrentTime() {
+		ZonedDateTime dateTime = ZonedDateTime.ofInstant(timeKeeper.now(), ZoneOffset.UTC);
 
 		StringBuilder builder = new StringBuilder();
 		builder.append(baseFilename);

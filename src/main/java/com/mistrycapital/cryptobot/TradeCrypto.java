@@ -59,7 +59,7 @@ public class TradeCrypto {
 		log.debug("Saving message data to " + dataDirString);
 		Path dataDir = Paths.get(dataDirString);
 		FileAppender fileAppender =
-			GdaxMessageAppender.create(dataDir, DATA_FILE_NAME, DATA_FILE_EXTENSION, timeKeeper, orderBookManager);
+			new GdaxMessageAppender(dataDir, DATA_FILE_NAME, DATA_FILE_EXTENSION, timeKeeper, orderBookManager);
 		GdaxWebSocket socket = new GdaxWebSocket(timeKeeper, fileAppender);
 
 		socket.subscribe(new Subscriber<>() {

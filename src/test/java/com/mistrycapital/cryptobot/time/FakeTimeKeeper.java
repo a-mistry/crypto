@@ -5,14 +5,14 @@ import java.time.Instant;
 public class FakeTimeKeeper implements TimeKeeper {
 	private Instant now;
 	
-	public FakeTimeKeeper(Instant now) {
-		this.now = now;
+	public FakeTimeKeeper(long epochMs) {
+		now = Instant.ofEpochMilli(epochMs);
 	}
 	
-	public void setTime(Instant now) {
-		this.now = now;
+	public void setTime(long epochMs) {
+		now = Instant.ofEpochMilli(epochMs);
 	}
-	
+
 	@Override
 	public Instant now() {
 		return now;

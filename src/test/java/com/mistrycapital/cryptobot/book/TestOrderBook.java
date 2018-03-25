@@ -17,7 +17,7 @@ import com.mistrycapital.cryptobot.time.TimeKeeper;
 import java.time.Instant;
 import java.util.UUID;
 
-public class TestOrderBook {
+class TestOrderBook {
 	private static final double EPSILON = 0.00000001;
 	
 	@BeforeEach
@@ -26,7 +26,7 @@ public class TestOrderBook {
 
 	@Test
 	void shouldCreateGdaxSnapshot() {
-		TimeKeeper timeKeeper = new FakeTimeKeeper(Instant.now());
+		TimeKeeper timeKeeper = new FakeTimeKeeper(System.currentTimeMillis());
 		OrderBook book = new OrderBook(timeKeeper, Product.BTC_USD);
 		GdaxMessageProcessor processor = book.getBookProcessor();
 		

@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import com.mistrycapital.cryptobot.gdax.websocket.OrderSide;
 
-public class TestOrderLine {
+class TestOrderLine {
 	static double EPSILON = 0.00000001;
 
 	@Test
