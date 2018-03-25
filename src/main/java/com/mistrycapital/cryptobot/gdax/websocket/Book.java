@@ -5,22 +5,14 @@ import java.util.UUID;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
-public class Book implements GdaxMessage {
-	/** UTC time in microseconds */
-	private final long timeMicros;
-	/** Product */
-	private final Product product;
-	/** Sequence number */
-	private final long sequence;
+public class Book extends CommonGdaxMessage {
 	/** Bids */
 	private final Order[] bids;
 	/** Asks */
 	private final Order[] asks;
 	
-	public Book(final JsonObject json, final Product product) {
-		this.product = product;
-		timeMicros = System.currentTimeMillis()*1000L;
-		sequence = json.get("sequence").getAsLong();
+	public Book(final JsonObject json) {
+		super(json);
 		bids = parseOrderArray(json.get("bids").getAsJsonArray());
 		asks = parseOrderArray(json.get("asks").getAsJsonArray());
 	}
@@ -47,21 +39,6 @@ public class Book implements GdaxMessage {
 		processor.process(this);
 	}
 
-	@Override
-	public Product getProduct() {
-		return product;
-	}
-
-	@Override
-	public long getTimeMicros() {
-		return timeMicros;
-	}
-
-	@Override
-	public long getSequence() {
-		return sequence;
-	}
-	
 	public Order[] getBids() {
 		return bids;
 	}
@@ -70,19 +47,6 @@ public class Book implements GdaxMessage {
 		return asks;
 	}
 
-	@Override
-	public String toString() {
-		StringBuilder builder = new StringBuilder();
-		builder.append(getType().toString());
-		builder.append(" message received at ");
-		builder.append(timeMicros);
-		builder.append(" sequence ");
-		builder.append(sequence);
-		builder.append(" for ");
-		builder.append(product);
-		return builder.toString();
-	}
-	
 	public class Order {
 		public final UUID orderId;
 		public final double price;

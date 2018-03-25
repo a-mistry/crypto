@@ -204,11 +204,12 @@ public class GdaxWebSocket extends SubmissionPublisher<GdaxMessage> {
 	    		    	} catch(IOException e) {
 	    		    		throw new RuntimeException("Could not write level 3 book data " + body, e);
 	    		    	}
-	    				Book message = new Book(json, product);
-	    				json = null; // mark for GC
+	    				Book message = new Book(json);
+						json = null; // mark for GC
 	    				submit(message);
 	    				sequence[product.getIndex()].set(message.getSequence());
 	    				building[product.getIndex()].set(false);
+						message = null; // mark for GC
 	    			});
 	    		
     		} catch(URISyntaxException e) {

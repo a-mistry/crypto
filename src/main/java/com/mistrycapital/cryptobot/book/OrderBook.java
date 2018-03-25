@@ -23,7 +23,7 @@ import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 
 public class OrderBook {
 	private static final Logger log = MCLoggerFactory.getLogger();
-	
+
 	/** Tolerance for equating two prices */
 	static final double PRICE_EPSILON = 0.00000001;
 
@@ -36,7 +36,7 @@ public class OrderBook {
 	private final BookProcessor bookProcessor;
 
 	private long sequence;
-	
+
 	public OrderBook(final TimeKeeper timeKeeper, final Product product) {
 		this.timeKeeper = timeKeeper;
 		this.product = product;
@@ -44,25 +44,31 @@ public class OrderBook {
 		asks = new OrderLineList(true);
 		activeOrders = new HashMap<>(10000);
 		orderPool = new ArrayDeque<>(1000);
-		for(int i=0; i<1000; i++) {
+		for(int i = 0; i < 1000; i++) {
 			orderPool.add(new Order());
 		}
 		bookProcessor = new BookProcessor();
 	}
-	
+
 	public GdaxMessageProcessor getBookProcessor() {
 		return bookProcessor;
 	}
-	
+
 	//////////////////////////////////////////////////////
 	// READ BOOK
 
+	/**
+	 * @return Top of book
+	 */
 	public synchronized BBO getBBO() {
 		BBO bbo = new BBO();
 		recordBBO(bbo);
 		return bbo;
 	}
-	
+
+	/**
+	 * Records top of book to the given object
+	 */
 	public synchronized void recordBBO(BBO bbo) {
 		bbo.bidPrice = bids.getFirstPrice();
 		bbo.bidSize = bids.getFirstSize();
@@ -76,7 +82,7 @@ public class OrderBook {
 	public synchronized int getBidCount() {
 		return bids.getCountBeforePrice(0.0);
 	}
-	
+
 	/**
 	 * @return Number of ask orders
 	 */
@@ -111,19 +117,45 @@ public class OrderBook {
 	public synchronized double getAskSize() {
 		return asks.getSizeBeforePrice(Double.MAX_VALUE);
 	}
-	
+
 	/**
 	 * @return Total size of bids whose price is greater than or equal to the given price
 	 */
 	public synchronized double getBidSizeGEPrice(double price) {
 		return bids.getSizeBeforePrice(price);
 	}
-	
+
 	/**
 	 * @return Total size of asks whose price is lower than or equal to the given price
 	 */
 	public synchronized double getAskSizeLEPrice(double price) {
 		return asks.getSizeBeforePrice(price);
+	}
+
+	/**
+	 * Record top of book and depth of book. For depth, takes as input an array of objects. For each object,
+	 * fills in the counts and sizes of orders that are within the given percentage from the midpoint.
+	 *
+	 * This is a significantly more efficient method for getting multiple pieces of book data than querying
+	 * individually since the synchronization cost is paid once.
+	 *
+	 * @param bbo    Best bid/offer object to record
+	 * @param depths Array of depth objects with the pctFromMid given. The remaining fields will be filled
+	 */
+	public synchronized void recordDepthsAndBBO(BBO bbo, Depth[] depths) {
+		recordBBO(bbo);
+
+		final double mid = bbo.midPrice();
+		for(int i = 0; i < depths.length; i++) {
+			final Depth depth = depths[i];
+			final double pct = depth.pctFromMid;
+			final double bidThreshold = mid * (1.0 - pct);
+			final double askThreshold = mid * (1.0 + pct);
+			depth.bidCount = bids.getCountBeforePrice(bidThreshold);
+			depth.askCount = asks.getCountBeforePrice(askThreshold);
+			depth.bidSize = bids.getSizeBeforePrice(bidThreshold);
+			depth.askSize = asks.getSizeBeforePrice(askThreshold);
+		}
 	}
 
 	/**
@@ -176,29 +208,32 @@ public class OrderBook {
 		builder.append("\",\"type\":\"book\"}");
 		return builder.toString();
 	}
-	
+
 	//////////////////////////////////////////////////////
 	// MODIFY BOOK
-	
+
 	/**
 	 * Inserts a new order into the book from the given Open message
 	 */
 	private synchronized void insert(final Open msg) {
-		insertNonSynchronized(msg.getOrderId(), msg.getPrice(), msg.getRemainingSize(), msg.getTimeMicros(), msg.getOrderSide());
+		insertNonSynchronized(msg.getOrderId(), msg.getPrice(), msg.getRemainingSize(), msg.getTimeMicros(),
+			msg.getOrderSide());
 	}
-	
+
 	/**
 	 * Helper function to insert a new order.
 	 * NOTE: For thread safety, this method MUST be called from a synchronized method
 	 */
-	private void insertNonSynchronized(final UUID orderId, final double price, final double size, final long timeMicros, final OrderSide side) {
+	private void insertNonSynchronized(final UUID orderId, final double price, final double size, final long timeMicros,
+		final OrderSide side)
+	{
 		// get order object first
 		if(orderPool.isEmpty()) {
 			orderPool.add(new Order());
 		}
 		Order order = orderPool.remove();
 		order.reset(orderId, price, size, timeMicros, side);
-		
+
 		// now add to map and to order line
 		activeOrders.put(order.getId(), order);
 		final OrderLine line;
@@ -231,7 +266,7 @@ public class OrderBook {
 			orderPool.add(order);
 		}
 	}
-	
+
 	/**
 	 * Clears out any existing values and rebuilds the book from the given Book message
 	 */
@@ -244,17 +279,19 @@ public class OrderBook {
 		activeOrders.clear();
 		bids.clear();
 		asks.clear();
-		
-		// now add orders
-		// note that since level 3 does not give us the times, we will use the current time as a best approximation
+
+		// note that since level 3 does not give us the times, we will use the time of book message as a best
+		// approximation
 		for(Book.Order bookOrder : book.getBids()) {
-			insertNonSynchronized(bookOrder.orderId, bookOrder.price, bookOrder.size, System.currentTimeMillis()*1000L, OrderSide.BUY);
+			insertNonSynchronized(bookOrder.orderId, bookOrder.price, bookOrder.size, book.getTimeMicros(),
+				OrderSide.BUY);
 		}
 		for(Book.Order bookOrder : book.getAsks()) {
-			insertNonSynchronized(bookOrder.orderId, bookOrder.price, bookOrder.size, System.currentTimeMillis()*1000L, OrderSide.SELL);
+			insertNonSynchronized(bookOrder.orderId, bookOrder.price, bookOrder.size, book.getTimeMicros(),
+				OrderSide.SELL);
 		}
 	}
-	
+
 	@Override
 	public String toString() {
 		return product + " Book";

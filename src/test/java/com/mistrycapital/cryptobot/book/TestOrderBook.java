@@ -2,6 +2,7 @@ package com.mistrycapital.cryptobot.book;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.mistrycapital.cryptobot.gdax.websocket.Book;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -14,26 +15,24 @@ import com.mistrycapital.cryptobot.gdax.websocket.Product;
 import com.mistrycapital.cryptobot.time.FakeTimeKeeper;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 
+import javax.crypto.EncryptedPrivateKeyInfo;
+import java.io.IOException;
 import java.time.Instant;
 import java.util.UUID;
 
 class TestOrderBook {
 	private static final double EPSILON = 0.00000001;
-	
-	@BeforeEach
-	void setUp() throws Exception {
-	}
 
 	@Test
 	void shouldCreateGdaxSnapshot() {
 		TimeKeeper timeKeeper = new FakeTimeKeeper(System.currentTimeMillis());
 		OrderBook book = new OrderBook(timeKeeper, Product.BTC_USD);
 		GdaxMessageProcessor processor = book.getBookProcessor();
-		
+
 		UUID orderId1 = UUID.randomUUID();
 		UUID orderId2 = UUID.randomUUID();
 		UUID orderId3 = UUID.randomUUID();
-		
+
 		JsonObject msgJson = new JsonObject();
 		msgJson.addProperty("side", "buy");
 		msgJson.addProperty("product_id", "BTC-USD");
@@ -43,18 +42,18 @@ class TestOrderBook {
 		msgJson.addProperty("price", 20.0);
 		msgJson.addProperty("remaining_size", 1.0);
 		processor.process(new Open(msgJson));
-		
+
 		msgJson.addProperty("order_id", orderId2.toString());
 		msgJson.addProperty("price", 18.0);
 		msgJson.addProperty("remaining_size", 0.5);
 		processor.process(new Open(msgJson));
-		
+
 		msgJson.addProperty("order_id", orderId3.toString());
 		msgJson.addProperty("price", 22.0);
 		msgJson.addProperty("remaining_size", 1.75);
 		msgJson.addProperty("side", "sell");
 		processor.process(new Open(msgJson));
-		
+
 		String result = book.getGdaxSnapshot();
 		JsonObject json = new JsonParser().parse(result).getAsJsonObject();
 		assertEquals(timeKeeper.iso8601(), json.get("time").getAsString());
@@ -82,5 +81,73 @@ class TestOrderBook {
 		assertEquals(22.0, order.get(0).getAsDouble(), EPSILON);
 		assertEquals(1.75, order.get(1).getAsDouble(), EPSILON);
 		assertEquals(orderId3.toString(), order.get(2).getAsString());
+	}
+
+	@Test
+	void shouldBuildBookAndReadLineData() {
+		TimeKeeper timeKeeper = new FakeTimeKeeper(System.currentTimeMillis());
+		OrderBook book = new OrderBook(timeKeeper, Product.BTC_USD);
+		GdaxMessageProcessor processor = book.getBookProcessor();
+
+		JsonObject json = new JsonParser().parse("{\n" +
+			"    \"time\": \"2014-11-07T08:19:27.028459Z\",\n" +
+			"    \"product_id\": \"BCH-USD\",\n" +
+			"    \"sequence\": 3,\n" +
+			"    \"bids\": [\n" +
+			"        [ \"295.96\",\"0.05088265\",\"3b0f1225-7f84-490b-a29f-0faef9de823a\" ],\n" +
+			"        [ \"293.96\",\"1.05088265\",\"4b0f1225-7f84-490b-a29f-0faef9de823a\" ],\n" +
+			"        [ \"290.96\",\"5.05088265\",\"5b0f1225-7f84-490b-a29f-0faef9de823a\" ]\n" +
+			"    ],\n" +
+			"    \"asks\": [\n" +
+			"        [ \"295.97\",\"5.72036512\",\"da863862-25f4-4868-ac41-005d11ab0a5f\" ],\n" +
+			"        [ \"296.97\",\"6.72036512\",\"aa863862-25f4-4868-ac41-005d11ab0a5f\" ]\n" +
+			"    ]\n" +
+			"}").getAsJsonObject();
+		processor.process(new Book(json));
+
+		BBO bbo = book.getBBO();
+		assertEquals(295.96, bbo.bidPrice, EPSILON);
+		assertEquals(295.97, bbo.askPrice, EPSILON);
+		assertEquals(0.05088265, bbo.bidSize, EPSILON);
+		assertEquals(5.72036512, bbo.askSize, EPSILON);
+
+		assertEquals(3, book.getBidCount());
+		assertEquals(2, book.getAskCount());
+		assertEquals(0.05088265 * 3 + 6, book.getBidSize(), EPSILON);
+		assertEquals(0.72036512 * 2 + 11, book.getAskSize(), EPSILON);
+
+		assertEquals(2, book.getBidCountGEPrice(292.0));
+		assertEquals(1, book.getAskCountLEPrice(296.0));
+		assertEquals(0.05088265 * 2 + 1, book.getBidSizeGEPrice(292.0), EPSILON);
+		assertEquals(5.72036512, book.getAskSizeLEPrice(296.0), EPSILON);
+
+		// verify efficient depth calcs
+		bbo = new BBO();
+		Depth[] depths = new Depth[2];
+		depths[0] = new Depth();
+		depths[0].pctFromMid = 296.0 / 295.965 - 1.0;
+		depths[1] = new Depth();
+		depths[1].pctFromMid = 1.0 - 292.0 / 295.965;
+		book.recordDepthsAndBBO(bbo, depths);
+
+		assertEquals(295.96, bbo.bidPrice, EPSILON);
+		assertEquals(295.97, bbo.askPrice, EPSILON);
+		assertEquals(0.05088265, bbo.bidSize, EPSILON);
+		assertEquals(5.72036512, bbo.askSize, EPSILON);
+
+		assertEquals(1, depths[0].bidCount);
+		assertEquals(1, depths[0].askCount);
+		assertEquals(0.05088265, depths[0].bidSize, EPSILON);
+		assertEquals(5.72036512, depths[0].askSize, EPSILON);
+		assertEquals(2, depths[1].bidCount);
+		assertEquals(2, depths[1].askCount);
+		assertEquals(0.05088265 * 2 + 1, depths[1].bidSize, EPSILON);
+		assertEquals(0.72036512 * 2 + 11, depths[1].askSize, EPSILON);
+	}
+
+	@Test
+	void shouldModifyBook() {
+		// need to test open, change size, change funds, cancel
+		fail("not yet implemented");
 	}
 }

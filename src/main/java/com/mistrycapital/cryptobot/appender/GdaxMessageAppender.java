@@ -32,9 +32,7 @@ public class GdaxMessageAppender implements FileAppender {
 	 * <ul>
 	 * <li>Write a new file every hour</li>
 	 * <li>New files start with the order book snapshot for each product</li>
-	 * <li>Archive old files into one zip per date</li>
 	 * <li>The filename of the log is baseFilename-yyyy-mm-dd-HH-extension</li>
-	 * <li>The zip file per day will be baseFilename-yyyy-mm-dd.zip</li>
 	 * </ul>
 	 *
 	 * @param logDir           Directory to put the log file

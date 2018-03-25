@@ -215,7 +215,7 @@ class TestObjectCreation {
 				assertEquals(Type.UNKNOWN, unknown.getType());
 				assertEquals(Product.BTC_USD, unknown.getProduct());
 				assertEquals(10L, unknown.getSequence());
-
+				assertEquals(1415348367028459L, unknown.getTimeMicros());
 			});
 	}
 
@@ -228,9 +228,10 @@ class TestObjectCreation {
 
 	@Test
 	void shouldCreateBook() {
-		long startMs = System.currentTimeMillis();
 		JsonObject json = new JsonParser().parse("{\n" +
-			"    \"sequence\": \"3\",\n" +
+			"    \"time\": \"2014-11-07T08:19:27.028459Z\",\n" +
+			"    \"product_id\": \"BCH-USD\",\n" +
+			"    \"sequence\": 3,\n" +
 			"    \"bids\": [\n" +
 			"        [ \"295.96\",\"0.05088265\",\"3b0f1225-7f84-490b-a29f-0faef9de823a\" ]\n" +
 			"    ],\n" +
@@ -239,10 +240,10 @@ class TestObjectCreation {
 			"        [ \"296.97\",\"6.72036512\",\"aa863862-25f4-4868-ac41-005d11ab0a5f\" ]\n" +
 			"    ]\n" +
 			"}").getAsJsonObject();
-		Book book = new Book(json, Product.BCH_USD);
+		Book book = new Book(json);
 		assertEquals(Type.BOOK, book.getType());
 		assertEquals(Product.BCH_USD, book.getProduct());
-		assertTrue(book.getTimeMicros() >= startMs * 1000L);
+		assertEquals(1415348367028459L, book.getTimeMicros());
 		assertEquals(3L, book.getSequence());
 		Book.Order[] orders = book.getBids();
 		assertEquals(1, orders.length);
