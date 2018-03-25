@@ -10,10 +10,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.eclipse.jetty.websocket.api.Session;
-import org.eclipse.jetty.websocket.api.annotations.OnWebSocketConnect;
-import org.eclipse.jetty.websocket.api.annotations.OnWebSocketError;
-import org.eclipse.jetty.websocket.api.annotations.OnWebSocketMessage;
-import org.eclipse.jetty.websocket.api.annotations.WebSocket;
+import org.eclipse.jetty.websocket.api.annotations.*;
 import org.slf4j.Logger;
 
 import com.google.gson.JsonArray;
@@ -31,198 +28,207 @@ import jdk.incubator.http.HttpResponse;
 @WebSocket(maxTextMessageSize = 4096 * 1024)
 public class GdaxWebSocket extends SubmissionPublisher<GdaxMessage> {
 	private static final Logger log = MCLoggerFactory.getLogger();
-	
-    private Session session;
-    
-    private final TimeKeeper timeKeeper;
-    private final FileAppender fileAppender;
-    private final HttpClient httpClient;
-    private final JsonParser jsonParser;
-    
-    private final Queue<GdaxMessage>[] pending;
-    private final AtomicBoolean[] building;
-    private final AtomicLong[] sequence;
-    
+
+	private Session session;
+
+	private final TimeKeeper timeKeeper;
+	private final FileAppender fileAppender;
+	private final HttpClient httpClient;
+	private final JsonParser jsonParser;
+
+	private final Queue<GdaxMessage>[] pending;
+	private final AtomicBoolean[] building;
+	private final AtomicLong[] sequence;
+
 	@SuppressWarnings("unchecked")
 	public GdaxWebSocket(final TimeKeeper timeKeeper, final FileAppender fileAppender) {
 		this.timeKeeper = timeKeeper;
 		this.fileAppender = fileAppender;
 		httpClient = HttpClient.newHttpClient();
-    	jsonParser = new JsonParser();
-    	pending = (Queue<GdaxMessage>[]) new Queue<?>[Product.count];
-    	building = new AtomicBoolean[Product.count];
-    	sequence = new AtomicLong[Product.count];
-    	for(Product product : Product.FAST_VALUES) {
-    		int index = product.getIndex();
-    		pending[index] = new ArrayDeque<GdaxMessage>(1000);
-    		building[index] = new AtomicBoolean(false);
-    		sequence[index] = new AtomicLong(0L);
-    	}
-    }
-    
-    public void close() {
-    	session.close();
-    	try {
-    		fileAppender.close();
-    	} catch(IOException e) {
-    		log.error("Could not close file appender for gdax messages", e);
-    	}
-    }
-    
-    @OnWebSocketConnect
-    public void onConnect(Session session) {
-    	this.session = session;
+		jsonParser = new JsonParser();
+		pending = (Queue<GdaxMessage>[]) new Queue<?>[Product.count];
+		building = new AtomicBoolean[Product.count];
+		sequence = new AtomicLong[Product.count];
+		for(Product product : Product.FAST_VALUES) {
+			int index = product.getIndex();
+			pending[index] = new ArrayDeque<GdaxMessage>(1000);
+			building[index] = new AtomicBoolean(false);
+			sequence[index] = new AtomicLong(0L);
+		}
+	}
+
+	public void close() {
+		session.close();
+		try {
+			fileAppender.close();
+		} catch(IOException e) {
+			log.error("Could not close file appender for gdax messages", e);
+		}
+	}
+
+	@OnWebSocketConnect
+	public void onConnect(Session session) {
+		this.session = session;
 		log.info("Connected to gdax websocket feed");
-    	try {
-    		JsonObject json = new JsonObject();
-    		json.addProperty("type", "subscribe");
+		try {
+			JsonObject json = new JsonObject();
+			json.addProperty("type", "subscribe");
 
-    		JsonArray productArray = new JsonArray();
-    		for(Product product : Product.FAST_VALUES) {
-    			productArray.add(product.toString());
-    		}
-    		json.add("product_ids", productArray);
-    		
-    		JsonArray channelArray = new JsonArray();
-    		channelArray.add("full");
-    		json.add("channels", channelArray);
-    		
-    		session.getRemote().sendString(json.toString());
-    		log.info("Subscribed to products");
-    		
-    		json = null; // mark for GC
-    		productArray = null;
-    		channelArray = null;
-    	} catch(IOException e) {
-    		log.error("Could not connect to gdax websocket feed", e);
-    	}
-    }
-    
-    @OnWebSocketMessage
-    public void onMessage(String msgStr) {
-    	try {
-    		fileAppender.append(msgStr);
-    		log.trace(msgStr);
-    	} catch(IOException e) {
-    		throw new RuntimeException("Could not write order message " + msgStr, e);
-    	}
+			JsonArray productArray = new JsonArray();
+			for(Product product : Product.FAST_VALUES) {
+				productArray.add(product.toString());
+			}
+			json.add("product_ids", productArray);
 
-    	final GdaxMessage msg = parseMessage(msgStr);
-    	if(msg == null) {
-    		log.debug("Unknown msg: " + msgStr);
-    	} else {
-    		Product product = msg.getProduct();
-    		final int index = product.getIndex();
-    		pending[index].add(msg);
-    		
-   			while(!pending[index].isEmpty() && !building[index].get()) {
-    			final GdaxMessage pendingMsg = pending[index].remove();
-    			if(sequence[index].get() < pendingMsg.getSequence() - 1) {
-	    			// either just started or a gap in sequence, so we should rebuild the book
-	    			startBuilding(product);
-	    			
-    			} else if(pendingMsg.getSequence() < sequence[index].get()) {
-    				// ignore this message; it's out of date from our book
-    				log.trace("Skipping msg " + pendingMsg);
-    				
-    			} else {
-    				// we don't handle received or unknown messages right now
-    				if(pendingMsg.getType() != Type.UNKNOWN) {
+			JsonArray channelArray = new JsonArray();
+			channelArray.add("full");
+			json.add("channels", channelArray);
+
+			session.getRemote().sendString(json.toString());
+			log.info("Subscribed to products");
+
+			json = null; // mark for GC
+			productArray = null;
+			channelArray = null;
+		} catch(IOException e) {
+			log.error("Could not connect to gdax websocket feed", e);
+		}
+	}
+
+	@OnWebSocketMessage
+	public void onMessage(String msgStr) {
+		try {
+			fileAppender.append(msgStr);
+			log.trace(msgStr);
+		} catch(IOException e) {
+			throw new RuntimeException("Could not write order message " + msgStr, e);
+		}
+
+		final GdaxMessage msg = parseMessage(msgStr);
+		if(msg == null) {
+			log.debug("Unknown msg: " + msgStr);
+		} else {
+			Product product = msg.getProduct();
+			final int index = product.getIndex();
+			pending[index].add(msg);
+
+			while(!pending[index].isEmpty() && !building[index].get()) {
+				final GdaxMessage pendingMsg = pending[index].remove();
+				if(sequence[index].get() < pendingMsg.getSequence() - 1) {
+					// either just started or a gap in sequence, so we should rebuild the book
+					startBuilding(product);
+
+				} else if(pendingMsg.getSequence() < sequence[index].get()) {
+					// ignore this message; it's out of date from our book
+					log.trace("Skipping msg " + pendingMsg);
+
+				} else {
+					// we don't handle received or unknown messages right now
+					if(pendingMsg.getType() != Type.UNKNOWN) {
 						submit(pendingMsg);
-    				}
+					}
 					sequence[index].set(pendingMsg.getSequence());
-    			}
-    		}
-    	}
-    }
-    
-    GdaxMessage parseMessage(String msg) {
-    	JsonObject json = jsonParser.parse(msg).getAsJsonObject();
-    	String type = json.get("type").getAsString();
-    	GdaxMessage message = null;
-    	switch(type) {
-    	case "open":
-    		// new order on book
-    		message = new Open(json);
-    		break;
-    	case "done":
-    		// order taken off book - could be filled or canceled
-    		message = new Done(json);
-    		break;
-    	case "match":
-    		// trade occurred
-    		message = new Match(json);
-    		break;
-    	case "change":
-    		// order modified
-    		if(json.has("new_size")) {
-    			message = new ChangeSize(json);
-    		} else {
-    			message = new ChangeFunds(json);
-    		}
-    		break;
-    	case "activate":
-    		// new stop order
-    		message = new Activate(json);
-    		break;
-    	case "received":
-    		// received a new order - we don't really do anything with these but we need the sequence number
-    		// fall through to unknown type
-    	default:
-			// this could be a new message type or received
-    		if(json.has("sequence") && json.has("product_id") && json.has("time")) {
-    			message = new Unknown(json);
-    		}
-    	}
-    	json = null; // mark for GC
-    	return message;
-    }
-    
-    void startBuilding(final Product product) {
-    	// start getting the book info if we are not already doing so
-    	if(building[product.getIndex()].compareAndSet(false, true)) {
-    		try {
-    			log.info("Building book for " + product);
-	    		HttpRequest request = HttpRequest.newBuilder()
-	    			.uri(new URI("https://api.gdax.com/products/" + product + "/book?level=3"))
-	    			.GET()
-	    			.header("User-Agent", "Custom")
-	    			.build();
-	    		httpClient.sendAsync(request, HttpResponse.BodyHandler.asString())
-	    			.thenAccept(response -> {
-	    				if(response.statusCode() != 200) {
-	    					throw new RuntimeException("Could not build book for " + product + " code " + response.statusCode() + ": " + response.body());
-	    				}
-	    				final String body = response.body();
-	    				JsonObject json = jsonParser.parse(body).getAsJsonObject();
-	    				// save additional info with message for data replay
-	    				json.addProperty("product_id", product.toString());
-	    				json.addProperty("time", timeKeeper.iso8601());
-	    				json.addProperty("type", "book");
-	    		    	try {
-	    		    		fileAppender.append(json.toString());
-	    		    	} catch(IOException e) {
-	    		    		throw new RuntimeException("Could not write level 3 book data " + body, e);
-	    		    	}
-	    				Book message = new Book(json);
+				}
+			}
+		}
+	}
+
+	GdaxMessage parseMessage(String msg) {
+		JsonObject json = jsonParser.parse(msg).getAsJsonObject();
+		String type = json.get("type").getAsString();
+		GdaxMessage message = null;
+		switch(type) {
+			case "open":
+				// new order on book
+				message = new Open(json);
+				break;
+			case "done":
+				// order taken off book - could be filled or canceled
+				message = new Done(json);
+				break;
+			case "match":
+				// trade occurred
+				message = new Match(json);
+				break;
+			case "change":
+				// order modified
+				if(json.has("new_size")) {
+					message = new ChangeSize(json);
+				} else {
+					message = new ChangeFunds(json);
+				}
+				break;
+			case "activate":
+				// new stop order
+				message = new Activate(json);
+				break;
+			case "received":
+				// received a new order - we don't really do anything with these but we need the sequence number
+				// fall through to unknown type
+			default:
+				// this could be a new message type or received
+				if(json.has("sequence") && json.has("product_id") && json.has("time")) {
+					message = new Unknown(json);
+				}
+		}
+		json = null; // mark for GC
+		return message;
+	}
+
+	void startBuilding(final Product product) {
+		// start getting the book info if we are not already doing so
+		if(building[product.getIndex()].compareAndSet(false, true)) {
+			try {
+				log.info("Building book for " + product);
+				HttpRequest request = HttpRequest.newBuilder()
+					.uri(new URI("https://api.gdax.com/products/" + product + "/book?level=3"))
+					.GET()
+					.header("User-Agent", "Custom")
+					.build();
+				httpClient.sendAsync(request, HttpResponse.BodyHandler.asString())
+					.thenAccept(response -> {
+						if(response.statusCode() != 200) {
+							throw new RuntimeException(
+								"Could not build book for " + product + " code " + response.statusCode() + ": " +
+									response.body());
+						}
+						final String body = response.body();
+						JsonObject json = jsonParser.parse(body).getAsJsonObject();
+						// save additional info with message for data replay
+						json.addProperty("product_id", product.toString());
+						json.addProperty("time", timeKeeper.iso8601());
+						json.addProperty("type", "book");
+						try {
+							fileAppender.append(json.toString());
+						} catch(IOException e) {
+							throw new RuntimeException("Could not write level 3 book data " + body, e);
+						}
+						Book message = new Book(json);
 						json = null; // mark for GC
-	    				submit(message);
-	    				sequence[product.getIndex()].set(message.getSequence());
-	    				building[product.getIndex()].set(false);
+						submit(message);
+						sequence[product.getIndex()].set(message.getSequence());
+						building[product.getIndex()].set(false);
 						message = null; // mark for GC
-	    			});
-	    		
-    		} catch(URISyntaxException e) {
+					});
+
+			} catch(URISyntaxException e) {
 				throw new RuntimeException("Could not build book for " + product, e);
 			}
-    	}
-    }
-    
-    @OnWebSocketError
-    public void onError(Throwable error) {
-    	log.error("Gdax websocket error", error);
-    	System.exit(1);
-    }
+		}
+	}
+
+	@OnWebSocketError
+	public void onError(Throwable error) {
+		log.error("Gdax websocket error", error);
+		System.exit(1);
+	}
+
+	@OnWebSocketClose
+	public void onClose(int statusCode, String reason) {
+		log.info("Gdax websocket connection closed " + statusCode + ": " + reason);
+		session = null;
+		System.exit(1);
+	}
 
 	public void subscribe(GdaxMessageProcessor processor) {
 		subscribe(new GdaxMessageProcessingSubscriber(processor));
