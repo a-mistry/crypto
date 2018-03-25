@@ -70,10 +70,12 @@ public class OrderBook {
 	 * Records top of book to the given object
 	 */
 	public synchronized void recordBBO(BBO bbo) {
-		bbo.bidPrice = bids.getFirstPrice();
-		bbo.bidSize = bids.getFirstSize();
-		bbo.askPrice = asks.getFirstPrice();
-		bbo.askSize = asks.getFirstSize();
+		bbo.reset(
+			bids.getFirstPrice(),
+			asks.getFirstPrice(),
+			bids.getFirstSize(),
+			asks.getFirstSize()
+		);
 	}
 
 	/**
@@ -135,7 +137,7 @@ public class OrderBook {
 	/**
 	 * Record top of book and depth of book. For depth, takes as input an array of objects. For each object,
 	 * fills in the counts and sizes of orders that are within the given percentage from the midpoint.
-	 *
+	 * <p>
 	 * This is a significantly more efficient method for getting multiple pieces of book data than querying
 	 * individually since the synchronization cost is paid once.
 	 *
@@ -151,10 +153,12 @@ public class OrderBook {
 			final double pct = depth.pctFromMid;
 			final double bidThreshold = mid * (1.0 - pct);
 			final double askThreshold = mid * (1.0 + pct);
-			depth.bidCount = bids.getCountBeforePrice(bidThreshold);
-			depth.askCount = asks.getCountBeforePrice(askThreshold);
-			depth.bidSize = bids.getSizeBeforePrice(bidThreshold);
-			depth.askSize = asks.getSizeBeforePrice(askThreshold);
+			depth.reset(
+				bids.getCountBeforePrice(bidThreshold),
+				asks.getCountBeforePrice(askThreshold),
+				bids.getSizeBeforePrice(bidThreshold),
+				asks.getSizeBeforePrice(askThreshold)
+			);
 		}
 	}
 

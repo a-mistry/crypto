@@ -19,4 +19,11 @@ public class Depth {
 	public double bidSize;
 	/** Size of asks within given percent of mid */
 	public double askSize;
+
+	void reset(final int bidCount, final int askCount, final double bidSize, final double askSize) {
+		this.bidCount = bidCount;
+		this.askCount = askCount;
+		this.bidSize = bidSize;
+		this.askSize = askSize;
+	}
 }

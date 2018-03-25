@@ -12,4 +12,11 @@ public class BBO {
 	public double midPrice() {
 		return (bidPrice + askPrice) / 2;
 	}
+
+	void reset(final double bidPrice, final double askPrice, final double bidSize, final double askSize) {
+		this.bidPrice = bidPrice;
+		this.askPrice = askPrice;
+		this.bidSize = bidSize;
+		this.askSize = askSize;
+	}
 }
