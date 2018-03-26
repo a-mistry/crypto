@@ -107,32 +107,38 @@ public class GdaxWebSocket extends SubmissionPublisher<GdaxMessage> {
 			throw new RuntimeException("Could not write order message " + msgStr, e);
 		}
 
-		final GdaxMessage msg = parseMessage(msgStr);
-		if(msg == null) {
-			log.debug("Unknown msg: " + msgStr);
-		} else {
-			Product product = msg.getProduct();
-			final int index = product.getIndex();
-			pending[index].add(msg);
+		try {
 
-			while(!pending[index].isEmpty() && !building[index].get()) {
-				final GdaxMessage pendingMsg = pending[index].remove();
-				if(sequence[index].get() < pendingMsg.getSequence() - 1) {
-					// either just started or a gap in sequence, so we should rebuild the book
-					startBuilding(product);
+			final GdaxMessage msg = parseMessage(msgStr);
+			if(msg == null) {
+				log.debug("Unknown msg: " + msgStr);
+			} else {
+				Product product = msg.getProduct();
+				final int index = product.getIndex();
+				pending[index].add(msg);
 
-				} else if(pendingMsg.getSequence() < sequence[index].get()) {
-					// ignore this message; it's out of date from our book
-					log.trace("Skipping msg " + pendingMsg);
+				while(!pending[index].isEmpty() && !building[index].get()) {
+					final GdaxMessage pendingMsg = pending[index].remove();
+					if(sequence[index].get() < pendingMsg.getSequence() - 1) {
+						// either just started or a gap in sequence, so we should rebuild the book
+						startBuilding(product);
 
-				} else {
-					// we don't handle received or unknown messages right now
-					if(pendingMsg.getType() != Type.UNKNOWN) {
-						submit(pendingMsg);
+					} else if(pendingMsg.getSequence() < sequence[index].get()) {
+						// ignore this message; it's out of date from our book
+						log.trace("Skipping msg " + pendingMsg);
+
+					} else {
+						// we don't handle received or unknown messages right now
+						if(pendingMsg.getType() != Type.UNKNOWN) {
+							submit(pendingMsg);
+						}
+						sequence[index].set(pendingMsg.getSequence());
 					}
-					sequence[index].set(pendingMsg.getSequence());
 				}
 			}
+
+		} catch(Exception e) {
+			log.error("Error processing gdax message. Message was\n" + msgStr, e);
 		}
 	}
 
@@ -223,7 +229,7 @@ public class GdaxWebSocket extends SubmissionPublisher<GdaxMessage> {
 	@OnWebSocketError
 	public void onError(Throwable error) {
 		log.error("Gdax websocket error", error);
-		System.exit(1);
+		disconnect();
 	}
 
 	@OnWebSocketClose
