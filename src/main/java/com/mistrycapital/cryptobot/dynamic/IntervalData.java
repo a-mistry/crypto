@@ -10,6 +10,8 @@ public class IntervalData {
 	public long endTimeMicros;
 	/** Last trade price */
 	public double lastPrice;
+	/** Return over interval */
+	public double ret;
 	/** Volume */
 	public double volume;
 	/** VWAP */
@@ -22,6 +24,14 @@ public class IntervalData {
 	public double bidTradeSize;
 	/** Size of trades executed at the ask */
 	public double askTradeSize;
+	/** Number of new bids placed */
+	public long newBidCount;
+	/** Number of new asks placed */
+	public long newAskCount;
+	/** Size of new bids placed */
+	public double newBidSize;
+	/** Size of new asks placed */
+	public double newAskSize;
 	/** Number of bids canceled */
 	public long bidCancelCount;
 	/** Number of asks canceled */
@@ -30,27 +40,16 @@ public class IntervalData {
 	public double bidCancelSize;
 	/** Size of asks canceled */
 	public double askCancelSize;
-	/** Return over interval */
-	public double ret;
 
-	void reset(final long startTimeMicros, final long endTimeMicros, final double lastPrice, final double volume,
-		final double vwap, final long bidTradeCount, final long askTradeCount, final double bidTradeSize,
-		final double askTradeSize, final long bidCancelCount, final long askCancelCount, final double bidCancelSize,
-		final double askCancelSize, final double ret)
-	{
+	void reset(final long startTimeMicros) {
 		this.startTimeMicros = startTimeMicros;
-		this.endTimeMicros = endTimeMicros;
-		this.lastPrice = lastPrice;
-		this.volume = volume;
-		this.vwap = vwap;
-		this.bidTradeCount = bidTradeCount;
-		this.askTradeCount = askTradeCount;
-		this.bidTradeSize = bidTradeSize;
-		this.askTradeSize = askTradeSize;
-		this.bidCancelCount = bidCancelCount;
-		this.askCancelCount = askCancelCount;
-		this.bidCancelSize = bidCancelSize;
-		this.askCancelSize = askCancelSize;
-		this.ret = ret;
+		lastPrice = Double.NaN;
+		ret = Double.NaN;
+		volume = 0.0;
+		vwap = 0.0;
+		bidTradeCount = askTradeCount = newBidCount = newAskCount = 0;
+		bidTradeSize = askTradeSize = newBidSize = newAskSize = 0.0;
+		bidCancelCount = askCancelCount = 0;
+		bidCancelSize = askCancelSize = 0.0;
 	}
 }

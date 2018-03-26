@@ -18,6 +18,14 @@ public interface TimeKeeper {
 	}
 
 	/**
+	 * @return Current time in nanoseconds since epoch
+	 */
+	default long epochNanos() {
+		Instant now = now();
+		return now.getEpochSecond()*1000000000L + now.getNano();
+	}
+
+	/**
 	 * @return Current time in ISO 8601 format
 	 */
 	default String iso8601() {
