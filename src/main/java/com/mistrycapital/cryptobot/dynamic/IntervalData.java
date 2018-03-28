@@ -41,8 +41,9 @@ public class IntervalData {
 	/** Size of asks canceled */
 	public double askCancelSize;
 
-	void reset(final long startTimeMicros) {
+	void reset(final long startTimeMicros, final long endTimeMicros) {
 		this.startTimeMicros = startTimeMicros;
+		this.endTimeMicros = endTimeMicros;
 		lastPrice = Double.NaN;
 		ret = Double.NaN;
 		volume = 0.0;
@@ -51,5 +52,26 @@ public class IntervalData {
 		bidTradeSize = askTradeSize = newBidSize = newAskSize = 0.0;
 		bidCancelCount = askCancelCount = 0;
 		bidCancelSize = askCancelSize = 0.0;
+	}
+
+	void copyFrom(IntervalData b) {
+		startTimeMicros = b.startTimeMicros;
+		endTimeMicros = b.endTimeMicros;
+		lastPrice = b.lastPrice;
+		ret = b.ret;
+		volume = b.volume;
+		vwap = b.vwap;
+		bidTradeCount = b.bidTradeCount;
+		askTradeCount = b.askTradeCount;
+		bidTradeSize = b.bidTradeSize;
+		askTradeSize = b.askTradeSize;
+		newBidCount = b.newBidCount;
+		newAskCount = b.newAskCount;
+		newBidSize = b.newBidSize;
+		newAskSize = b.newAskSize;
+		bidCancelCount = b.bidCancelCount;
+		askCancelCount = b.askCancelCount;
+		bidCancelSize = b.bidCancelSize;
+		askCancelSize = b.askCancelSize;
 	}
 }

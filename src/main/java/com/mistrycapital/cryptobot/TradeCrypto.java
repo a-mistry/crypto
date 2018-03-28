@@ -4,6 +4,7 @@ import java.net.URI;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.websocket.client.ClientUpgradeRequest;
 import org.eclipse.jetty.websocket.client.WebSocketClient;
@@ -18,10 +19,6 @@ import com.mistrycapital.cryptobot.time.TimeKeeper;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
 
-import jdk.incubator.http.HttpClient;
-import jdk.incubator.http.HttpRequest;
-import jdk.incubator.http.HttpResponse;
-
 public class TradeCrypto {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
@@ -31,6 +28,7 @@ public class TradeCrypto {
 	public static void main(String[] args)
 		throws Exception
 	{
+		/*
 		HttpClient client = HttpClient.newHttpClient();
 		HttpRequest request = HttpRequest.newBuilder()
 			.uri(new URI("https://api.gdax.com/products"))
@@ -45,20 +43,23 @@ public class TradeCrypto {
 			System.out.println("not working err=" + response.statusCode());
 			System.out.println(response.body());
 		}
+		*/
+
+		Path dataDir = Paths.get(MCProperties.getProperty("dataDir"));
+		log.debug("Saving message data to " + dataDir);
+
 		TimeKeeper timeKeeper = new SystemTimeKeeper();
 		OrderBookManager orderBookManager = new OrderBookManager(timeKeeper);
-
-		WebSocketClient socketClient = new WebSocketClient(new SslContextFactory());
-		final String dataDirString = MCProperties.getProperty("dataDir");
-		log.debug("Saving message data to " + dataDirString);
-		Path dataDir = Paths.get(dataDirString);
+		DynamicTracker dynamicTracker = new DynamicTracker(timeKeeper);
 		FileAppender fileAppender =
 			new GdaxMessageAppender(dataDir, DATA_FILE_NAME, DATA_FILE_EXTENSION, timeKeeper, orderBookManager);
 		GdaxWebSocket gdaxWebSocket = new GdaxWebSocket(timeKeeper, fileAppender);
 
 		gdaxWebSocket.subscribe(orderBookManager);
+		gdaxWebSocket.subscribe(dynamicTracker);
 
 		URI gdaxWebSocketURI = new URI("wss://ws-feed.gdax.com");
+		WebSocketClient socketClient = new WebSocketClient(new SslContextFactory());
 
 		while(true) {
 			if(!gdaxWebSocket.isConnected()) {

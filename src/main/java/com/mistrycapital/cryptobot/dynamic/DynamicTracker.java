@@ -4,18 +4,26 @@ import com.mistrycapital.cryptobot.gdax.websocket.*;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 
 public class DynamicTracker implements GdaxMessageProcessor {
-	static final int SECONDS_TO_KEEP = 60 * 60 * 24; // keep one day
-	static final int INTERVAL_SECONDS = 60;
+	public static final int SECONDS_TO_KEEP = 60 * 60 * 24; // keep one day
+	public static final int INTERVAL_SECONDS = 60;
 
 	private final TimeKeeper timeKeeper;
 	private final ProductTracker[] productTrackers;
+	private final ProductHistory[] productHistories;
 
 	public DynamicTracker(TimeKeeper timeKeeper) {
 		this.timeKeeper = timeKeeper;
+		productHistories = new ProductHistory[Product.count];
 		productTrackers = new ProductTracker[Product.count];
 		for(Product product : Product.FAST_VALUES) {
-			productTrackers[product.getIndex()] = new ProductTracker(product, timeKeeper);
+			productHistories[product.getIndex()] = new ProductHistory(product);
+			productTrackers[product.getIndex()] =
+				new ProductTracker(product, timeKeeper, productHistories[product.getIndex()]);
 		}
+	}
+
+	public ProductHistory getProductHistory(Product product) {
+		return productHistories[product.getIndex()];
 	}
 
 	@Override
