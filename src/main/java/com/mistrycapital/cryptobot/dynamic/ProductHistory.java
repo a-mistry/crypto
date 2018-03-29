@@ -2,86 +2,94 @@ package com.mistrycapital.cryptobot.dynamic;
 
 import com.mistrycapital.cryptobot.gdax.websocket.Product;
 
-import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 
 /**
- * Circular buffer of interval data
+ * Buffer of interval data
  */
 public class ProductHistory {
-	private static final int BUFFER_SIZE = DynamicTracker.SECONDS_TO_KEEP / DynamicTracker.INTERVAL_SECONDS;
+	private static final int MAX_INTERVALS = DynamicTracker.SECONDS_TO_KEEP / DynamicTracker.INTERVAL_SECONDS;
 
 	private final Product product;
-	/** Recorded data for each interval, in a circular buffer with the head containing the oldest value */
-	private final IntervalData[] intervalData;
-	/** Index of oldest value */
-	private int oldest;
-	/** Index of last value */
-	private int last;
+	/** Recorded data for each interval, in a linked list with the head containing the latest value */
+	private IntervalDataListNode head;
+
+	private class IntervalDataListNode {
+		IntervalData data;
+		IntervalDataListNode prev;
+
+		IntervalDataListNode(IntervalData data, IntervalDataListNode prev) {
+			this.data = data;
+			this.prev = prev;
+		}
+	}
 
 	ProductHistory(Product product) {
 		this.product = product;
-		intervalData = new IntervalData[BUFFER_SIZE];
-		for(int i = 0; i < intervalData.length; i++)
-			intervalData[i] = new IntervalData();
-		oldest = -1;
-		last = -1;
 	}
 
 	public synchronized void add(IntervalData newData) {
-		last = (last + 1) % BUFFER_SIZE;
-		if(oldest == -1 || last == oldest) {
-			// need to move oldest
-			oldest = (oldest + 1) % BUFFER_SIZE;
+		// TO DO: append data to file
+		if(head == null) {
+			head = new IntervalDataListNode(newData, null);
+			return;
 		}
-		intervalData[last].copyFrom(newData);
+
+		head = new IntervalDataListNode(newData, head);
+
+		// remove oldest if needed
+		IntervalDataListNode cur = head;
+		int count = 1;
+		while(count < MAX_INTERVALS && cur.prev != null) {
+			cur = cur.prev;
+			count++;
+		}
+		if(count == MAX_INTERVALS)
+			cur.prev = null;
 	}
 
 	/**
 	 * @return Latest recorded interval value (not the interval we are currently tracking)
 	 */
 	public synchronized IntervalData latest() {
-		return last == -1 ? null : intervalData[last];
+		return head.data;
 	}
 
 	/**
-	 * Note the objects returned by this iterator must be consumed within DynamicTracker.INTERVAL_SECONDS amount
-	 * of time. After this the oldest values will no longer be valid and will be reused; hence, this object
-	 * will return no values and instead will throw a ConcurrentModificationException.
-	 *
-	 * @return The full history we are storing, sorted from latest to oldest
+	 * @return The full history we are storing, sorted from oldest to latest
 	 */
 	public synchronized Iterable<IntervalData> values() {
-		return () -> new BufferIterator(last, oldest);
+		final ProductHistory history = this;
+		return () -> new BufferIterator(history, head);
 	}
 
 	private class BufferIterator implements Iterator<IntervalData> {
-		private int index;
-		private final int savedOldest;
+		private final ProductHistory history;
+		private IntervalDataListNode cur;
 
-		BufferIterator(int index, int savedOldest) {
-			this.index = index;
-			this.savedOldest = savedOldest;
+		BufferIterator(ProductHistory history, IntervalDataListNode latest) {
+			this.history = history;
+			cur = latest;
 		}
 
 		@Override
 		public boolean hasNext() {
-			if(savedOldest != oldest)
-				throw new ConcurrentModificationException();
-
-			if(savedOldest == -1)
-				return false;
-
-			return index != savedOldest;
+			synchronized(history) {
+				return cur != null;
+			}
 		}
 
 		@Override
 		public IntervalData next() {
-			if(!hasNext()) return null;
-
-			IntervalData retVal = intervalData[index];
-			index = (index - 1) % BUFFER_SIZE;
-			return retVal;
+			synchronized(history) {
+				if(cur == null) {
+					return null;
+				} else {
+					IntervalData retVal = cur.data;
+					cur = cur.prev;
+					return retVal;
+				}
+			}
 		}
 	}
 }

@@ -1,5 +1,11 @@
 package com.mistrycapital.cryptobot.dynamic;
 
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Date;
+
 /**
  * Dynamic product data for a given interval
  */
@@ -41,37 +47,65 @@ public class IntervalData {
 	/** Size of asks canceled */
 	public double askCancelSize;
 
-	void reset(final long startTimeMicros, final long endTimeMicros) {
+	IntervalData(final long startTimeMicros, final long endTimeMicros) {
 		this.startTimeMicros = startTimeMicros;
 		this.endTimeMicros = endTimeMicros;
 		lastPrice = Double.NaN;
 		ret = Double.NaN;
-		volume = 0.0;
-		vwap = 0.0;
-		bidTradeCount = askTradeCount = newBidCount = newAskCount = 0;
-		bidTradeSize = askTradeSize = newBidSize = newAskSize = 0.0;
-		bidCancelCount = askCancelCount = 0;
-		bidCancelSize = askCancelSize = 0.0;
 	}
 
-	void copyFrom(IntervalData b) {
-		startTimeMicros = b.startTimeMicros;
-		endTimeMicros = b.endTimeMicros;
-		lastPrice = b.lastPrice;
-		ret = b.ret;
-		volume = b.volume;
-		vwap = b.vwap;
-		bidTradeCount = b.bidTradeCount;
-		askTradeCount = b.askTradeCount;
-		bidTradeSize = b.bidTradeSize;
-		askTradeSize = b.askTradeSize;
-		newBidCount = b.newBidCount;
-		newAskCount = b.newAskCount;
-		newBidSize = b.newBidSize;
-		newAskSize = b.newAskSize;
-		bidCancelCount = b.bidCancelCount;
-		askCancelCount = b.askCancelCount;
-		bidCancelSize = b.bidCancelSize;
-		askCancelSize = b.askCancelSize;
+	public static String csvHeaderRow() {
+		return "date,unix_timestamp,start_time_micros,end_time_micros,last_price,ret_5m,volume,vwap,"
+			+ "bid_trade_count,ask_trade_count,bid_trade_size,ask_trade_size,"
+			+ "new_bid_count,new_ask_count,new_bid_size,new_ask_size,"
+			+ "bid_cancel_count,ask_cancel_count,bid_cancel_size,ask_cancel_size";
+	}
+
+	private static DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+	public String toCSVString() {
+		Instant instant = Instant.ofEpochMilli(endTimeMicros / 1000L);
+		ZonedDateTime dateTime = ZonedDateTime.ofInstant(instant, ZoneOffset.UTC);
+		StringBuilder builder = new StringBuilder();
+		builder.append(dateTime.format(dateTimeFormatter));
+		builder.append(',');
+		builder.append(endTimeMicros / 1000L);
+		builder.append(',');
+		builder.append(startTimeMicros);
+		builder.append(',');
+		builder.append(endTimeMicros);
+		builder.append(',');
+		builder.append(lastPrice);
+		builder.append(',');
+		builder.append(ret);
+		builder.append(',');
+		builder.append(volume);
+		builder.append(',');
+		builder.append(vwap);
+		builder.append(',');
+		builder.append(bidTradeCount);
+		builder.append(',');
+		builder.append(askTradeCount);
+		builder.append(',');
+		builder.append(bidTradeSize);
+		builder.append(',');
+		builder.append(askTradeSize);
+		builder.append(',');
+		builder.append(newBidCount);
+		builder.append(',');
+		builder.append(newAskCount);
+		builder.append(',');
+		builder.append(newBidSize);
+		builder.append(',');
+		builder.append(newAskSize);
+		builder.append(',');
+		builder.append(bidCancelCount);
+		builder.append(',');
+		builder.append(askCancelCount);
+		builder.append(',');
+		builder.append(bidCancelSize);
+		builder.append(',');
+		builder.append(askCancelSize);
+		return builder.toString();
 	}
 }

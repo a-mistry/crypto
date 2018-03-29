@@ -25,10 +25,9 @@ class ProductTracker implements GdaxMessageProcessor {
 		this.product = product;
 		this.timeKeeper = timeKeeper;
 		this.history = history;
-		curInterval = new IntervalData();
 		final long curMicros = timeKeeper.epochNanos() / 1000L;
 		intervalEndMicros = calcNextIntervalMicros(curMicros);
-		curInterval.reset(curMicros, intervalEndMicros);
+		curInterval = new IntervalData(curMicros, intervalEndMicros);
 		prevLastPrice = Double.NaN;
 		volumeTimesPrice = 0.0;
 	}
@@ -39,6 +38,7 @@ class ProductTracker implements GdaxMessageProcessor {
 	}
 
 	private synchronized void recordNewOrder(final Open msg) {
+		rollOverIfNeeded();
 		final double size = msg.getRemainingSize();
 		if(msg.getOrderSide() == OrderSide.BUY) {
 			curInterval.newBidCount++;
@@ -50,6 +50,7 @@ class ProductTracker implements GdaxMessageProcessor {
 	}
 
 	private synchronized void recordCancel(final Done msg) {
+		rollOverIfNeeded();
 		final double size = msg.getRemainingSize();
 		if(msg.getOrderSide() == OrderSide.BUY) {
 			curInterval.bidCancelCount++;
@@ -61,6 +62,7 @@ class ProductTracker implements GdaxMessageProcessor {
 	}
 
 	private synchronized void recordTrade(final Match msg) {
+		rollOverIfNeeded();
 		final double price = msg.getPrice();
 		final double size = msg.getSize();
 		curInterval.lastPrice = price;
@@ -75,7 +77,10 @@ class ProductTracker implements GdaxMessageProcessor {
 		}
 	}
 
-	private void rollOver() {
+	private void rollOverIfNeeded() {
+		if(timeKeeper.epochNanos() / 1000L < intervalEndMicros)
+			return;
+
 		if(!Double.isNaN(prevLastPrice))
 			curInterval.ret = curInterval.lastPrice / prevLastPrice - 1.0;
 		curInterval.vwap = curInterval.volume > 0.0 ? volumeTimesPrice / curInterval.volume : Double.NaN;
@@ -85,7 +90,7 @@ class ProductTracker implements GdaxMessageProcessor {
 		volumeTimesPrice = 0.0;
 		final long curMicros = intervalEndMicros;
 		intervalEndMicros = calcNextIntervalMicros(curMicros);
-		curInterval.reset(curMicros, intervalEndMicros);
+		curInterval = new IntervalData(curMicros, intervalEndMicros);
 	}
 
 	@Override
