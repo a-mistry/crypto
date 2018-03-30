@@ -27,7 +27,7 @@ class ProductTracker implements GdaxMessageProcessor {
 		this.history = history;
 		final long curMicros = timeKeeper.epochNanos() / 1000L;
 		intervalEndMicros = calcNextIntervalMicros(curMicros);
-		curInterval = new IntervalData(curMicros, intervalEndMicros);
+		curInterval = new IntervalData(product, curMicros, intervalEndMicros);
 		prevLastPrice = Double.NaN;
 		volumeTimesPrice = 0.0;
 	}
@@ -90,7 +90,7 @@ class ProductTracker implements GdaxMessageProcessor {
 		volumeTimesPrice = 0.0;
 		final long curMicros = intervalEndMicros;
 		intervalEndMicros = calcNextIntervalMicros(curMicros);
-		curInterval = new IntervalData(curMicros, intervalEndMicros);
+		curInterval = new IntervalData(product, curMicros, intervalEndMicros);
 	}
 
 	@Override

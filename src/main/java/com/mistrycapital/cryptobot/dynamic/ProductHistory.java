@@ -1,16 +1,23 @@
 package com.mistrycapital.cryptobot.dynamic;
 
+import com.mistrycapital.cryptobot.appender.FileAppender;
 import com.mistrycapital.cryptobot.gdax.websocket.Product;
+import com.mistrycapital.cryptobot.util.MCLoggerFactory;
+import org.slf4j.Logger;
 
+import java.io.IOException;
 import java.util.Iterator;
 
 /**
  * Buffer of interval data
  */
 public class ProductHistory {
+	private static final Logger log = MCLoggerFactory.getLogger();
+
 	private static final int MAX_INTERVALS = DynamicTracker.SECONDS_TO_KEEP / DynamicTracker.INTERVAL_SECONDS;
 
 	private final Product product;
+	private final FileAppender fileAppender;
 	/** Recorded data for each interval, in a linked list with the head containing the latest value */
 	private IntervalDataListNode head;
 
@@ -24,12 +31,17 @@ public class ProductHistory {
 		}
 	}
 
-	ProductHistory(Product product) {
+	ProductHistory(Product product, FileAppender fileAppender) {
 		this.product = product;
+		this.fileAppender = fileAppender;
 	}
 
 	public synchronized void add(IntervalData newData) {
-		// TO DO: append data to file
+		try {
+			fileAppender.append(newData.toCSVString());
+		} catch(IOException e) {
+			log.error("Could not append interval data for " + product, e);
+		}
 		if(head == null) {
 			head = new IntervalDataListNode(newData, null);
 			return;

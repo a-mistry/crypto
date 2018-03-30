@@ -1,5 +1,6 @@
 package com.mistrycapital.cryptobot.dynamic;
 
+import com.mistrycapital.cryptobot.appender.FileAppender;
 import com.mistrycapital.cryptobot.gdax.websocket.*;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 
@@ -11,12 +12,12 @@ public class DynamicTracker implements GdaxMessageProcessor {
 	private final ProductTracker[] productTrackers;
 	private final ProductHistory[] productHistories;
 
-	public DynamicTracker(TimeKeeper timeKeeper) {
+	public DynamicTracker(TimeKeeper timeKeeper, FileAppender intervalFileAppender) {
 		this.timeKeeper = timeKeeper;
 		productHistories = new ProductHistory[Product.count];
 		productTrackers = new ProductTracker[Product.count];
 		for(Product product : Product.FAST_VALUES) {
-			productHistories[product.getIndex()] = new ProductHistory(product);
+			productHistories[product.getIndex()] = new ProductHistory(product, intervalFileAppender);
 			productTrackers[product.getIndex()] =
 				new ProductTracker(product, timeKeeper, productHistories[product.getIndex()]);
 		}

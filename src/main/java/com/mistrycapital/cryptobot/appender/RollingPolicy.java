@@ -2,7 +2,6 @@ package com.mistrycapital.cryptobot.appender;
 
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.TemporalAccessor;
 
 /**
  * Instructs the appender on when to roll to a new file

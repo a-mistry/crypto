@@ -4,6 +4,7 @@ import java.net.URI;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import com.mistrycapital.cryptobot.appender.IntervalDataAppender;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.websocket.client.ClientUpgradeRequest;
@@ -22,8 +23,8 @@ import com.mistrycapital.cryptobot.util.MCProperties;
 public class TradeCrypto {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
-	private static final String DATA_FILE_NAME = "gdax-orders";
-	private static final String DATA_FILE_EXTENSION = ".json";
+	private static final String BOOK_MESSAGE_FILE_NAME = "gdax-orders";
+	private static final String INTERVAL_FILE_NAME = "samples";
 
 	public static void main(String[] args)
 		throws Exception
@@ -50,10 +51,11 @@ public class TradeCrypto {
 
 		TimeKeeper timeKeeper = new SystemTimeKeeper();
 		OrderBookManager orderBookManager = new OrderBookManager(timeKeeper);
-		DynamicTracker dynamicTracker = new DynamicTracker(timeKeeper);
-		FileAppender fileAppender =
-			new GdaxMessageAppender(dataDir, DATA_FILE_NAME, DATA_FILE_EXTENSION, timeKeeper, orderBookManager);
-		GdaxWebSocket gdaxWebSocket = new GdaxWebSocket(timeKeeper, fileAppender);
+		FileAppender gdaxAppender =
+			new GdaxMessageAppender(dataDir, BOOK_MESSAGE_FILE_NAME, ".json", timeKeeper, orderBookManager);
+		GdaxWebSocket gdaxWebSocket = new GdaxWebSocket(timeKeeper, gdaxAppender);
+		FileAppender intervalAppender = new IntervalDataAppender(dataDir, INTERVAL_FILE_NAME, timeKeeper);
+		DynamicTracker dynamicTracker = new DynamicTracker(timeKeeper, intervalAppender);
 
 		gdaxWebSocket.subscribe(orderBookManager);
 		gdaxWebSocket.subscribe(dynamicTracker);
@@ -70,7 +72,7 @@ public class TradeCrypto {
 				log.info("Connecting to gdax feed: " + gdaxWebSocketURI);
 				final long startMs = timeKeeper.epochMs();
 				final long timeout = 30000L; // 30 seconds
-				while(!gdaxWebSocket.isConnected() && timeKeeper.epochMs()-startMs<timeout) {
+				while(!gdaxWebSocket.isConnected() && timeKeeper.epochMs() - startMs < timeout) {
 					Thread.sleep(100);
 				}
 				if(!gdaxWebSocket.isConnected()) {

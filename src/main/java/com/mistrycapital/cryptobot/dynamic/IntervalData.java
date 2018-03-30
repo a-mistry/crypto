@@ -1,5 +1,7 @@
 package com.mistrycapital.cryptobot.dynamic;
 
+import com.mistrycapital.cryptobot.gdax.websocket.Product;
+
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -9,6 +11,8 @@ import java.time.format.DateTimeFormatter;
  * Dynamic product data for a given interval
  */
 public class IntervalData {
+	/** Product */
+	public final Product product;
 	/** Interval start time since epoch in microseconds */
 	public long startTimeMicros;
 	/** Interval end time since epoch in microseconds */
@@ -46,7 +50,8 @@ public class IntervalData {
 	/** Size of asks canceled */
 	public double askCancelSize;
 
-	IntervalData(final long startTimeMicros, final long endTimeMicros) {
+	IntervalData(final Product product, final long startTimeMicros, final long endTimeMicros) {
+		this.product = product;
 		this.startTimeMicros = startTimeMicros;
 		this.endTimeMicros = endTimeMicros;
 		lastPrice = Double.NaN;
@@ -54,7 +59,7 @@ public class IntervalData {
 	}
 
 	public static String csvHeaderRow() {
-		return "date,unix_timestamp,start_time_micros,end_time_micros,last_price,ret_5m,volume,vwap,"
+		return "date,unix_timestamp,product,start_time_micros,end_time_micros,last_price,ret_5m,volume,vwap,"
 			+ "bid_trade_count,ask_trade_count,bid_trade_size,ask_trade_size,"
 			+ "new_bid_count,new_ask_count,new_bid_size,new_ask_size,"
 			+ "bid_cancel_count,ask_cancel_count,bid_cancel_size,ask_cancel_size";
@@ -69,6 +74,8 @@ public class IntervalData {
 		builder.append(dateTime.format(dateTimeFormatter));
 		builder.append(',');
 		builder.append(endTimeMicros / 1000L);
+		builder.append(',');
+		builder.append(product.toString());
 		builder.append(',');
 		builder.append(startTimeMicros);
 		builder.append(',');
