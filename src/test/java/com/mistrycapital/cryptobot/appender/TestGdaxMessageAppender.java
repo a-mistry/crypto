@@ -7,7 +7,6 @@ import static org.mockito.Mockito.when;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -23,13 +22,6 @@ import com.mistrycapital.cryptobot.time.TimeKeeper;
 
 class TestGdaxMessageAppender {
 	@Test
-	void shouldCalcHours() {
-		long timeMs = 1520640000000L; // 3/10/18 00:00:00 UTC
-		assertEquals(1520643600000L, GdaxMessageAppender.calcNextHourMillis(timeMs));
-		assertEquals(1520643600000L, GdaxMessageAppender.calcNextHourMillis(timeMs + 100000L));
-	}
-
-	@Test
 	void shouldGetFileName()
 		throws Exception
 	{
@@ -41,13 +33,13 @@ class TestGdaxMessageAppender {
 		FakeTimeKeeper timeKeeper = new FakeTimeKeeper(timeInMillis);
 		GdaxMessageAppender appender =
 			new GdaxMessageAppender(logDir, "base", ".txt", timeKeeper, new OrderBookManager(timeKeeper));
-		assertEquals("base-2018-03-10-00.txt", appender.getLogFileNameForCurrentTime());
+		assertEquals("base-2018-03-10-00.txt", appender.getFileNameForCurrentTime());
 		timeKeeper.setTime(timeInMillis + 50000L);
-		assertEquals("base-2018-03-10-00.txt", appender.getLogFileNameForCurrentTime());
+		assertEquals("base-2018-03-10-00.txt", appender.getFileNameForCurrentTime());
 		timeKeeper.setTime(timeInMillis + 3600000L + 50000L);
-		assertEquals("base-2018-03-10-01.txt", appender.getLogFileNameForCurrentTime());
+		assertEquals("base-2018-03-10-01.txt", appender.getFileNameForCurrentTime());
 		timeKeeper.setTime(1520687563000L);
-		assertEquals("base-2018-03-10-13.txt", appender.getLogFileNameForCurrentTime());
+		assertEquals("base-2018-03-10-13.txt", appender.getFileNameForCurrentTime());
 	}
 
 	@Test
@@ -61,7 +53,7 @@ class TestGdaxMessageAppender {
 		TimeKeeper timeKeeper = new FakeTimeKeeper();
 		GdaxMessageAppender appender =
 			new GdaxMessageAppender(logDir, "base", ".txt", timeKeeper, new OrderBookManager(timeKeeper));
-		Path logFile = logDir.resolve(appender.getLogFileNameForCurrentTime());
+		Path logFile = logDir.resolve(appender.getFileNameForCurrentTime());
 		appender.append("This is some text to write");
 		appender.append("Here's some more");
 		appender.close();
@@ -90,7 +82,7 @@ class TestGdaxMessageAppender {
 		FakeTimeKeeper timeKeeper = new FakeTimeKeeper(1520640000000L); // 3/10/18 00:00:00 UTC
 		GdaxMessageAppender appender =
 			new GdaxMessageAppender(logDir, "base", ".txt", timeKeeper, orderBookManager);
-		Path logFile1 = logDir.resolve(appender.getLogFileNameForCurrentTime());
+		Path logFile1 = logDir.resolve(appender.getFileNameForCurrentTime());
 		appender.append("Write some text in first file");
 		assertTrue(Files.exists(logFile1));
 
@@ -100,7 +92,7 @@ class TestGdaxMessageAppender {
 
 		timeKeeper.setTime(1520640000000L + 3600000L); // 1 hour forward
 		assertTrue(appender.rollIfNeeded());
-		Path logFile2 = logDir.resolve(appender.getLogFileNameForCurrentTime());
+		Path logFile2 = logDir.resolve(appender.getFileNameForCurrentTime());
 		assertNotEquals(logFile1.toAbsolutePath().toString(), logFile2.toAbsolutePath().toString());
 		appender.append("Write some text in second file");
 		assertTrue(Files.exists(logFile2));

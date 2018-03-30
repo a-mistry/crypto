@@ -6,10 +6,10 @@ public interface FileAppender {
 	/**
 	 * Append the given message to the file, with a newline inserted after
 	 */
-	public void append(String msg) throws IOException;
+	void append(String msg) throws IOException;
 
 	/**
-	 * Close this appender
+	 * Close this appender. After close() is called, no further appending can be done under any circumstances
 	 */
-	public void close() throws IOException;
+	void close() throws IOException;
 }
