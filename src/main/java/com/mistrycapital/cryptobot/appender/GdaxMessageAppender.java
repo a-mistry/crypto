@@ -2,9 +2,6 @@ package com.mistrycapital.cryptobot.appender;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
 
 import com.mistrycapital.cryptobot.book.OrderBook;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
@@ -20,9 +17,8 @@ public class GdaxMessageAppender extends CommonFileAppender {
 
 	public GdaxMessageAppender(final Path dataDir, final String baseFilename, String extension,
 		final TimeKeeper timeKeeper, final OrderBookManager orderBookManager)
-		throws IOException
 	{
-		super(timeKeeper, dataDir, baseFilename, extension, RollingPolicy.HOURLY);
+		super(timeKeeper, dataDir, baseFilename, extension, RollingPolicy.HOURLY, FlushPolicy.DONT_FLUSH);
 		this.orderBookManager = orderBookManager;
 	}
 

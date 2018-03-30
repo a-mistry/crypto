@@ -21,23 +21,36 @@ abstract class CommonFileAppender implements FileAppender {
 	private final String baseFilename;
 	private final String extension;
 	private final RollingPolicy rollingPolicy;
+	private final FlushPolicy flushPolicy;
 	private BufferedWriter writer;
 	private long nextRollMillis;
 
-	/** Creates a new appender and opens the output file for writing */
 	CommonFileAppender(final TimeKeeper timeKeeper, final Path dataDir, final String baseFilename, String extension,
-		final RollingPolicy rollingPolicy)
-		throws IOException
+		final RollingPolicy rollingPolicy, final FlushPolicy flushPolicy)
 	{
 		this.timeKeeper = timeKeeper;
 		this.dataDir = dataDir;
 		this.rollingPolicy = rollingPolicy;
+		this.flushPolicy = flushPolicy;
 		this.baseFilename = baseFilename;
 		if(extension.startsWith(".")) {
 			extension = extension.substring(1, extension.length());
 		}
 		this.extension = extension;
-		openNewFile();
+	}
+
+	@Override
+	public void open()
+		throws IOException
+	{
+		final Path dataFile = dataDir.resolve(getFileNameForCurrentTime());
+		final boolean exists = Files.exists(dataFile);
+		writer = Files.newBufferedWriter(dataFile, StandardCharsets.UTF_8, StandardOpenOption.CREATE,
+			StandardOpenOption.APPEND, StandardOpenOption.WRITE);
+		if(!exists)
+			addNewFileHeader();
+
+		nextRollMillis = rollingPolicy.calcNextRollMillis(timeKeeper.epochMs());
 	}
 
 	@Override
@@ -47,13 +60,18 @@ abstract class CommonFileAppender implements FileAppender {
 		rollIfNeeded();
 
 		writer.append(msg + '\n');
+		if(flushPolicy == FlushPolicy.FLUSH_EACH_WRITE)
+			writer.flush();
 	}
 
 	@Override
 	public void close()
 		throws IOException
 	{
-		writer.close();
+		if(writer != null) {
+			writer.close();
+			writer = null;
+		}
 	}
 
 	/**
@@ -68,25 +86,10 @@ abstract class CommonFileAppender implements FileAppender {
 			return false;
 		}
 
-		openNewFile();
-		addNewFileHeader();
+		close();
+		open();
 
 		return true;
-	}
-
-	private void openNewFile()
-		throws IOException
-	{
-		if(writer != null) {
-			writer.close();
-		}
-
-		final Path dataFile = dataDir.resolve(getFileNameForCurrentTime());
-		writer = Files
-			.newBufferedWriter(dataFile, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND,
-				StandardOpenOption.WRITE);
-
-		nextRollMillis = rollingPolicy.calcNextRollMillis(timeKeeper.epochMs());
 	}
 
 	/**
@@ -105,7 +108,8 @@ abstract class CommonFileAppender implements FileAppender {
 	}
 
 	/**
-	 * This is called when a new file is created. It can be used for example to add a header to the file
+	 * This is called when a new file is created. It can be used for example to add a header to the file. It
+	 * is not called if the file already exists from before.
 	 */
 	abstract protected void addNewFileHeader()
 		throws IOException;

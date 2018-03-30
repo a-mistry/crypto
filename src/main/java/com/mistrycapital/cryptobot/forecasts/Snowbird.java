@@ -10,7 +10,7 @@ import com.mistrycapital.cryptobot.dynamic.ProductHistory;
 import com.mistrycapital.cryptobot.gdax.websocket.Product;
 
 public class Snowbird implements Forecast {
-	private static final int THREE_HOUR_DATAPOINTS = 3 * 60 * 60 / DynamicTracker.INTERVAL_SECONDS;
+	private static final int THREE_HOUR_DATAPOINTS = 3 * 60 * 60 / ProductHistory.INTERVAL_SECONDS;
 	private static final int SIX_HOUR_DATAPOINTS = THREE_HOUR_DATAPOINTS * 2;
 
 	private final DynamicTracker dynamicTracker;

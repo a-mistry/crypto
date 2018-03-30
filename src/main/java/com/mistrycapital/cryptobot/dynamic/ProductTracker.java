@@ -33,8 +33,8 @@ class ProductTracker implements GdaxMessageProcessor {
 	}
 
 	final static long calcNextIntervalMicros(long curMicros) {
-		return (curMicros / 1000000L / DynamicTracker.INTERVAL_SECONDS + 1)
-			* 1000000L * DynamicTracker.INTERVAL_SECONDS;
+		return (curMicros / 1000000L / ProductHistory.INTERVAL_SECONDS + 1)
+			* 1000000L * ProductHistory.INTERVAL_SECONDS;
 	}
 
 	private synchronized void recordNewOrder(final Open msg) {

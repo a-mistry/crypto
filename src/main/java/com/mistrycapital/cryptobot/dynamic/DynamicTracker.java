@@ -5,8 +5,6 @@ import com.mistrycapital.cryptobot.gdax.websocket.*;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 
 public class DynamicTracker implements GdaxMessageProcessor {
-	public static final int SECONDS_TO_KEEP = 60 * 60 * 24; // keep one day
-	public static final int INTERVAL_SECONDS = 60;
 
 	private final TimeKeeper timeKeeper;
 	private final ProductTracker[] productTrackers;

@@ -6,6 +6,7 @@ import java.nio.file.Paths;
 
 import com.mistrycapital.cryptobot.appender.IntervalDataAppender;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
+import com.mistrycapital.cryptobot.gdax.websocket.Product;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.websocket.client.ClientUpgradeRequest;
 import org.eclipse.jetty.websocket.client.WebSocketClient;
@@ -47,14 +48,16 @@ public class TradeCrypto {
 		*/
 
 		Path dataDir = Paths.get(MCProperties.getProperty("dataDir"));
-		log.debug("Saving message data to " + dataDir);
+		log.debug("Saving message and sample data to " + dataDir);
 
 		TimeKeeper timeKeeper = new SystemTimeKeeper();
 		OrderBookManager orderBookManager = new OrderBookManager(timeKeeper);
 		FileAppender gdaxAppender =
 			new GdaxMessageAppender(dataDir, BOOK_MESSAGE_FILE_NAME, ".json", timeKeeper, orderBookManager);
+		gdaxAppender.open();
 		GdaxWebSocket gdaxWebSocket = new GdaxWebSocket(timeKeeper, gdaxAppender);
 		FileAppender intervalAppender = new IntervalDataAppender(dataDir, INTERVAL_FILE_NAME, timeKeeper);
+		intervalAppender.open();
 		DynamicTracker dynamicTracker = new DynamicTracker(timeKeeper, intervalAppender);
 
 		gdaxWebSocket.subscribe(orderBookManager);
@@ -81,6 +84,7 @@ public class TradeCrypto {
 				}
 			} else {
 				Thread.sleep(1000);
+				log.debug("heartbeat btc=" + orderBookManager.getBook(Product.BTC_USD).getBBO().bidPrice);
 			}
 //			// kill connection after 10s to test
 //			Thread.sleep(10000L);

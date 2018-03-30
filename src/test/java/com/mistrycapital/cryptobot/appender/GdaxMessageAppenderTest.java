@@ -7,6 +7,8 @@ import static org.mockito.Mockito.when;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -53,6 +55,10 @@ class GdaxMessageAppenderTest {
 		TimeKeeper timeKeeper = new FakeTimeKeeper();
 		GdaxMessageAppender appender =
 			new GdaxMessageAppender(logDir, "base", ".txt", timeKeeper, new OrderBookManager(timeKeeper));
+		// make sure file was already open to avoid order book msgs
+		ZonedDateTime dateTime = ZonedDateTime.ofInstant(timeKeeper.now(), ZoneOffset.UTC);
+		Files.createFile(logDir.resolve("base-" + RollingPolicy.HOURLY.format(dateTime) + ".txt"));
+		appender.open();
 		Path logFile = logDir.resolve(appender.getFileNameForCurrentTime());
 		appender.append("This is some text to write");
 		appender.append("Here's some more");
@@ -82,6 +88,7 @@ class GdaxMessageAppenderTest {
 		FakeTimeKeeper timeKeeper = new FakeTimeKeeper(1520640000000L); // 3/10/18 00:00:00 UTC
 		GdaxMessageAppender appender =
 			new GdaxMessageAppender(logDir, "base", ".txt", timeKeeper, orderBookManager);
+		appender.open();
 		Path logFile1 = logDir.resolve(appender.getFileNameForCurrentTime());
 		appender.append("Write some text in first file");
 		assertTrue(Files.exists(logFile1));

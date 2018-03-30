@@ -9,7 +9,7 @@
 
     <appender name="file" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>/home/mistry/log/output-%d{yyyy-MM-dd, UTC}.log.gz</fileNamePattern>
+            <fileNamePattern>C:\\Users\\mistr\\Documents\\gdaxtmp\\output-%d{yyyy-MM-dd, UTC}.log.gz</fileNamePattern>
         </rollingPolicy>
         <append>true</append>
         <immediateFlush>true</immediateFlush>

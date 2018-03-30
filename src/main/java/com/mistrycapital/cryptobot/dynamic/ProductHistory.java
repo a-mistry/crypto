@@ -3,6 +3,7 @@ package com.mistrycapital.cryptobot.dynamic;
 import com.mistrycapital.cryptobot.appender.FileAppender;
 import com.mistrycapital.cryptobot.gdax.websocket.Product;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
+import com.mistrycapital.cryptobot.util.MCProperties;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -14,7 +15,12 @@ import java.util.Iterator;
 public class ProductHistory {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
-	private static final int MAX_INTERVALS = DynamicTracker.SECONDS_TO_KEEP / DynamicTracker.INTERVAL_SECONDS;
+	/** Length of each interval of data aggregation */
+	public static final int INTERVAL_SECONDS = MCProperties.getIntProperty("history.intervalSeconds", 60);
+	/** Total amount of history to track (default 1 day) */
+	public static final int SECONDS_TO_KEEP = MCProperties.getIntProperty("history.secondsToKeep", 60 * 60 * 24);
+	/** Maximum number of intervals to track */
+	private static final int MAX_INTERVALS = SECONDS_TO_KEEP / INTERVAL_SECONDS;
 
 	private final Product product;
 	private final FileAppender fileAppender;

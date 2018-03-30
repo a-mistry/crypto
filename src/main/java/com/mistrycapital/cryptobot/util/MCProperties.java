@@ -25,4 +25,12 @@ public class MCProperties {
 	public static String getProperty(String key, String defaultValue) {
 		return properties.getProperty(key, defaultValue);
 	}
+
+	public static int getIntProperty(String key) {
+		return Integer.parseInt(properties.getProperty(key));
+	}
+
+	public static int getIntProperty(String key, int defaultValue) {
+		return Integer.parseInt(properties.getProperty(key, Integer.toString(defaultValue)));
+	}
 }
