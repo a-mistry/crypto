@@ -17,7 +17,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.UUID;
 
-class TestOrderBook {
+class OrderBookTest {
 	private static final double EPSILON = 0.00000001;
 
 	@Test

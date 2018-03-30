@@ -22,7 +22,7 @@ import com.mistrycapital.cryptobot.gdax.websocket.GdaxMessage.Type;
 import com.mistrycapital.cryptobot.time.FakeTimeKeeper;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 
-class TestObjectCreation {
+class ObjectCreationTest {
 	private static final double EPSILON = 0.00000001;
 
 	private GdaxWebSocket webSocket;

@@ -20,7 +20,7 @@ import com.mistrycapital.cryptobot.book.OrderBookManager;
 import com.mistrycapital.cryptobot.time.FakeTimeKeeper;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 
-class TestGdaxMessageAppender {
+class GdaxMessageAppenderTest {
 	@Test
 	void shouldGetFileName()
 		throws Exception
