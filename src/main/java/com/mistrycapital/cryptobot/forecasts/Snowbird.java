@@ -2,11 +2,7 @@ package com.mistrycapital.cryptobot.forecasts;
 
 import com.mistrycapital.cryptobot.PeriodicEvaluator;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedData;
-import com.mistrycapital.cryptobot.book.BBO;
 import com.mistrycapital.cryptobot.book.Depth;
-import com.mistrycapital.cryptobot.book.OrderBook;
-import com.mistrycapital.cryptobot.book.OrderBookManager;
-import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
 import com.mistrycapital.cryptobot.dynamic.IntervalData;
 import com.mistrycapital.cryptobot.dynamic.ProductHistory;
 import com.mistrycapital.cryptobot.gdax.websocket.Product;

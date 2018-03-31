@@ -28,7 +28,7 @@ public class ConsolidatedData {
 		}
 	}
 
-	public static ConsolidatedData getSnapshot(final OrderBookManager orderBookManager,
+	public static final ConsolidatedData getSnapshot(final OrderBookManager orderBookManager,
 		final DynamicTracker dynamicTracker)
 	{
 		ConsolidatedData data = new ConsolidatedData();
@@ -40,27 +40,27 @@ public class ConsolidatedData {
 		return data;
 	}
 
-	public BBO getBBO(Product product) {
+	public final BBO getBBO(Product product) {
 		return bbo[product.getIndex()];
 	}
 
-	public Depth getDepth1Pct(Product product) {
+	public final Depth getDepth1Pct(Product product) {
 		return depths[product.getIndex()][0];
 	}
 
-	public Depth getDepth5Pct(Product product) {
+	public final Depth getDepth5Pct(Product product) {
 		return depths[product.getIndex()][1];
 	}
 
-	public IntervalData getLatestInterval(Product product) {
+	public final IntervalData getLatestInterval(Product product) {
 		return histories[product.getIndex()].latest();
 	}
 
-	public ProductHistory getHistory(Product product) {
+	public final ProductHistory getHistory(Product product) {
 		return histories[product.getIndex()];
 	}
 
-	public String toCSVString(Product product) {
+	public final String toCSVString(Product product) {
 		final int index = product.getIndex();
 		final StringBuilder builder = new StringBuilder();
 		final BBO bbo = this.bbo[index];
@@ -89,7 +89,7 @@ public class ConsolidatedData {
 		return builder.toString();
 	}
 
-	public static String csvHeaderRow() {
+	public static final String csvHeaderRow() {
 		return "bid,ask,mid,bid_size,ask_size,bid_count_1pct,ask_count_1pct,bid_size_1pct,ask_size_1pct," +
 			"bid_count_5pct,ask_count_5pct,bid_size_1pct,ask_size_1pct," + IntervalData.csvHeaderRow();
 	}
