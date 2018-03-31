@@ -18,7 +18,7 @@ public class Match extends CommonGdaxMessage {
 	/** Order side */
 	private final OrderSide side;
 
-	Match(JsonObject json) {
+	public Match(JsonObject json) {
 		super(json);
 		tradeId = json.get("trade_id").getAsLong();
 		makerOrderId = UUID.fromString(json.get("maker_order_id").getAsString());

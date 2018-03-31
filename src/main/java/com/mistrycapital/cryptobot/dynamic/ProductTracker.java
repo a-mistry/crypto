@@ -32,6 +32,11 @@ class ProductTracker implements GdaxMessageProcessor {
 		volumeTimesPrice = 0.0;
 	}
 
+	/** Used for testing */
+	protected IntervalData readCurInterval() {
+		return curInterval;
+	}
+
 	final static long calcNextIntervalMicros(long curMicros) {
 		return (curMicros / 1000000L / ProductHistory.INTERVAL_SECONDS + 1)
 			* 1000000L * ProductHistory.INTERVAL_SECONDS;

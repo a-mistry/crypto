@@ -70,7 +70,7 @@ public class ProductHistory {
 	 * @return Latest recorded interval value (not the interval we are currently tracking)
 	 */
 	public synchronized IntervalData latest() {
-		return head.data;
+		return head != null ? head.data : null;
 	}
 
 	/**
