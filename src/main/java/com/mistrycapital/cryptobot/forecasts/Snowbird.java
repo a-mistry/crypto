@@ -1,6 +1,7 @@
 package com.mistrycapital.cryptobot.forecasts;
 
 import com.mistrycapital.cryptobot.PeriodicEvaluator;
+import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedData;
 import com.mistrycapital.cryptobot.book.BBO;
 import com.mistrycapital.cryptobot.book.Depth;
 import com.mistrycapital.cryptobot.book.OrderBook;
@@ -14,9 +15,6 @@ public class Snowbird implements Forecast {
 	private static final int THREE_HOUR_DATAPOINTS = 3 * 60 * 60 / PeriodicEvaluator.INTERVAL_SECONDS;
 	private static final int SIX_HOUR_DATAPOINTS = THREE_HOUR_DATAPOINTS * 2;
 
-	private final DynamicTracker dynamicTracker;
-	private final OrderBookManager orderBookManager;
-
 	private static final double[] coeffs = new double[] {
 		-0.000550307499740531,
 		-0.0010944365777197412,
@@ -28,40 +26,26 @@ public class Snowbird implements Forecast {
 		-0.00024395633450024047
 	};
 
-	private BBO bbo;
-	private Depth[] depths;
-
-	public Snowbird(DynamicTracker dynamicTracker, OrderBookManager orderBookManager) {
-		this.dynamicTracker = dynamicTracker;
-		this.orderBookManager = orderBookManager;
-		bbo = new BBO();
-		depths = new Depth[1];
-		depths[0] = new Depth();
-		depths[0].pctFromMid = 0.05;
+	public Snowbird() {
 	}
 
 	@Override
-	public double calculate(final Product product) {
+	public double calculate(final ConsolidatedData consolidatedData, final Product product) {
 		// calc static metrics
-		OrderBook orderBook = orderBookManager.getBook(product);
-		final int bid5PctCount;
-		final int ask5PctCount;
-		synchronized(this) {
-			orderBook.recordDepthsAndBBO(bbo, depths);
-			bid5PctCount = depths[0].bidCount;
-			ask5PctCount = depths[0].askCount;
-		}
+		final Depth depth5Pct = consolidatedData.getDepth5Pct(product);
+		final int bid5PctCount = depth5Pct.bidCount;
+		final int ask5PctCount = depth5Pct.askCount;
 		final int book5PctCount = bid5PctCount + ask5PctCount;
 		final double bookRatio = ((double) bid5PctCount) / book5PctCount;
 
 		// calc dynamic metrics
-		final ProductHistory history = dynamicTracker.getProductHistory(product);
+		final ProductHistory history = consolidatedData.getHistory(product);
 		int dataPoints = 0;
 		int bidTradeCount = 0;
 		int askTradeCount = 0;
 		int bidCancelCount = 0;
 		int askCancelCount = 0;
-		double lastTradePrice = bbo.midPrice();
+		double lastTradePrice = consolidatedData.getBBO(product).midPrice();
 		double tradePrice6h = lastTradePrice;
 		for(IntervalData data : history.values()) {
 			if(dataPoints < THREE_HOUR_DATAPOINTS) {

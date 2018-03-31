@@ -51,10 +51,8 @@ public class IntervalData {
 			+ "bid_cancel_count,ask_cancel_count,bid_cancel_size,ask_cancel_size";
 	}
 
-	private static DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-
 	public String toCSVString() {
-		StringBuilder builder = new StringBuilder();
+		final StringBuilder builder = new StringBuilder();
 		builder.append(lastPrice);
 		builder.append(',');
 		builder.append(ret);

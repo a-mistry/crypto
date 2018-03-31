@@ -1,10 +1,9 @@
 package com.mistrycapital.cryptobot;
 
-import com.mistrycapital.cryptobot.appender.FileAppender;
+import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedData;
+import com.mistrycapital.cryptobot.appender.IntervalDataAppender;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
-import com.mistrycapital.cryptobot.dynamic.IntervalData;
-import com.mistrycapital.cryptobot.gdax.websocket.Product;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
@@ -23,9 +22,9 @@ public class PeriodicEvaluator implements Runnable {
 	private final TimeKeeper timeKeeper;
 	private final OrderBookManager orderBookManager;
 	private final DynamicTracker dynamicTracker;
-	private final FileAppender intervalDataAppender;
+	private final IntervalDataAppender intervalDataAppender;
 
-	public PeriodicEvaluator(TimeKeeper timeKeeper, OrderBookManager orderBookManager, DynamicTracker dynamicTracker, FileAppender intervalDataAppender) {
+	public PeriodicEvaluator(TimeKeeper timeKeeper, OrderBookManager orderBookManager, DynamicTracker dynamicTracker, IntervalDataAppender intervalDataAppender) {
 		this.timeKeeper = timeKeeper;
 		this.orderBookManager = orderBookManager;
 		this.dynamicTracker = dynamicTracker;
@@ -38,14 +37,10 @@ public class PeriodicEvaluator implements Runnable {
 			try {
 				Thread.sleep(INTERVAL_SECONDS*1000);
 				// check if we need to evaluate
-				dynamicTracker.recordSnapshots();
-				for(Product product : Product.FAST_VALUES) {
-					IntervalData intervalData = dynamicTracker.getProductHistory(product).latest();
-					//orderBookManager.getBook(product).recordDepthsAndBBO(bbo, depths);
-					intervalDataAppender.append(intervalData.toCSVString());
+				ConsolidatedData consolidatedData = ConsolidatedData.getSnapshot(orderBookManager, dynamicTracker);
+				intervalDataAppender.recordSnapshot(timeKeeper.epochNanos()/1000L, consolidatedData);
 
-					// update signals
-				}
+				// update signals
 			} catch(InterruptedException e) {
 				log.error("Sampling/trading thread interrupted", e);
 			} catch(IOException e) {
