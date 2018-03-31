@@ -76,27 +76,13 @@ class ProductTrackerTest {
 		matchAsk2 = new Match(msgJson);
 	}
 
-	@Test
-	void calcNextIntervalMicros() {
-		assertEquals(60, ProductHistory.INTERVAL_SECONDS);
-		long timeMicros = 1520640000000000L; // 3/10/18 00:00:00 UTC
-		assertEquals(1520640060000000L, ProductTracker.calcNextIntervalMicros(timeMicros));
-		assertEquals(1520640060000000L, ProductTracker.calcNextIntervalMicros(timeMicros + 12345000L));
-	}
-
 
 	@Test
 	void shouldTrackNewOrder()
 		throws Exception
 	{
-		FileSystem fs = Jimfs.newFileSystem(Configuration.unix());
-		Path dataDir = fs.getPath("/logs");
-		Files.createDirectory(dataDir);
-
-		FakeTimeKeeper timeKeeper = new FakeTimeKeeper(System.currentTimeMillis());
-		FileAppender fileAppender = new IntervalDataAppender(dataDir, "samples", timeKeeper);
-		ProductHistory history = new ProductHistory(Product.LTC_USD, fileAppender);
-		ProductTracker tracker = new ProductTracker(Product.BTC_USD, timeKeeper, history);
+		ProductHistory history = new ProductHistory(100);
+		ProductTracker tracker = new ProductTracker();
 
 		// first do new/canceled orders
 		tracker.process(openBid);
@@ -105,12 +91,11 @@ class ProductTrackerTest {
 		tracker.process(canceledBid1);
 		tracker.process(canceledBid2);
 
-		IntervalData intervalData = tracker.readCurInterval();
-		assertEquals(Product.BTC_USD, intervalData.product);
+		IntervalData intervalData = tracker.snapshot();
 		assertEquals(Double.NaN, intervalData.lastPrice);
 		assertEquals(Double.NaN, intervalData.ret);
 		assertEquals(0, intervalData.volume);
-		assertEquals(0.0, intervalData.vwap);
+		assertEquals(Double.NaN, intervalData.vwap);
 		assertEquals(0, intervalData.bidTradeCount);
 		assertEquals(0.0, intervalData.bidTradeSize);
 		assertEquals(0, intervalData.askTradeCount);
@@ -124,21 +109,14 @@ class ProductTrackerTest {
 		assertEquals(1, intervalData.newAskCount);
 		assertEquals(openAsk.getRemainingSize(), intervalData.newAskSize);
 
-		// check roll over to history
-		timeKeeper.setTime(System.currentTimeMillis() + 60000L);
-		tracker.process(matchBid);
-		assertEquals(intervalData, history.latest());
-
 		// now verify trades
-		timeKeeper.setTime(System.currentTimeMillis() + 120000L);
+		tracker.process(matchBid);
+		tracker.snapshot();
 		tracker.process(matchBid);
 		tracker.process(matchAsk1);
 		tracker.process(matchAsk2);
-		timeKeeper.setTime(System.currentTimeMillis() + 180000L);
-		tracker.process(openBid); // dummy
 
-		intervalData = history.latest();
-		assertEquals(Product.BTC_USD, intervalData.product);
+		intervalData = tracker.snapshot();
 		assertEquals(matchAsk2.getPrice(), intervalData.lastPrice);
 		assertEquals(matchAsk2.getPrice() / matchBid.getPrice() - 1, intervalData.ret);
 		List<Match> matchList = Arrays.asList(matchBid, matchAsk1, matchAsk2);

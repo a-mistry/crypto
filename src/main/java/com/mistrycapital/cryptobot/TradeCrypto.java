@@ -58,13 +58,20 @@ public class TradeCrypto {
 		GdaxWebSocket gdaxWebSocket = new GdaxWebSocket(timeKeeper, gdaxAppender);
 		FileAppender intervalAppender = new IntervalDataAppender(dataDir, INTERVAL_FILE_NAME, timeKeeper);
 		intervalAppender.open();
-		DynamicTracker dynamicTracker = new DynamicTracker(timeKeeper, intervalAppender);
+		DynamicTracker dynamicTracker =
+			new DynamicTracker(PeriodicEvaluator.SECONDS_TO_KEEP / PeriodicEvaluator.INTERVAL_SECONDS);
+		PeriodicEvaluator periodicEvaluator =
+			new PeriodicEvaluator(timeKeeper, orderBookManager, dynamicTracker, intervalAppender);
 
 		gdaxWebSocket.subscribe(orderBookManager);
 		gdaxWebSocket.subscribe(dynamicTracker);
 
 		URI gdaxWebSocketURI = new URI("wss://ws-feed.gdax.com");
 		WebSocketClient socketClient = new WebSocketClient(new SslContextFactory());
+
+		Thread t = new Thread(periodicEvaluator);
+		t.setDaemon(true);
+		t.start();
 
 		while(true) {
 			if(!gdaxWebSocket.isConnected()) {

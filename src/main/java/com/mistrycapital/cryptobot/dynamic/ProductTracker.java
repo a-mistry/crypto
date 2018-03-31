@@ -1,49 +1,23 @@
 package com.mistrycapital.cryptobot.dynamic;
 
 import com.mistrycapital.cryptobot.gdax.websocket.*;
-import com.mistrycapital.cryptobot.time.TimeKeeper;
 
 class ProductTracker implements GdaxMessageProcessor {
-	// need to split up this class into one that tracks current interval and one that tracks history
-	// these two are mixed here in a confusing way
-
-	private final Product product;
-	private final TimeKeeper timeKeeper;
-	private final ProductHistory history;
-
 	/** Current interval data */
 	private IntervalData curInterval;
-	/** Current interval end time in micros */
-	private long intervalEndMicros;
 	// extra values we need to keep track of
 	/** Last trade price of previous interval */
 	private double prevLastPrice;
 	/** Volume times price, used for VWAP calculation */
 	private double volumeTimesPrice;
 
-	ProductTracker(Product product, TimeKeeper timeKeeper, ProductHistory history) {
-		this.product = product;
-		this.timeKeeper = timeKeeper;
-		this.history = history;
-		final long curMicros = timeKeeper.epochNanos() / 1000L;
-		intervalEndMicros = calcNextIntervalMicros(curMicros);
-		curInterval = new IntervalData(product, curMicros, intervalEndMicros);
+	ProductTracker() {
+		curInterval = new IntervalData();
 		prevLastPrice = Double.NaN;
 		volumeTimesPrice = 0.0;
 	}
 
-	/** Used for testing */
-	protected IntervalData readCurInterval() {
-		return curInterval;
-	}
-
-	final static long calcNextIntervalMicros(long curMicros) {
-		return (curMicros / 1000000L / ProductHistory.INTERVAL_SECONDS + 1)
-			* 1000000L * ProductHistory.INTERVAL_SECONDS;
-	}
-
 	private synchronized void recordNewOrder(final Open msg) {
-		rollOverIfNeeded();
 		final double size = msg.getRemainingSize();
 		if(msg.getOrderSide() == OrderSide.BUY) {
 			curInterval.newBidCount++;
@@ -55,7 +29,6 @@ class ProductTracker implements GdaxMessageProcessor {
 	}
 
 	private synchronized void recordCancel(final Done msg) {
-		rollOverIfNeeded();
 		final double size = msg.getRemainingSize();
 		if(msg.getOrderSide() == OrderSide.BUY) {
 			curInterval.bidCancelCount++;
@@ -67,7 +40,6 @@ class ProductTracker implements GdaxMessageProcessor {
 	}
 
 	private synchronized void recordTrade(final Match msg) {
-		rollOverIfNeeded();
 		final double price = msg.getPrice();
 		final double size = msg.getSize();
 		curInterval.lastPrice = price;
@@ -82,20 +54,19 @@ class ProductTracker implements GdaxMessageProcessor {
 		}
 	}
 
-	private void rollOverIfNeeded() {
-		if(timeKeeper.epochNanos() / 1000L < intervalEndMicros)
-			return;
-
+	public synchronized IntervalData snapshot() {
+		// finalize current interval
 		if(!Double.isNaN(prevLastPrice))
 			curInterval.ret = curInterval.lastPrice / prevLastPrice - 1.0;
 		curInterval.vwap = curInterval.volume > 0.0 ? volumeTimesPrice / curInterval.volume : Double.NaN;
-		history.add(curInterval);
+		IntervalData retValue = curInterval;
 
+		// set up next interval
 		prevLastPrice = curInterval.lastPrice;
 		volumeTimesPrice = 0.0;
-		final long curMicros = intervalEndMicros;
-		intervalEndMicros = calcNextIntervalMicros(curMicros);
-		curInterval = new IntervalData(product, curMicros, intervalEndMicros);
+		curInterval = new IntervalData();
+
+		return retValue;
 	}
 
 	@Override

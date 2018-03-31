@@ -1,28 +1,33 @@
 package com.mistrycapital.cryptobot.dynamic;
 
-import com.mistrycapital.cryptobot.appender.FileAppender;
 import com.mistrycapital.cryptobot.gdax.websocket.*;
-import com.mistrycapital.cryptobot.time.TimeKeeper;
 
 public class DynamicTracker implements GdaxMessageProcessor {
-
-	private final TimeKeeper timeKeeper;
 	private final ProductTracker[] productTrackers;
 	private final ProductHistory[] productHistories;
 
-	public DynamicTracker(TimeKeeper timeKeeper, FileAppender intervalFileAppender) {
-		this.timeKeeper = timeKeeper;
+	public DynamicTracker(final int maxIntervals) {
 		productHistories = new ProductHistory[Product.count];
 		productTrackers = new ProductTracker[Product.count];
 		for(Product product : Product.FAST_VALUES) {
-			productHistories[product.getIndex()] = new ProductHistory(product, intervalFileAppender);
-			productTrackers[product.getIndex()] =
-				new ProductTracker(product, timeKeeper, productHistories[product.getIndex()]);
+			productHistories[product.getIndex()] = new ProductHistory(maxIntervals);
+			productTrackers[product.getIndex()] = new ProductTracker();
 		}
 	}
 
 	public ProductHistory getProductHistory(Product product) {
 		return productHistories[product.getIndex()];
+	}
+
+	/**
+	 * Records snapshot of each product's last interval data and stores it in the product history. This
+	 * should be called at regular intervals to capture the history correctly.
+	 */
+	public void recordSnapshots() {
+		for(Product product : Product.FAST_VALUES) {
+			IntervalData intervalData = productTrackers[product.getIndex()].snapshot();
+			productHistories[product.getIndex()].add(intervalData);
+		}
 	}
 
 	@Override
