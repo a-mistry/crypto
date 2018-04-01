@@ -53,21 +53,19 @@ public class PeriodicEvaluator implements Runnable {
 			try {
 				long remainingMs = nextIntervalMillis - timeKeeper.epochMs();
 				if(remainingMs <= 0) {
+					log.debug("snapshot");
 					evaluateInterval();
 					final long timeMs = timeKeeper.epochMs();
 					nextIntervalMillis = calcNextIntervalMillis(timeMs);
 					remainingMs = nextIntervalMillis - timeMs;
 				}
 
+				// try to get as close as possible to the beginning of the interval
 				final long sleepMs;
 				if(remainingMs > 100) {
 					sleepMs = remainingMs - 100;
-				} else if(remainingMs > 20) {
-					sleepMs = remainingMs - 20;
-				} else if(remainingMs > 5) {
-					sleepMs = remainingMs - 5;
 				} else {
-					sleepMs = 1;
+					sleepMs = remainingMs;
 				}
 				log.debug("Sleeping for " + sleepMs + "ms");
 				Thread.sleep(sleepMs);

@@ -81,7 +81,7 @@ class ProductTracker implements GdaxMessageProcessor {
 
 	@Override
 	public void process(final Done msg) {
-		if(msg.getReason() == Reason.CANCELED) {
+		if(msg.getReason() == Reason.CANCELED && msg.isLimitOrder()) {
 			recordCancel(msg);
 		}
 	}

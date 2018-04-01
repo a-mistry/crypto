@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
+    <property resource="default.properties" />
+
     <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS, UTC}Z %level [%logger{36}] %msg%n</pattern>
@@ -9,7 +11,7 @@
 
     <appender name="file" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>C:\\Users\\mistr\\Documents\\gdaxtmp\\output-%d{yyyy-MM-dd, UTC}.log.gz</fileNamePattern>
+            <fileNamePattern>${dataDir}${fileSeparator}output-%d{yyyy-MM-dd, UTC}.log.gz</fileNamePattern>
         </rollingPolicy>
         <append>true</append>
         <immediateFlush>true</immediateFlush>
