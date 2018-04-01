@@ -4,9 +4,9 @@ import java.net.URI;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import com.mistrycapital.cryptobot.appender.ForecastAppender;
 import com.mistrycapital.cryptobot.appender.IntervalDataAppender;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
-import com.mistrycapital.cryptobot.gdax.websocket.Product;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.websocket.client.ClientUpgradeRequest;
 import org.eclipse.jetty.websocket.client.WebSocketClient;
@@ -26,6 +26,7 @@ public class TradeCrypto {
 
 	private static final String BOOK_MESSAGE_FILE_NAME = "gdax-orders";
 	private static final String INTERVAL_FILE_NAME = "samples";
+	private static final String FORECAST_FILE_NAME = "forecasts";
 
 	public static void main(String[] args)
 		throws Exception
@@ -58,10 +59,12 @@ public class TradeCrypto {
 		GdaxWebSocket gdaxWebSocket = new GdaxWebSocket(timeKeeper, gdaxAppender);
 		IntervalDataAppender intervalAppender = new IntervalDataAppender(dataDir, INTERVAL_FILE_NAME, timeKeeper);
 		intervalAppender.open();
+		ForecastAppender forecastAppender = new ForecastAppender(dataDir, FORECAST_FILE_NAME, timeKeeper);
+		forecastAppender.open();
 		DynamicTracker dynamicTracker =
 			new DynamicTracker(PeriodicEvaluator.SECONDS_TO_KEEP / PeriodicEvaluator.INTERVAL_SECONDS);
 		PeriodicEvaluator periodicEvaluator =
-			new PeriodicEvaluator(timeKeeper, orderBookManager, dynamicTracker, intervalAppender);
+			new PeriodicEvaluator(timeKeeper, orderBookManager, dynamicTracker, intervalAppender, forecastAppender);
 
 		gdaxWebSocket.subscribe(orderBookManager);
 		gdaxWebSocket.subscribe(dynamicTracker);
@@ -91,7 +94,6 @@ public class TradeCrypto {
 				}
 			} else {
 				Thread.sleep(1000);
-				log.debug("heartbeat btc=" + orderBookManager.getBook(Product.BTC_USD).getBBO().bidPrice);
 			}
 //			// kill connection after 10s to test
 //			Thread.sleep(10000L);

@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 
 /**
  * Appends messages to a log file, with a new file created with the frequency specified in the RollingPolicy
@@ -79,7 +80,7 @@ abstract class CommonFileAppender implements FileAppender {
 	 *
 	 * @return true if we rolled to a new file
 	 */
-	public boolean rollIfNeeded()
+	boolean rollIfNeeded()
 		throws IOException
 	{
 		if(timeKeeper.epochMs() < nextRollMillis) {
@@ -95,7 +96,7 @@ abstract class CommonFileAppender implements FileAppender {
 	/**
 	 * @return File name to use for the output file, given the current time
 	 */
-	protected String getFileNameForCurrentTime() {
+	String getFileNameForCurrentTime() {
 		ZonedDateTime dateTime = ZonedDateTime.ofInstant(timeKeeper.now(), ZoneOffset.UTC);
 
 		StringBuilder builder = new StringBuilder();
@@ -113,4 +114,7 @@ abstract class CommonFileAppender implements FileAppender {
 	 */
 	abstract protected void addNewFileHeader()
 		throws IOException;
+
+	/** Formatter used for date in csv files */
+	static DateTimeFormatter CSV_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 }

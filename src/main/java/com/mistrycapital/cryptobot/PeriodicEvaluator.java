@@ -1,10 +1,12 @@
 package com.mistrycapital.cryptobot;
 
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedData;
+import com.mistrycapital.cryptobot.appender.ForecastAppender;
 import com.mistrycapital.cryptobot.appender.IntervalDataAppender;
+import com.mistrycapital.cryptobot.book.BBO;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
-import com.mistrycapital.cryptobot.forecasts.Forecast;
+import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.websocket.Product;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
@@ -26,18 +28,22 @@ public class PeriodicEvaluator implements Runnable {
 	private final OrderBookManager orderBookManager;
 	private final DynamicTracker dynamicTracker;
 	private final IntervalDataAppender intervalDataAppender;
+	private final ForecastAppender forecastAppender;
 
 	private long nextIntervalMillis;
-	private Forecast snowbird;
+	private ForecastCalculator snowbird;
+	private double[] forecasts;
 
 	public PeriodicEvaluator(TimeKeeper timeKeeper, OrderBookManager orderBookManager, DynamicTracker dynamicTracker,
-		IntervalDataAppender intervalDataAppender)
+		IntervalDataAppender intervalDataAppender, ForecastAppender forecastAppender)
 	{
 		this.timeKeeper = timeKeeper;
 		this.orderBookManager = orderBookManager;
 		this.dynamicTracker = dynamicTracker;
 		this.intervalDataAppender = intervalDataAppender;
+		this.forecastAppender = forecastAppender;
 		snowbird = new Snowbird();
+		forecasts = new double[Product.count];
 		nextIntervalMillis = calcNextIntervalMillis(timeKeeper.epochMs());
 	}
 
@@ -45,18 +51,26 @@ public class PeriodicEvaluator implements Runnable {
 	public void run() {
 		while(true) {
 			try {
-				final long timeMs = timeKeeper.epochMs();
-				final long remainingMs = nextIntervalMillis - timeMs;
+				long remainingMs = nextIntervalMillis - timeKeeper.epochMs();
 				if(remainingMs <= 0) {
 					evaluateInterval();
+					final long timeMs = timeKeeper.epochMs();
 					nextIntervalMillis = calcNextIntervalMillis(timeMs);
-				} else if(remainingMs > 100) {
-					Thread.sleep(remainingMs - 100);
-				} else if(remainingMs > 20){
-					Thread.sleep(10);
-				} else {
-					Thread.sleep(1);
+					remainingMs = nextIntervalMillis - timeMs;
 				}
+
+				final long sleepMs;
+				if(remainingMs > 100) {
+					sleepMs = remainingMs - 100;
+				} else if(remainingMs > 20) {
+					sleepMs = remainingMs - 20;
+				} else if(remainingMs > 5) {
+					sleepMs = remainingMs - 5;
+				} else {
+					sleepMs = 1;
+				}
+				log.debug("Sleeping for " + sleepMs + "ms");
+				Thread.sleep(sleepMs);
 
 			} catch(InterruptedException e) {
 				log.error("Sampling/trading thread interrupted", e);
@@ -65,20 +79,34 @@ public class PeriodicEvaluator implements Runnable {
 	}
 
 	void evaluateInterval() {
+		// check that data is available on all books
+		BBO bbo = new BBO();
+		for(Product product : Product.FAST_VALUES) {
+			orderBookManager.getBook(product).recordBBO(bbo);
+			if(Double.isNaN(bbo.bidPrice) || Double.isNaN(bbo.askPrice))
+				return; // need to wait for book data to become available before recording
+		}
+
 		// get data snapshot
+		dynamicTracker.recordSnapshots();
 		ConsolidatedData consolidatedData = ConsolidatedData.getSnapshot(orderBookManager, dynamicTracker);
 
 		// save to file
 		try {
-			intervalDataAppender.recordSnapshot(timeKeeper.epochNanos() / 1000L, consolidatedData);
+			intervalDataAppender.recordSnapshot(nextIntervalMillis, consolidatedData);
 		} catch(IOException e) {
 			log.error("Error saving interval data", e);
 		}
 
 		// update signals
 		for(Product product : Product.FAST_VALUES) {
-			double forecast = snowbird.calculate(consolidatedData, product);
-			log.debug("Forecast " + product + " = " + forecast);
+			forecasts[product.getIndex()] = snowbird.calculate(consolidatedData, product);
+//			log.debug("Calc'd forecast " + product + " = " + forecasts[product.getIndex()]);
+		}
+		try {
+			forecastAppender.recordForecasts(nextIntervalMillis, forecasts);
+		} catch(IOException e) {
+			log.error("Error saving forecast data", e);
 		}
 
 		// possibly trade
