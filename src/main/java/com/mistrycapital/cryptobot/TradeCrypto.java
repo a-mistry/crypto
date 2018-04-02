@@ -25,8 +25,8 @@ public class TradeCrypto {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
 	private static final String BOOK_MESSAGE_FILE_NAME = "gdax-orders";
-	private static final String INTERVAL_FILE_NAME = "samples";
-	private static final String FORECAST_FILE_NAME = "forecasts";
+	public static final String INTERVAL_FILE_NAME = "samples";
+	public static final String FORECAST_FILE_NAME = "forecasts";
 
 	public static void main(String[] args)
 		throws Exception

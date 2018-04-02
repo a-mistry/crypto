@@ -10,7 +10,7 @@ public class ChangeFunds extends OrderGdaxMessage {
 	/** New funds */
 	private final double newFunds;
 
-	ChangeFunds(JsonObject json) {
+	public ChangeFunds(JsonObject json) {
 		super(json);
 		if(json.has("price")) {
 			price = Double.parseDouble(json.get("price").getAsString());

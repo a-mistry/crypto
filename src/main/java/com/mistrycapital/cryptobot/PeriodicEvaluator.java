@@ -110,7 +110,12 @@ public class PeriodicEvaluator implements Runnable {
 		// possibly trade
 	}
 
-	final static long calcNextIntervalMillis(long curMillis) {
+	/**
+	 * Used to determine when a sampling interval has ended
+	 * @param curMillis Current time in millis since epoch
+	 * @return Time when the next interval will end, in millis since epoch
+	 */
+	public static final long calcNextIntervalMillis(long curMillis) {
 		return (curMillis / 1000L / INTERVAL_SECONDS + 1) * 1000L * INTERVAL_SECONDS;
 	}
 

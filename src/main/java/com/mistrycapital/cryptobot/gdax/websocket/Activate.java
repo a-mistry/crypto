@@ -14,7 +14,7 @@ public class Activate extends OrderGdaxMessage {
 	/** Stop type - loss or entry */
 	private final StopType stopType;
 	
-	Activate(JsonObject json) {
+	public Activate(JsonObject json) {
 		super(json);
 		stopPrice = Double.parseDouble(json.get("stop_price").getAsString());
 		hasSize = json.has("size");

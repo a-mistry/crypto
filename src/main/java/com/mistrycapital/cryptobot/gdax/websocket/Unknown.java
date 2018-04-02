@@ -3,7 +3,7 @@ package com.mistrycapital.cryptobot.gdax.websocket;
 import com.google.gson.JsonObject;
 
 public class Unknown extends CommonGdaxMessage {
-	Unknown(JsonObject json) {
+	public Unknown(JsonObject json) {
 		super(json);
 	}
 
