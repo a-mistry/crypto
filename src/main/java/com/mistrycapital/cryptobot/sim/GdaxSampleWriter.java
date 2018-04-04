@@ -49,8 +49,12 @@ public class GdaxSampleWriter {
 			final GdaxMessage message = messageQueue.poll();
 			if(message == null && done)
 				break;
-			if(message == null)
+			if(message == null) {
+				try {
+					Thread.sleep(1);
+				} catch(InterruptedException e) {}
 				continue;
+			}
 
 			timeKeeper.advanceTime(message.getTimeMicros() * 1000L);
 			message.process(orderBookManager);

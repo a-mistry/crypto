@@ -53,7 +53,7 @@ public class PeriodicEvaluator implements Runnable {
 			try {
 				long remainingMs = nextIntervalMillis - timeKeeper.epochMs();
 				if(remainingMs <= 0) {
-					log.debug("snapshot");
+					log.trace("snapshot");
 					evaluateInterval();
 					final long timeMs = timeKeeper.epochMs();
 					nextIntervalMillis = calcNextIntervalMillis(timeMs);
@@ -67,7 +67,7 @@ public class PeriodicEvaluator implements Runnable {
 				} else {
 					sleepMs = remainingMs;
 				}
-				log.debug("Sleeping for " + sleepMs + "ms");
+				log.trace("Sleeping for " + sleepMs + "ms");
 				Thread.sleep(sleepMs);
 
 			} catch(InterruptedException e) {
@@ -99,7 +99,6 @@ public class PeriodicEvaluator implements Runnable {
 		// update signals
 		for(Product product : Product.FAST_VALUES) {
 			forecasts[product.getIndex()] = snowbird.calculate(consolidatedData, product);
-//			log.debug("Calc'd forecast " + product + " = " + forecasts[product.getIndex()]);
 		}
 		try {
 			forecastAppender.recordForecasts(nextIntervalMillis, forecasts);

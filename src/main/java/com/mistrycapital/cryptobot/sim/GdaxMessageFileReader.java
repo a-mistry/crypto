@@ -14,6 +14,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.function.BiPredicate;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -54,7 +55,6 @@ public class GdaxMessageFileReader implements Runnable {
 		return aStr.compareTo(bStr);
 	};
 
-
 	@Override
 	public void run() {
 		try {
@@ -63,6 +63,7 @@ public class GdaxMessageFileReader implements Runnable {
 				path.getFileName().toString().matches("gdax-orders-\\d\\d\\d\\d-\\d\\d-\\d\\d.*.zip");
 			final List<Path> zips = Files
 				.find(dataDir, 1, zipMatcher)
+				.filter(GdaxMessageFileReader::hasNoCheckpoint)
 				.collect(Collectors.toList());
 
 			for(Path zipPath : zips) {
@@ -77,12 +78,27 @@ public class GdaxMessageFileReader implements Runnable {
 					BufferedReader jsonReader = new BufferedReader(new InputStreamReader(inputStream));
 					readJson(jsonReader);
 				}
+
+				writeCheckpoint(zipPath);
 			}
 			writer.markDone();
 
 		} catch(IOException e) {
 			throw new RuntimeException(e);
 		}
+	}
+
+	static Path getCheckpointPath(Path zipPath) {
+		String checkpointName = zipPath.getFileName().toString().replace(".zip","-checked.txt");
+		return zipPath.getParent().resolve(checkpointName);
+	}
+
+	static boolean hasNoCheckpoint(Path zipPath) {
+		return !Files.exists(getCheckpointPath(zipPath));
+	}
+
+	static void writeCheckpoint(Path zipPath) throws IOException {
+		Files.createFile(getCheckpointPath(zipPath));
 	}
 
 	private void readJson(BufferedReader jsonReader) {
