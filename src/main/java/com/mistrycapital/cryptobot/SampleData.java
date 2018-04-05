@@ -5,6 +5,7 @@ import com.mistrycapital.cryptobot.book.OrderBookManager;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
 import com.mistrycapital.cryptobot.gdax.websocket.GdaxMessage;
 import com.mistrycapital.cryptobot.sim.GdaxMessageFileReader;
+import com.mistrycapital.cryptobot.sim.GdaxMessageTranslator;
 import com.mistrycapital.cryptobot.sim.GdaxSampleWriter;
 import com.mistrycapital.cryptobot.sim.SimTimeKeeper;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
@@ -38,12 +39,17 @@ public class SampleData {
 		DynamicTracker dynamicTracker = new DynamicTracker(SECONDS_TO_KEEP / INTERVAL_SECONDS);
 
 		BlockingQueue<GdaxMessage> messageQueue = new LinkedBlockingQueue<>();
+		BlockingQueue<String> messageStringQueue = new ArrayBlockingQueue<>(10000);
 		GdaxSampleWriter writer = new GdaxSampleWriter(timeKeeper, orderBookManager, dynamicTracker, intervalAppender, messageQueue);
-		GdaxMessageFileReader reader = new GdaxMessageFileReader(dataDir, messageQueue, writer);
+		GdaxMessageTranslator translator = new GdaxMessageTranslator(messageStringQueue, messageQueue, writer);
+		GdaxMessageFileReader reader = new GdaxMessageFileReader(dataDir, messageStringQueue, translator);
 
 		Thread readerThread = new Thread(reader);
 		readerThread.setDaemon(true);
 		readerThread.start();
+		Thread translatorThread = new Thread(translator);
+		translatorThread.setDaemon(true);
+		translatorThread.start();
 
 		writer.sample();
 	}
