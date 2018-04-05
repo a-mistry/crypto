@@ -31,23 +31,6 @@ public class TradeCrypto {
 	public static void main(String[] args)
 		throws Exception
 	{
-		/*
-		HttpClient client = HttpClient.newHttpClient();
-		HttpRequest request = HttpRequest.newBuilder()
-			.uri(new URI("https://api.gdax.com/products"))
-			.GET()
-			.header("User-Agent", "Custom")
-			.build();
-		HttpResponse<String> response = client.send(request, HttpResponse.BodyHandler.asString());
-		if(response.statusCode() == 200) {
-			System.out.println("Worked. Response is ");
-			System.out.println(response.body());
-		} else {
-			System.out.println("not working err=" + response.statusCode());
-			System.out.println(response.body());
-		}
-		*/
-
 		Path dataDir = Paths.get(MCProperties.getProperty("dataDir"));
 		log.debug("Saving message and sample data to " + dataDir);
 
