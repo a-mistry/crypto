@@ -18,8 +18,6 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import static com.mistrycapital.cryptobot.PeriodicEvaluator.INTERVAL_SECONDS;
-import static com.mistrycapital.cryptobot.PeriodicEvaluator.SECONDS_TO_KEEP;
 import static com.mistrycapital.cryptobot.TradeCrypto.INTERVAL_FILE_NAME;
 
 /**
@@ -36,7 +34,7 @@ public class SampleData {
 		SimTimeKeeper timeKeeper = new SimTimeKeeper();
 		OrderBookManager orderBookManager = new OrderBookManager(timeKeeper);
 		IntervalDataAppender intervalAppender = new IntervalDataAppender(dataDir, INTERVAL_FILE_NAME, timeKeeper);
-		DynamicTracker dynamicTracker = new DynamicTracker(SECONDS_TO_KEEP / INTERVAL_SECONDS);
+		DynamicTracker dynamicTracker = new DynamicTracker();
 
 		BlockingQueue<GdaxMessage> messageQueue = new LinkedBlockingQueue<>();
 		BlockingQueue<String> messageStringQueue = new ArrayBlockingQueue<>(10000);

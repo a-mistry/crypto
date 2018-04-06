@@ -23,7 +23,7 @@ public class PeriodicEvaluator implements Runnable {
 	/** Total amount of history to track (default 1 day) */
 	public static final int SECONDS_TO_KEEP = MCProperties.getIntProperty("history.secondsToKeep", 60 * 60 * 24);
 	/** Length of each interval of data aggregation */
-	public static final int INTERVAL_SECONDS = MCProperties.getIntProperty("history.intervalSeconds", 60);
+	public static final int INTERVAL_SECONDS = MCProperties.getIntProperty("history.intervalSeconds", 5 * 60);
 
 	private final TimeKeeper timeKeeper;
 	private final OrderBookManager orderBookManager;
@@ -114,6 +114,7 @@ public class PeriodicEvaluator implements Runnable {
 
 	/**
 	 * Used to determine when a sampling interval has ended
+	 *
 	 * @param curMillis Current time in millis since epoch
 	 * @return Time when the next interval will end, in millis since epoch
 	 */

@@ -44,8 +44,7 @@ public class TradeCrypto {
 		intervalAppender.open();
 		ForecastAppender forecastAppender = new ForecastAppender(dataDir, FORECAST_FILE_NAME, timeKeeper);
 		forecastAppender.open();
-		DynamicTracker dynamicTracker =
-			new DynamicTracker(PeriodicEvaluator.SECONDS_TO_KEEP / PeriodicEvaluator.INTERVAL_SECONDS);
+		DynamicTracker dynamicTracker = new DynamicTracker();
 		PeriodicEvaluator periodicEvaluator =
 			new PeriodicEvaluator(timeKeeper, orderBookManager, dynamicTracker, intervalAppender, forecastAppender);
 

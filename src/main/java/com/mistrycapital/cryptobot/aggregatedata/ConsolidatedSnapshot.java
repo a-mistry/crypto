@@ -24,12 +24,11 @@ public class ConsolidatedSnapshot {
 	public static final ConsolidatedSnapshot getSnapshot(final OrderBookManager orderBookManager,
 		final DynamicTracker dynamicTracker)
 	{
-		dynamicTracker.recordSnapshots();
 		final ProductSnapshot[] productSnapshots = new ProductSnapshot[Product.count];
 		for(Product product : Product.FAST_VALUES) {
 			final OrderBook orderBook = orderBookManager.getBook(product);
-			final IntervalData intervalData = dynamicTracker.getLatestInterval(product);
-			productSnapshots[product.getIndex()] = new ProductSnapshot(product, orderBook, intervalData);
+			final IntervalData intervalData = dynamicTracker.getSnapshot(product);
+			productSnapshots[product.getIndex()] = ProductSnapshot.getSnapshot(product, orderBook, intervalData);
 		}
 		return new ConsolidatedSnapshot(productSnapshots);
 	}

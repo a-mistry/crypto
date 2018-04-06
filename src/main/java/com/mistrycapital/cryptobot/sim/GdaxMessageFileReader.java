@@ -76,7 +76,7 @@ public class GdaxMessageFileReader implements Runnable {
 						try {
 							if(messageStringQueue.remainingCapacity() == 0) {
 								Thread.sleep(1);
-								waitMs++;
+								waitMs += 10;
 								if(waitMs % 1000 == 0)
 									log.debug("Waited " + (waitMs/1000) + "s in string reader");
 							}

@@ -1,21 +1,12 @@
 package com.mistrycapital.cryptobot.dynamic;
 
-import com.google.common.jimfs.Configuration;
-import com.google.common.jimfs.Jimfs;
 import com.google.gson.JsonObject;
-import com.mistrycapital.cryptobot.appender.FileAppender;
-import com.mistrycapital.cryptobot.appender.IntervalDataAppender;
 import com.mistrycapital.cryptobot.gdax.websocket.Done;
 import com.mistrycapital.cryptobot.gdax.websocket.Match;
 import com.mistrycapital.cryptobot.gdax.websocket.Open;
-import com.mistrycapital.cryptobot.gdax.websocket.Product;
-import com.mistrycapital.cryptobot.time.FakeTimeKeeper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.nio.file.FileSystem;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -78,10 +69,7 @@ class ProductTrackerTest {
 
 
 	@Test
-	void shouldTrackNewOrder()
-		throws Exception
-	{
-		ProductHistory history = new ProductHistory(100);
+	void shouldTrackNewOrder() {
 		ProductTracker tracker = new ProductTracker();
 
 		// first do new/canceled orders

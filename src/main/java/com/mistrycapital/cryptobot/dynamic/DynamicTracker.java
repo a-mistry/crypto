@@ -4,34 +4,20 @@ import com.mistrycapital.cryptobot.gdax.websocket.*;
 
 public class DynamicTracker implements GdaxMessageProcessor {
 	private final ProductTracker[] productTrackers;
-	private final ProductHistory[] productHistories;
 
-	public DynamicTracker(final int maxIntervals) {
-		productHistories = new ProductHistory[Product.count];
+	public DynamicTracker() {
 		productTrackers = new ProductTracker[Product.count];
 		for(Product product : Product.FAST_VALUES) {
-			productHistories[product.getIndex()] = new ProductHistory(maxIntervals);
 			productTrackers[product.getIndex()] = new ProductTracker();
 		}
 	}
 
-	public IntervalData getLatestInterval(Product product) {
-		return productHistories[product.getIndex()].latest();
-	}
-
-	public ProductHistory getProductHistory(Product product) {
-		return productHistories[product.getIndex()];
-	}
-
 	/**
-	 * Records snapshot of each product's last interval data and stores it in the product history. This
+	 * Records snapshot of each product's last interval data and rolls to the next interval. This
 	 * should be called at regular intervals to capture the history correctly.
 	 */
-	public void recordSnapshots() {
-		for(Product product : Product.FAST_VALUES) {
-			IntervalData intervalData = productTrackers[product.getIndex()].snapshot();
-			productHistories[product.getIndex()].add(intervalData);
-		}
+	public IntervalData getSnapshot(Product product) {
+		return productTrackers[product.getIndex()].snapshot();
 	}
 
 	@Override

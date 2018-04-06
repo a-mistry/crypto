@@ -35,7 +35,6 @@ public class GdaxMessageTranslator implements Runnable {
 	}
 
 	private long readWaitMs = 0;
-	private long writeWaitMs = 0;
 
 	@Override
 	public void run() {
@@ -58,9 +57,6 @@ public class GdaxMessageTranslator implements Runnable {
 				if(gdaxMessage != null) {
 					if(messageQueue.remainingCapacity() == 0) {
 						Thread.sleep(1);
-						writeWaitMs++;
-						if(writeWaitMs % 1000 == 0)
-							log.debug("Waited " + (writeWaitMs/1000) + "s in translator writer");
 					}
 					messageQueue.put(gdaxMessage);
 				}

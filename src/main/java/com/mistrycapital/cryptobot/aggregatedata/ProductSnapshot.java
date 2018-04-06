@@ -77,8 +77,7 @@ public class ProductSnapshot {
 	/** Size of asks canceled */
 	public final double askCancelSize;
 
-	ProductSnapshot(Product product, OrderBook orderBook, IntervalData intervalData) {
-		this.product = product;
+	public static ProductSnapshot getSnapshot(Product product, OrderBook orderBook, IntervalData intervalData) {
 		BBO bbo = new BBO();
 		Depth[] depths = new Depth[2];
 		depths[DEPTH_1PCT] = new Depth();
@@ -87,20 +86,26 @@ public class ProductSnapshot {
 		depths[DEPTH_5PCT].pctFromMid = 0.05;
 		orderBook.recordDepthsAndBBO(bbo, depths);
 
+		return new ProductSnapshot(product, bbo, depths[0], depths[1], intervalData);
+	}
+
+	private ProductSnapshot(Product product, BBO bbo, Depth depth1Pct, Depth depth5Pct, IntervalData intervalData) {
+		this.product = product;
+
 		bidPrice = bbo.bidPrice;
 		askPrice = bbo.askPrice;
 		midPrice = bbo.midPrice();
 		bidSize = bbo.bidSize;
 		askSize = bbo.askSize;
 
-		bidCount1Pct = depths[DEPTH_1PCT].bidCount;
-		askCount1Pct = depths[DEPTH_1PCT].askCount;
-		bidCount5Pct = depths[DEPTH_5PCT].bidCount;
-		askCount5Pct = depths[DEPTH_5PCT].askCount;
-		bidSize1Pct = depths[DEPTH_1PCT].bidSize;
-		askSize1Pct = depths[DEPTH_1PCT].askSize;
-		bidSize5Pct = depths[DEPTH_5PCT].bidSize;
-		askSize5Pct = depths[DEPTH_5PCT].askSize;
+		bidCount1Pct = depth1Pct.bidCount;
+		askCount1Pct = depth1Pct.askCount;
+		bidCount5Pct = depth5Pct.bidCount;
+		askCount5Pct = depth5Pct.askCount;
+		bidSize1Pct = depth1Pct.bidSize;
+		askSize1Pct = depth1Pct.askSize;
+		bidSize5Pct = depth5Pct.bidSize;
+		askSize5Pct = depth5Pct.askSize;
 
 		lastPrice = intervalData.lastPrice;
 		ret = intervalData.ret;
