@@ -1,6 +1,6 @@
 package com.mistrycapital.cryptobot.sim;
 
-import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedData;
+import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.appender.IntervalDataAppender;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
@@ -65,10 +65,9 @@ public class GdaxSampleWriter {
 				nextIntervalMillis = calcNextIntervalMillis(timeKeeper.epochMs());
 			} else if(timeKeeper.epochMs() >= nextIntervalMillis) {
 				try {
-					dynamicTracker.recordSnapshots();
-					final ConsolidatedData consolidatedData =
-						ConsolidatedData.getSnapshot(orderBookManager, dynamicTracker);
-					intervalDataAppender.recordSnapshot(timeKeeper.epochMs(), consolidatedData);
+					final ConsolidatedSnapshot consolidatedSnapshot =
+						ConsolidatedSnapshot.getSnapshot(orderBookManager, dynamicTracker);
+					intervalDataAppender.recordSnapshot(timeKeeper.epochMs(), consolidatedSnapshot);
 				} catch(IOException e) {
 					log.error("Could not store snapshot, time=" + timeKeeper.epochNanos() + " " + timeKeeper.iso8601(),
 						e);

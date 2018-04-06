@@ -1,6 +1,7 @@
 package com.mistrycapital.cryptobot.appender;
 
-import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedData;
+import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
+import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
 import com.mistrycapital.cryptobot.gdax.websocket.Product;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 
@@ -20,7 +21,7 @@ public class IntervalDataAppender extends CommonFileAppender {
 	}
 
 	/** Records aggregated data for the latest interval and static data, with the given timestamp */
-	public void recordSnapshot(final long timeMs, final ConsolidatedData consolidatedData)
+	public void recordSnapshot(final long timeMs, final ConsolidatedSnapshot consolidatedSnapshot)
 		throws IOException
 	{
 		final ZonedDateTime dateTime = ZonedDateTime.ofInstant(Instant.ofEpochMilli(timeMs), ZoneOffset.UTC);
@@ -31,9 +32,7 @@ public class IntervalDataAppender extends CommonFileAppender {
 			builder.append(',');
 			builder.append(timeMs / 1000L);
 			builder.append(',');
-			builder.append(product);
-			builder.append(',');
-			builder.append(consolidatedData.toCSVString(product));
+			builder.append(consolidatedSnapshot.getProductSnapshot(product).toCSVString());
 			append(builder.toString());
 		}
 	}
@@ -42,6 +41,6 @@ public class IntervalDataAppender extends CommonFileAppender {
 	protected void addNewFileHeader()
 		throws IOException
 	{
-		append("date,unix_timestamp,product," + ConsolidatedData.csvHeaderRow());
+		append("date,unix_timestamp," + ProductSnapshot.csvHeaderRow());
 	}
 }

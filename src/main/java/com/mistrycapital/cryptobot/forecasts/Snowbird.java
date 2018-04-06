@@ -1,10 +1,9 @@
 package com.mistrycapital.cryptobot.forecasts;
 
 import com.mistrycapital.cryptobot.PeriodicEvaluator;
-import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedData;
-import com.mistrycapital.cryptobot.book.Depth;
-import com.mistrycapital.cryptobot.dynamic.IntervalData;
-import com.mistrycapital.cryptobot.dynamic.ProductHistory;
+import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
+import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
+import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
 import com.mistrycapital.cryptobot.gdax.websocket.Product;
 
 public class Snowbird implements ForecastCalculator {
@@ -22,28 +21,24 @@ public class Snowbird implements ForecastCalculator {
 		-0.00024395633450024047
 	};
 
-	public Snowbird() {
-	}
-
 	@Override
-	public double calculate(final ConsolidatedData consolidatedData, final Product product) {
+	public double calculate(final ConsolidatedHistory consolidatedHistory, final Product product) {
+		ProductSnapshot latest = consolidatedHistory.latest().getProductSnapshot(product);
+
 		// calc static metrics
-		final Depth depth5Pct = consolidatedData.getDepth5Pct(product);
-		final int bid5PctCount = depth5Pct.bidCount;
-		final int ask5PctCount = depth5Pct.askCount;
-		final int book5PctCount = bid5PctCount + ask5PctCount;
-		final double bookRatio = ((double) bid5PctCount) / book5PctCount;
+		final int book5PctCount = latest.bidCount5Pct + latest.askCount5Pct;
+		final double bookRatio = ((double) latest.bidCount5Pct) / book5PctCount;
 
 		// calc dynamic metrics
-		final ProductHistory history = consolidatedData.getHistory(product);
 		int dataPoints = 0;
 		int bidTradeCount = 0;
 		int askTradeCount = 0;
 		int bidCancelCount = 0;
 		int askCancelCount = 0;
-		double lastTradePrice = consolidatedData.getBBO(product).midPrice();
+		double lastTradePrice = latest.midPrice;
 		double tradePrice6h = lastTradePrice;
-		for(IntervalData data : history.values()) {
+		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values()) {
+			ProductSnapshot data = snapshot.getProductSnapshot(product);
 			if(dataPoints < THREE_HOUR_DATAPOINTS) {
 				bidTradeCount += data.bidTradeCount;
 				askTradeCount += data.askTradeCount;
@@ -70,5 +65,8 @@ public class Snowbird implements ForecastCalculator {
 		return coeffs[0] + coeffs[1] * bookRatio + coeffs[2] * bidTradeToBook + coeffs[3] * askTradeToBook
 			+ coeffs[4] * bidCancelToBook + coeffs[5] * askCancelToBook
 			+ coeffs[6] * bidCancelToBook * ret6h + coeffs[7] * askCancelToBook * ret6h;
+	}
+
+	public Snowbird() {
 	}
 }

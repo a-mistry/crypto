@@ -15,6 +15,10 @@ public class DynamicTracker implements GdaxMessageProcessor {
 		}
 	}
 
+	public IntervalData getLatestInterval(Product product) {
+		return productHistories[product.getIndex()].latest();
+	}
+
 	public ProductHistory getProductHistory(Product product) {
 		return productHistories[product.getIndex()];
 	}

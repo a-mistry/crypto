@@ -1,6 +1,7 @@
 package com.mistrycapital.cryptobot;
 
-import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedData;
+import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
+import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.appender.ForecastAppender;
 import com.mistrycapital.cryptobot.appender.IntervalDataAppender;
 import com.mistrycapital.cryptobot.book.BBO;
@@ -29,6 +30,7 @@ public class PeriodicEvaluator implements Runnable {
 	private final DynamicTracker dynamicTracker;
 	private final IntervalDataAppender intervalDataAppender;
 	private final ForecastAppender forecastAppender;
+	private final ConsolidatedHistory consolidatedHistory;
 
 	private long nextIntervalMillis;
 	private ForecastCalculator snowbird;
@@ -45,6 +47,7 @@ public class PeriodicEvaluator implements Runnable {
 		snowbird = new Snowbird();
 		forecasts = new double[Product.count];
 		nextIntervalMillis = calcNextIntervalMillis(timeKeeper.epochMs());
+		consolidatedHistory = new ConsolidatedHistory(SECONDS_TO_KEEP / INTERVAL_SECONDS);
 	}
 
 	@Override
@@ -86,19 +89,19 @@ public class PeriodicEvaluator implements Runnable {
 		}
 
 		// get data snapshot
-		dynamicTracker.recordSnapshots();
-		ConsolidatedData consolidatedData = ConsolidatedData.getSnapshot(orderBookManager, dynamicTracker);
+		ConsolidatedSnapshot consolidatedSnapshot = ConsolidatedSnapshot.getSnapshot(orderBookManager, dynamicTracker);
+		consolidatedHistory.add(consolidatedSnapshot);
 
 		// save to file
 		try {
-			intervalDataAppender.recordSnapshot(nextIntervalMillis, consolidatedData);
+			intervalDataAppender.recordSnapshot(nextIntervalMillis, consolidatedSnapshot);
 		} catch(IOException e) {
 			log.error("Error saving interval data", e);
 		}
 
 		// update signals
 		for(Product product : Product.FAST_VALUES) {
-			forecasts[product.getIndex()] = snowbird.calculate(consolidatedData, product);
+			forecasts[product.getIndex()] = snowbird.calculate(consolidatedHistory, product);
 		}
 		try {
 			forecastAppender.recordForecasts(nextIntervalMillis, forecasts);

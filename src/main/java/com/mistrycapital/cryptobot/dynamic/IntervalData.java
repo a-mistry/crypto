@@ -1,7 +1,5 @@
 package com.mistrycapital.cryptobot.dynamic;
 
-import java.time.format.DateTimeFormatter;
-
 /**
  * Dynamic product data for a given interval
  */
@@ -42,48 +40,5 @@ public class IntervalData {
 	IntervalData() {
 		lastPrice = Double.NaN;
 		ret = Double.NaN;
-	}
-
-	public static String csvHeaderRow() {
-		return "last_price,ret_5m,volume,vwap,"
-			+ "bid_trade_count,ask_trade_count,bid_trade_size,ask_trade_size,"
-			+ "new_bid_count,new_ask_count,new_bid_size,new_ask_size,"
-			+ "bid_cancel_count,ask_cancel_count,bid_cancel_size,ask_cancel_size";
-	}
-
-	public String toCSVString() {
-		final StringBuilder builder = new StringBuilder();
-		builder.append(lastPrice);
-		builder.append(',');
-		builder.append(ret);
-		builder.append(',');
-		builder.append(volume);
-		builder.append(',');
-		builder.append(vwap);
-		builder.append(',');
-		builder.append(bidTradeCount);
-		builder.append(',');
-		builder.append(askTradeCount);
-		builder.append(',');
-		builder.append(bidTradeSize);
-		builder.append(',');
-		builder.append(askTradeSize);
-		builder.append(',');
-		builder.append(newBidCount);
-		builder.append(',');
-		builder.append(newAskCount);
-		builder.append(',');
-		builder.append(newBidSize);
-		builder.append(',');
-		builder.append(newAskSize);
-		builder.append(',');
-		builder.append(bidCancelCount);
-		builder.append(',');
-		builder.append(askCancelCount);
-		builder.append(',');
-		builder.append(bidCancelSize);
-		builder.append(',');
-		builder.append(askCancelSize);
-		return builder.toString();
 	}
 }
