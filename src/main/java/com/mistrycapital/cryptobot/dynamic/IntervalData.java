@@ -37,7 +37,7 @@ public class IntervalData {
 	/** Size of asks canceled */
 	public double askCancelSize;
 
-	IntervalData() {
+	public IntervalData() {
 		lastPrice = Double.NaN;
 		ret = Double.NaN;
 	}
