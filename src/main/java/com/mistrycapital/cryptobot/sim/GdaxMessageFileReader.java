@@ -63,6 +63,8 @@ public class GdaxMessageFileReader implements Runnable {
 				.collect(Collectors.toList());
 
 			for(Path zipPath : zips) {
+				long startNanos = System.nanoTime();
+
 				ZipFile zipFile = new ZipFile(zipPath.toFile());
 				List<ZipEntry> entries = zipFile.stream()
 					.sorted(jsonSorter)
@@ -77,7 +79,7 @@ public class GdaxMessageFileReader implements Runnable {
 							if(messageStringQueue.remainingCapacity() == 0) {
 								Thread.sleep(1);
 								waitMs += 10;
-								if(waitMs % 1000 == 0)
+								if(waitMs % 10000 == 0)
 									log.debug("Waited " + (waitMs/1000) + "s in string reader");
 							}
 							messageStringQueue.put(line);
@@ -88,6 +90,8 @@ public class GdaxMessageFileReader implements Runnable {
 				}
 
 				writeCheckpoint(zipPath);
+
+				log.info("Completed " + zipPath + " in " + (System.nanoTime()-startNanos)/1000000000.0 + "s");
 			}
 			writer.markDone();
 

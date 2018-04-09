@@ -161,12 +161,12 @@ public class ProductSnapshot {
 
 	/** @return Column headers for csv output */
 	public static final String csvHeaderRow() {
-		return "product,bid,ask,mid,bid_size,ask_size,bid_count_1pct,ask_count_1pct,bid_size_1pct,ask_size_1pct," +
-			"bid_count_5pct,ask_count_5pct,bid_size_5pct,ask_size_5pct," +
-			"last_price,ret_5m,volume,vwap," +
-			"bid_trade_count,ask_trade_count,bid_trade_size,ask_trade_size," +
-			"new_bid_count,new_ask_count,new_bid_size,new_ask_size," +
-			"bid_cancel_count,ask_cancel_count,bid_cancel_size,ask_cancel_size";
+		return "product,bidPrice,askPrice,midPrice,bidSize,askSize,bidCount1Pct,askCount1Pct,bidSize1Pct,askSize1Pct," +
+			"bidCount5Pct,askCount5Pct,bidSize5Pct,askSize5Pct," +
+			"lastPrice,ret,volume,vwap," +
+			"bidTradeCount,askTradeCount,bidTradeSize,askTradeSize," +
+			"newBidCount,newAskCount,newBidSize,newAskSize," +
+			"bidCancelCount,askCancelCount,bidCancelSize,askCancelSize";
 	}
 
 	/** @return CSV output row */
