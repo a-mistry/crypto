@@ -33,8 +33,9 @@ public class GdaxMessageFileReader implements Runnable {
 		this.writer = writer;
 	}
 
-	final private Pattern hourlyJsonPattern = Pattern.compile("gdax-orders-\\d\\d\\d\\d-\\d\\d-\\d\\d-(\\d*).json");
-	final Comparator<ZipEntry> jsonSorter = (a, b) -> {
+	private static final Pattern hourlyJsonPattern = Pattern.compile("gdax-orders-\\d\\d\\d\\d-\\d\\d-\\d\\d-(\\d*).json");
+	/** Sorts the same day's json entries by the hour */
+	static final Comparator<ZipEntry> hourlyJsonSorter = (a, b) -> {
 		final String aStr = a.getName();
 		final String bStr = b.getName();
 		Matcher aMatcher = hourlyJsonPattern.matcher(aStr);
@@ -67,7 +68,7 @@ public class GdaxMessageFileReader implements Runnable {
 
 				ZipFile zipFile = new ZipFile(zipPath.toFile());
 				List<ZipEntry> entries = zipFile.stream()
-					.sorted(jsonSorter)
+					.sorted(hourlyJsonSorter)
 					.collect(Collectors.toList());
 
 				for(ZipEntry entry : entries) {
