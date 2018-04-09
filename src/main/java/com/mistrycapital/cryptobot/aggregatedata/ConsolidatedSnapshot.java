@@ -12,7 +12,7 @@ import com.mistrycapital.cryptobot.gdax.websocket.Product;
 public class ConsolidatedSnapshot {
 	private ProductSnapshot[] productSnapshots;
 
-	private ConsolidatedSnapshot(final ProductSnapshot[] productSnapshots) {
+	public ConsolidatedSnapshot(final ProductSnapshot[] productSnapshots) {
 		this.productSnapshots = productSnapshots;
 	}
 

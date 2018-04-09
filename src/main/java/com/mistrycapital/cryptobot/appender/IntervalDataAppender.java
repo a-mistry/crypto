@@ -41,6 +41,6 @@ public class IntervalDataAppender extends CommonFileAppender {
 	protected void addNewFileHeader()
 		throws IOException
 	{
-		append("date,unix_timestamp," + ProductSnapshot.csvHeaderRow());
+		append("date,unixTimestamp," + ProductSnapshot.csvHeaderRow());
 	}
 }
