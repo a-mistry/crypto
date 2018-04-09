@@ -5,5 +5,6 @@ module crypto {
 	requires websocket.api;
 	requires websocket.client;
 	requires jetty.util;
+	requires commons.csv;
 	exports com.mistrycapital.cryptobot.gdax.websocket;
 }

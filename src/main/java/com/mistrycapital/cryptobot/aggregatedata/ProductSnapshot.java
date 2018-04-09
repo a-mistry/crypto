@@ -5,6 +5,7 @@ import com.mistrycapital.cryptobot.book.Depth;
 import com.mistrycapital.cryptobot.book.OrderBook;
 import com.mistrycapital.cryptobot.dynamic.IntervalData;
 import com.mistrycapital.cryptobot.gdax.websocket.Product;
+import org.apache.commons.csv.CSVRecord;
 
 /**
  * Snapshot of product information (static book data and dynamic data recorded over the last interval)
@@ -123,6 +124,39 @@ public class ProductSnapshot {
 		askCancelCount = intervalData.askCancelCount;
 		bidCancelSize = intervalData.bidCancelSize;
 		askCancelSize = intervalData.askCancelSize;
+	}
+
+	public ProductSnapshot(CSVRecord record) {
+		product = Product.parse(record.get("product"));
+		bidPrice = Double.parseDouble(record.get("bidPrice"));
+		askPrice = Double.parseDouble(record.get("askPrice"));
+		midPrice = Double.parseDouble(record.get("midPrice"));
+		bidSize = Double.parseDouble(record.get("bidSize"));
+		askSize = Double.parseDouble(record.get("askSize"));
+		bidCount1Pct = Integer.parseInt(record.get("bidCount1Pct"));
+		askCount1Pct = Integer.parseInt(record.get("askCount1Pct"));
+		bidCount5Pct = Integer.parseInt(record.get("bidCount5Pct"));
+		askCount5Pct = Integer.parseInt(record.get("askCount5Pct"));
+		bidSize1Pct = Double.parseDouble(record.get("bidSize1Pct"));
+		askSize1Pct = Double.parseDouble(record.get("askSize1Pct"));
+		bidSize5Pct = Double.parseDouble(record.get("bidSize5Pct"));
+		askSize5Pct = Double.parseDouble(record.get("askSize5Pct"));
+		lastPrice = Double.parseDouble(record.get("lastPrice"));
+		ret = Double.parseDouble(record.get("ret"));
+		volume = Double.parseDouble(record.get("volume"));
+		vwap = Double.parseDouble(record.get("vwap"));
+		bidTradeCount = Long.parseLong(record.get("bidTradeCount"));
+		askTradeCount = Long.parseLong(record.get("askTradeCount"));
+		bidTradeSize = Double.parseDouble(record.get("bidTradeSize"));
+		askTradeSize = Double.parseDouble(record.get("askTradeSize"));
+		newBidCount = Long.parseLong(record.get("newBidCount"));
+		newAskCount = Long.parseLong(record.get("newAskCount"));
+		newBidSize = Double.parseDouble(record.get("newBidSize"));
+		newAskSize = Double.parseDouble(record.get("newAskSize"));
+		bidCancelCount = Long.parseLong(record.get("bidCancelCount"));
+		askCancelCount = Long.parseLong(record.get("askCancelCount"));
+		bidCancelSize = Double.parseDouble(record.get("bidCancelSize"));
+		askCancelSize = Double.parseDouble(record.get("askCancelSize"));
 	}
 
 	/** @return Column headers for csv output */
