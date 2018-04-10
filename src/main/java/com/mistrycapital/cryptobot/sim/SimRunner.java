@@ -8,6 +8,7 @@ import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
+import com.mistrycapital.cryptobot.util.MCProperties;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -25,6 +26,8 @@ import static com.mistrycapital.cryptobot.PeriodicEvaluator.SECONDS_TO_KEEP;
 
 public class SimRunner implements Runnable {
 	private static final Logger log = MCLoggerFactory.getLogger();
+
+	private static final boolean LOG_FORECASTS = MCProperties.getBooleanProperty("sim.logForecasts", false);
 
 	private final Path dataDir;
 	private final SimTimeKeeper timeKeeper;
@@ -103,10 +106,12 @@ public class SimRunner implements Runnable {
 		for(Product product : Product.FAST_VALUES) {
 			forecasts[product.getIndex()] = forecastCalculator.calculate(history, product);
 		}
-		try {
-			forecastAppender.recordForecasts(timeKeeper.epochMs(), forecasts);
-		} catch(IOException e) {
-			log.error("Error saving forecast data", e);
+		if(LOG_FORECASTS) {
+			try {
+				forecastAppender.recordForecasts(timeKeeper.epochMs(), forecasts);
+			} catch(IOException e) {
+				log.error("Error saving forecast data", e);
+			}
 		}
 
 		// possibly trade

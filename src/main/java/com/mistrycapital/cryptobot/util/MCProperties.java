@@ -33,4 +33,12 @@ public class MCProperties {
 	public static int getIntProperty(String key, int defaultValue) {
 		return Integer.parseInt(properties.getProperty(key, Integer.toString(defaultValue)));
 	}
+
+	public static boolean getBooleanProperty(String key) {
+		return Boolean.parseBoolean(properties.getProperty(key));
+	}
+
+	public static boolean getBooleanProperty(String key, boolean defaultValue) {
+		return Boolean.parseBoolean(properties.getProperty(key, Boolean.toString(defaultValue)));
+	}
 }
