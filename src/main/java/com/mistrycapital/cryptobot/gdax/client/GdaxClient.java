@@ -30,6 +30,9 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
+/**
+ * Asynchronous gdax REST client
+ */
 public class GdaxClient {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
@@ -47,9 +50,7 @@ public class GdaxClient {
 		jsonParser = new JsonParser();
 	}
 
-	public CompletableFuture<List<Account>> getAccounts()
-		throws GdaxException
-	{
+	public CompletableFuture<List<Account>> getAccounts() {
 		return submit("/accounts", "GET", null)
 			.thenApply(jsonElement -> {
 				JsonArray jsonArray = jsonElement.getAsJsonArray();
@@ -60,6 +61,14 @@ public class GdaxClient {
 			});
 	}
 
+	/**
+	 * Submits the request to the gdax API asynchronously
+	 *
+	 * @param path   URI path, e.g. /accounts
+	 * @param method GET or POST
+	 * @param body   Body for a POST request or null for a GET
+	 * @return Future with json returned by the API, which throws GdaxException if there was an error
+	 */
 	private CompletableFuture<JsonElement> submit(String path, String method, JsonObject body) {
 		final boolean isPost = method.equals("POST");
 		final String bodyString = isPost ? body.toString() : "";
@@ -91,6 +100,7 @@ public class GdaxClient {
 			});
 	}
 
+	/** HTTP error */
 	public class GdaxException extends RuntimeException {
 		private final int errorCode;
 		private final String body;
@@ -100,8 +110,23 @@ public class GdaxClient {
 			this.errorCode = errorCode;
 			this.body = body;
 		}
+
+		public final int getErrorCode() {
+			return errorCode;
+		}
+
+		public final String getBody() {
+			return body;
+		}
 	}
 
+	/**
+	 * @param timestamp Unix timestamp in seconds
+	 * @param path      URI path, for example /accounts
+	 * @param method    GET or POST
+	 * @param body      Body for POST request, or "" for GET
+	 * @return CB-ACCESS-SIGN signature
+	 */
 	private String getSignature(final long timestamp, final String path, final String method, final String body) {
 		final String toEncode = timestamp + method + path + body;
 		try {

@@ -15,6 +15,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
 
 /**
@@ -33,7 +34,8 @@ public class GdaxMessageFileReader implements Runnable {
 		this.writer = writer;
 	}
 
-	private static final Pattern hourlyJsonPattern = Pattern.compile("gdax-orders-\\d\\d\\d\\d-\\d\\d-\\d\\d-(\\d*).json");
+	private static final Pattern hourlyJsonPattern =
+		Pattern.compile("gdax-orders-\\d\\d\\d\\d-\\d\\d-\\d\\d-(\\d*).json");
 	/** Sorts the same day's json entries by the hour */
 	static final Comparator<ZipEntry> hourlyJsonSorter = (a, b) -> {
 		final String aStr = a.getName();
@@ -66,33 +68,38 @@ public class GdaxMessageFileReader implements Runnable {
 			for(Path zipPath : zips) {
 				long startNanos = System.nanoTime();
 
-				ZipFile zipFile = new ZipFile(zipPath.toFile());
-				List<ZipEntry> entries = zipFile.stream()
-					.sorted(hourlyJsonSorter)
-					.collect(Collectors.toList());
+				try {
+					ZipFile zipFile = new ZipFile(zipPath.toFile());
+					List<ZipEntry> entries = zipFile.stream()
+						.sorted(hourlyJsonSorter)
+						.collect(Collectors.toList());
 
-				for(ZipEntry entry : entries) {
-					log.info("Reading entry " + entry.getName() + " in zip " + zipPath);
-					InputStream inputStream = zipFile.getInputStream(entry);
-					BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-					reader.lines().forEach(line -> {
-						try {
-							if(messageStringQueue.remainingCapacity() == 0) {
-								Thread.sleep(1);
-								waitMs += 10;
-								if(waitMs % 10000 == 0)
-									log.debug("Waited " + (waitMs/1000) + "s in string reader");
+					for(ZipEntry entry : entries) {
+						log.info("Reading entry " + entry.getName() + " in zip " + zipPath);
+						InputStream inputStream = zipFile.getInputStream(entry);
+						BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+						reader.lines().forEach(line -> {
+							try {
+								if(messageStringQueue.remainingCapacity() == 0) {
+									Thread.sleep(1);
+									waitMs += 10;
+									if(waitMs % 100000 == 0)
+										log.debug("Waited " + (waitMs / 1000) + "s in string reader");
+								}
+								messageStringQueue.put(line);
+							} catch(InterruptedException e) {
+								throw new RuntimeException(e);
 							}
-							messageStringQueue.put(line);
-						} catch(InterruptedException e) {
-							throw new RuntimeException(e);
-						}
-					});
+						});
+					}
+
+					writeCheckpoint(zipPath);
+
+					log.info("Completed " + zipPath + " in " + (System.nanoTime() - startNanos) / 1000000000.0 + "s");
+
+				} catch(ZipException e) {
+					log.error("Could not parse zip " + zipPath, e);
 				}
-
-				writeCheckpoint(zipPath);
-
-				log.info("Completed " + zipPath + " in " + (System.nanoTime()-startNanos)/1000000000.0 + "s");
 			}
 			writer.markDone();
 
