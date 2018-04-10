@@ -5,15 +5,18 @@ import com.mistrycapital.cryptobot.book.OrderBookManager;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
 import com.mistrycapital.cryptobot.dynamic.IntervalData;
 import com.mistrycapital.cryptobot.gdax.common.Product;
+import com.mistrycapital.cryptobot.time.TimeKeeper;
 
 /**
  * Snapshot of all product data as of the end of an interval
  */
 public class ConsolidatedSnapshot {
-	private ProductSnapshot[] productSnapshots;
+	private final ProductSnapshot[] productSnapshots;
+	private final long timeNanos;
 
-	public ConsolidatedSnapshot(final ProductSnapshot[] productSnapshots) {
+	public ConsolidatedSnapshot(final ProductSnapshot[] productSnapshots, long timeNanos) {
 		this.productSnapshots = productSnapshots;
+		this.timeNanos = timeNanos;
 	}
 
 	/**
@@ -22,7 +25,7 @@ public class ConsolidatedSnapshot {
 	 * @return Snapshot of all product data as of now (the end of the interval)
 	 */
 	public static final ConsolidatedSnapshot getSnapshot(final OrderBookManager orderBookManager,
-		final DynamicTracker dynamicTracker)
+		final DynamicTracker dynamicTracker, final TimeKeeper timeKeeper)
 	{
 		final ProductSnapshot[] productSnapshots = new ProductSnapshot[Product.count];
 		for(Product product : Product.FAST_VALUES) {
@@ -30,10 +33,14 @@ public class ConsolidatedSnapshot {
 			final IntervalData intervalData = dynamicTracker.getSnapshot(product);
 			productSnapshots[product.getIndex()] = ProductSnapshot.getSnapshot(product, orderBook, intervalData);
 		}
-		return new ConsolidatedSnapshot(productSnapshots);
+		return new ConsolidatedSnapshot(productSnapshots, timeKeeper.epochNanos());
 	}
 
 	public ProductSnapshot getProductSnapshot(Product product) {
 		return productSnapshots[product.getIndex()];
+	}
+
+	public long getTimeNanos() {
+		return timeNanos;
 	}
 }

@@ -66,7 +66,7 @@ public class GdaxSampleWriter {
 			} else if(timeKeeper.epochMs() >= nextIntervalMillis) {
 				try {
 					final ConsolidatedSnapshot consolidatedSnapshot =
-						ConsolidatedSnapshot.getSnapshot(orderBookManager, dynamicTracker);
+						ConsolidatedSnapshot.getSnapshot(orderBookManager, dynamicTracker, timeKeeper);
 					intervalDataAppender.recordSnapshot(timeKeeper.epochMs(), consolidatedSnapshot);
 				} catch(IOException e) {
 					log.error("Could not store snapshot, time=" + timeKeeper.epochNanos() + " " + timeKeeper.iso8601(),

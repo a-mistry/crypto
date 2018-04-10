@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -47,7 +48,8 @@ public class SimRunner implements Runnable {
 	public void run() {
 		try {
 
-			ConsolidatedHistory history = new ConsolidatedHistory(SECONDS_TO_KEEP / INTERVAL_SECONDS);
+			// first read sampled data
+			List<ConsolidatedSnapshot> consolidatedSnapshots = new ArrayList<>(365 * 24 * 12); // 1 year
 			ProductSnapshot[] productSnapshots = new ProductSnapshot[Product.count];
 
 			for(Path sampleFile : getSampleFiles()) {
@@ -62,14 +64,22 @@ public class SimRunner implements Runnable {
 						productSnapshots[productSnapshot.product.getIndex()] = productSnapshot;
 
 						if(isFull(productSnapshots)) {
-							ConsolidatedSnapshot consolidatedSnapshot = new ConsolidatedSnapshot(productSnapshots);
-							history.add(consolidatedSnapshot);
+							ConsolidatedSnapshot consolidatedSnapshot =
+								new ConsolidatedSnapshot(productSnapshots, timeNanos);
+							consolidatedSnapshots.add(consolidatedSnapshot);
 							productSnapshots = new ProductSnapshot[Product.count];
-
-							evaluate(consolidatedSnapshot, history);
 						}
 					}
 				}
+			}
+
+			// now "sim"
+			ConsolidatedHistory history = new ConsolidatedHistory(SECONDS_TO_KEEP / INTERVAL_SECONDS);
+			SimTimeKeeper treatmentTimeKeeper = new SimTimeKeeper();
+			for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedSnapshots) {
+				treatmentTimeKeeper.advanceTime(consolidatedSnapshot.getTimeNanos());
+				history.add(consolidatedSnapshot);
+				evaluate(consolidatedSnapshot, history);
 			}
 
 		} catch(IOException e) {

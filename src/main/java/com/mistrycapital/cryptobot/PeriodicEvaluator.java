@@ -89,7 +89,8 @@ public class PeriodicEvaluator implements Runnable {
 		}
 
 		// get data snapshot
-		ConsolidatedSnapshot consolidatedSnapshot = ConsolidatedSnapshot.getSnapshot(orderBookManager, dynamicTracker);
+		ConsolidatedSnapshot consolidatedSnapshot =
+			ConsolidatedSnapshot.getSnapshot(orderBookManager, dynamicTracker, timeKeeper);
 		consolidatedHistory.add(consolidatedSnapshot);
 
 		// save to file
