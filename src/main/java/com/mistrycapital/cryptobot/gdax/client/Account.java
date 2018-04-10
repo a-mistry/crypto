@@ -1,6 +1,7 @@
 package com.mistrycapital.cryptobot.gdax.client;
 
 import com.google.gson.JsonObject;
+import com.mistrycapital.cryptobot.gdax.common.Currency;
 
 import java.util.UUID;
 

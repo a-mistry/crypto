@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.Test;
 
-import com.mistrycapital.cryptobot.gdax.websocket.OrderSide;
+import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 
 class OrderLineTest {
 	private static double EPSILON = 0.00000001;

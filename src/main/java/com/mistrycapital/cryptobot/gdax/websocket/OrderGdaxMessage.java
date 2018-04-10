@@ -3,6 +3,7 @@ package com.mistrycapital.cryptobot.gdax.websocket;
 import java.util.UUID;
 
 import com.google.gson.JsonObject;
+import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 
 abstract class OrderGdaxMessage extends CommonGdaxMessage {
 	/** Order id */

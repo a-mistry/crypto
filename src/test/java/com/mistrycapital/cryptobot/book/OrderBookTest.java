@@ -2,8 +2,8 @@ package com.mistrycapital.cryptobot.book;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.gdax.websocket.*;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.google.gson.JsonArray;
@@ -12,9 +12,6 @@ import com.google.gson.JsonParser;
 import com.mistrycapital.cryptobot.time.FakeTimeKeeper;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 
-import javax.crypto.EncryptedPrivateKeyInfo;
-import java.io.IOException;
-import java.time.Instant;
 import java.util.UUID;
 
 class OrderBookTest {

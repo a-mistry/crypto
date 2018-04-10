@@ -4,7 +4,7 @@ import com.mistrycapital.cryptobot.book.BBO;
 import com.mistrycapital.cryptobot.book.Depth;
 import com.mistrycapital.cryptobot.book.OrderBook;
 import com.mistrycapital.cryptobot.dynamic.IntervalData;
-import com.mistrycapital.cryptobot.gdax.websocket.Product;
+import com.mistrycapital.cryptobot.gdax.common.Product;
 import org.apache.commons.csv.CSVRecord;
 
 /**

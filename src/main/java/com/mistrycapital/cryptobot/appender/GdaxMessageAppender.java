@@ -5,7 +5,7 @@ import java.nio.file.Path;
 
 import com.mistrycapital.cryptobot.book.OrderBook;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
-import com.mistrycapital.cryptobot.gdax.websocket.Product;
+import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 
 /**

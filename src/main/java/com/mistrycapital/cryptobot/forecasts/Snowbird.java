@@ -4,7 +4,7 @@ import com.mistrycapital.cryptobot.PeriodicEvaluator;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
-import com.mistrycapital.cryptobot.gdax.websocket.Product;
+import com.mistrycapital.cryptobot.gdax.common.Product;
 
 public class Snowbird implements ForecastCalculator {
 	private static final int THREE_HOUR_DATAPOINTS = 3 * 60 * 60 / PeriodicEvaluator.INTERVAL_SECONDS;

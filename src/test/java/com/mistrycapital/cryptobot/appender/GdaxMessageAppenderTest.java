@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import com.mistrycapital.cryptobot.book.OrderBook;
-import com.mistrycapital.cryptobot.gdax.websocket.Product;
+import com.mistrycapital.cryptobot.gdax.common.Product;
 import org.junit.jupiter.api.Test;
 
 import com.google.common.jimfs.Configuration;

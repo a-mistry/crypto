@@ -16,8 +16,8 @@ import com.mistrycapital.cryptobot.gdax.websocket.Done;
 import com.mistrycapital.cryptobot.gdax.websocket.GdaxMessageProcessor;
 import com.mistrycapital.cryptobot.gdax.websocket.Match;
 import com.mistrycapital.cryptobot.gdax.websocket.Open;
-import com.mistrycapital.cryptobot.gdax.websocket.OrderSide;
-import com.mistrycapital.cryptobot.gdax.websocket.Product;
+import com.mistrycapital.cryptobot.gdax.common.OrderSide;
+import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 

@@ -1,7 +1,7 @@
 package com.mistrycapital.cryptobot.forecasts;
 
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
-import com.mistrycapital.cryptobot.gdax.websocket.Product;
+import com.mistrycapital.cryptobot.gdax.common.Product;
 
 public interface ForecastCalculator {
 	/**

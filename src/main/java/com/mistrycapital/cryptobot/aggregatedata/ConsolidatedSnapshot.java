@@ -4,7 +4,7 @@ import com.mistrycapital.cryptobot.book.OrderBook;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
 import com.mistrycapital.cryptobot.dynamic.IntervalData;
-import com.mistrycapital.cryptobot.gdax.websocket.Product;
+import com.mistrycapital.cryptobot.gdax.common.Product;
 
 /**
  * Snapshot of all product data as of the end of an interval

@@ -3,6 +3,7 @@ package com.mistrycapital.cryptobot.gdax.websocket;
 import java.time.Instant;
 
 import com.google.gson.JsonObject;
+import com.mistrycapital.cryptobot.gdax.common.Product;
 
 abstract class CommonGdaxMessage implements GdaxMessage {
 	/** UTC time in microseconds */

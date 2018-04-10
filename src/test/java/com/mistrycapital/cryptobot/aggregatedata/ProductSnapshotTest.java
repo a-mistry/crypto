@@ -4,7 +4,7 @@ import com.mistrycapital.cryptobot.book.BBO;
 import com.mistrycapital.cryptobot.book.Depth;
 import com.mistrycapital.cryptobot.book.OrderBook;
 import com.mistrycapital.cryptobot.dynamic.IntervalData;
-import com.mistrycapital.cryptobot.gdax.websocket.Product;
+import com.mistrycapital.cryptobot.gdax.common.Product;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -15,7 +15,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 class ProductSnapshotTest {
 	private static final double EPSILON = 0.00000001;

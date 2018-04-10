@@ -9,7 +9,7 @@ import com.mistrycapital.cryptobot.book.OrderBookManager;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.forecasts.Snowbird;
-import com.mistrycapital.cryptobot.gdax.websocket.Product;
+import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;

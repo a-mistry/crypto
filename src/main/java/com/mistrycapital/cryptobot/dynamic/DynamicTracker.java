@@ -1,5 +1,6 @@
 package com.mistrycapital.cryptobot.dynamic;
 
+import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.gdax.websocket.*;
 
 public class DynamicTracker implements GdaxMessageProcessor {

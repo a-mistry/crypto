@@ -1,5 +1,7 @@
 package com.mistrycapital.cryptobot.gdax.websocket;
 
+import com.mistrycapital.cryptobot.gdax.common.Product;
+
 public interface GdaxMessage {
 	/** @return Type of message */
 	Type getType();

@@ -2,7 +2,7 @@ package com.mistrycapital.cryptobot.appender;
 
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
-import com.mistrycapital.cryptobot.gdax.websocket.Product;
+import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 
 import java.io.IOException;

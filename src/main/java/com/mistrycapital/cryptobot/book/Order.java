@@ -2,7 +2,7 @@ package com.mistrycapital.cryptobot.book;
 
 import java.util.UUID;
 
-import com.mistrycapital.cryptobot.gdax.websocket.OrderSide;
+import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 
 public class Order {
 	private UUID id;

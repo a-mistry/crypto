@@ -5,10 +5,11 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.UUID;
 import java.util.function.Consumer;
 
+import com.mistrycapital.cryptobot.gdax.common.OrderSide;
+import com.mistrycapital.cryptobot.gdax.common.Product;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
