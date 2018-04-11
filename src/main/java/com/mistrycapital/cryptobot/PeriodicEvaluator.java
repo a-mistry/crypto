@@ -19,6 +19,7 @@ import com.mistrycapital.cryptobot.util.MCProperties;
 import org.slf4j.Logger;
 
 import java.io.IOException;
+import java.util.List;
 
 public class PeriodicEvaluator implements Runnable {
 	private static final Logger log = MCLoggerFactory.getLogger();
@@ -119,8 +120,8 @@ public class PeriodicEvaluator implements Runnable {
 		}
 
 		// possibly trade
-		TradeInstruction[] instructions = tactic.decideTrades(consolidatedSnapshot, forecasts);
-		if(instructions != null && instructions.length > 0)
+		List<TradeInstruction> instructions = tactic.decideTrades(consolidatedSnapshot, forecasts);
+		if(instructions != null && instructions.size() > 0)
 			executionEngine.trade(instructions);
 	}
 

@@ -11,6 +11,7 @@ import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.forecasts.Snowbird;
+import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.tactic.Tactic;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
@@ -59,14 +60,16 @@ public class SimRunner implements Runnable {
 
 			long startNanos = System.nanoTime();
 			simulate(consolidatedSnapshots);
-			log.debug("Simulation treatment ended in " + ((System.nanoTime()-startNanos)/1000000.0) + "ms");
+			log.debug("Simulation treatment ended in " + ((System.nanoTime() - startNanos) / 1000000.0) + "ms");
 
 		} catch(IOException e) {
 			throw new RuntimeException(e);
 		}
 	}
 
-	private List<ConsolidatedSnapshot> readMarketData() throws IOException {
+	private List<ConsolidatedSnapshot> readMarketData()
+		throws IOException
+	{
 		List<ConsolidatedSnapshot> consolidatedSnapshots = new ArrayList<>(365 * 24 * 12); // 1 year
 		ProductSnapshot[] productSnapshots = new ProductSnapshot[Product.count];
 
@@ -121,7 +124,7 @@ public class SimRunner implements Runnable {
 		PositionsProvider positionsProvider = new EmptyPositionsProvider(STARTING_USD);
 		Accountant accountant = new Accountant(positionsProvider);
 		Tactic tactic = new Tactic(accountant);
-		SimExecutionEngine executionEngine = new SimExecutionEngine();
+		SimExecutionEngine executionEngine = new SimExecutionEngine(accountant);
 
 		for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedSnapshots) {
 			treatmentTimeKeeper.advanceTime(consolidatedSnapshot.getTimeNanos());
@@ -129,13 +132,21 @@ public class SimRunner implements Runnable {
 			executionEngine.useSnapshot(consolidatedSnapshot);
 			evaluate(consolidatedSnapshot, history, tactic, executionEngine);
 		}
+		log.debug("Ending positions USD " + accountant.getAvailable(Currency.USD)
+			+ " BTC " + accountant.getAvailable(Currency.BTC)
+			+ " BCH " + accountant.getAvailable(Currency.BCH)
+			+ " ETH " + accountant.getAvailable(Currency.ETH)
+			+ " LTC " + accountant.getAvailable(Currency.LTC));
 	}
 
 	// TODO: merge this code with PeriodicEvaluator
+
 	/**
 	 * Evaluates forecasts and trades if warranted
 	 */
-	private void evaluate(ConsolidatedSnapshot snapshot, ConsolidatedHistory history, Tactic tactic, ExecutionEngine executionEngine) {
+	private void evaluate(ConsolidatedSnapshot snapshot, ConsolidatedHistory history, Tactic tactic,
+		ExecutionEngine executionEngine)
+	{
 		// update signals
 		for(Product product : Product.FAST_VALUES) {
 			forecasts[product.getIndex()] = forecastCalculator.calculate(history, product);
@@ -149,8 +160,8 @@ public class SimRunner implements Runnable {
 		}
 
 		// possibly trade
-		TradeInstruction[] instructions = tactic.decideTrades(snapshot, forecasts);
-		if(instructions != null && instructions.length > 0)
+		List<TradeInstruction> instructions = tactic.decideTrades(snapshot, forecasts);
+		if(instructions != null && instructions.size() > 0)
 			executionEngine.trade(instructions);
 	}
 }

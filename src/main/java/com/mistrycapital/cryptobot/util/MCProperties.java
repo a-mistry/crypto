@@ -41,4 +41,12 @@ public class MCProperties {
 	public static boolean getBooleanProperty(String key, boolean defaultValue) {
 		return Boolean.parseBoolean(properties.getProperty(key, Boolean.toString(defaultValue)));
 	}
+
+	public static double getDoubleProperty(String key) {
+		return Double.parseDouble(properties.getProperty(key));
+	}
+
+	public static double getDoubleProperty(String key, double defaultValue) {
+		return Double.parseDouble(properties.getProperty(key, Double.toString(defaultValue)));
+	}
 }
