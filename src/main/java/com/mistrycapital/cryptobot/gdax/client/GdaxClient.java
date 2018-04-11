@@ -138,25 +138,4 @@ public class GdaxClient {
 			throw new RuntimeException(e);
 		}
 	}
-
-	public static void main(String[] args)
-	{
-		try {
-			String apiFilename = MCProperties.getProperty("gdaxApiFile");
-			log.debug("reading from " + apiFilename);
-			Path apiFile = Paths.get(apiFilename);
-			List<String> apiLines = Files.lines(apiFile).collect(Collectors.toList());
-			GdaxClient client = new GdaxClient(apiLines.get(0), apiLines.get(1), apiLines.get(2));
-			List<Account> accounts = client.getAccounts().get();
-			for(Account account : accounts) {
-				System.out.println(account.getId());
-				System.out.println(account.getCurrency());
-				System.out.println(account.getAvailable());
-				System.out.println(account.getBalance());
-				System.out.println(account.getHold());
-			}
-		} catch(Exception e) {
-			log.error("error", e);
-		}
-	}
 }

@@ -4,9 +4,18 @@ import java.net.URI;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import com.mistrycapital.cryptobot.accounting.Accountant;
 import com.mistrycapital.cryptobot.appender.ForecastAppender;
 import com.mistrycapital.cryptobot.appender.IntervalDataAppender;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
+import com.mistrycapital.cryptobot.execution.ExecutionEngine;
+import com.mistrycapital.cryptobot.execution.GdaxExecutionEngine;
+import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
+import com.mistrycapital.cryptobot.forecasts.Snowbird;
+import com.mistrycapital.cryptobot.gdax.GdaxClientFactory;
+import com.mistrycapital.cryptobot.gdax.GdaxPositionsProvider;
+import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
+import com.mistrycapital.cryptobot.tactic.Tactic;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.websocket.client.ClientUpgradeRequest;
 import org.eclipse.jetty.websocket.client.WebSocketClient;
@@ -45,8 +54,15 @@ public class TradeCrypto {
 		ForecastAppender forecastAppender = new ForecastAppender(dataDir, FORECAST_FILE_NAME, timeKeeper);
 		forecastAppender.open();
 		DynamicTracker dynamicTracker = new DynamicTracker();
+		ForecastCalculator snowbird = new Snowbird();
+		GdaxClient gdaxClient = GdaxClientFactory.createClientFromFile();
+		GdaxPositionsProvider gdaxPositionsProvider = new GdaxPositionsProvider(timeKeeper, gdaxClient);
+		Accountant accountant = new Accountant(gdaxPositionsProvider);
+		Tactic tactic = new Tactic(accountant);
+		ExecutionEngine executionEngine = new GdaxExecutionEngine();
 		PeriodicEvaluator periodicEvaluator =
-			new PeriodicEvaluator(timeKeeper, orderBookManager, dynamicTracker, intervalAppender, forecastAppender);
+			new PeriodicEvaluator(timeKeeper, orderBookManager, dynamicTracker, intervalAppender, forecastAppender,
+				snowbird, tactic, executionEngine);
 
 		gdaxWebSocket.subscribe(orderBookManager);
 		gdaxWebSocket.subscribe(dynamicTracker);

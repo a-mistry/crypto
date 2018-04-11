@@ -7,9 +7,12 @@ import com.mistrycapital.cryptobot.appender.IntervalDataAppender;
 import com.mistrycapital.cryptobot.book.BBO;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
+import com.mistrycapital.cryptobot.execution.ExecutionEngine;
+import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.common.Product;
+import com.mistrycapital.cryptobot.tactic.Tactic;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
@@ -31,20 +34,25 @@ public class PeriodicEvaluator implements Runnable {
 	private final IntervalDataAppender intervalDataAppender;
 	private final ForecastAppender forecastAppender;
 	private final ConsolidatedHistory consolidatedHistory;
+	private final ForecastCalculator forecastCalculator;
+	private final Tactic tactic;
+	private final ExecutionEngine executionEngine;
 
 	private long nextIntervalMillis;
-	private ForecastCalculator snowbird;
 	private double[] forecasts;
 
 	public PeriodicEvaluator(TimeKeeper timeKeeper, OrderBookManager orderBookManager, DynamicTracker dynamicTracker,
-		IntervalDataAppender intervalDataAppender, ForecastAppender forecastAppender)
+		IntervalDataAppender intervalDataAppender, ForecastAppender forecastAppender,
+		ForecastCalculator forecastCalculator, Tactic tactic, ExecutionEngine executionEngine)
 	{
 		this.timeKeeper = timeKeeper;
 		this.orderBookManager = orderBookManager;
 		this.dynamicTracker = dynamicTracker;
 		this.intervalDataAppender = intervalDataAppender;
 		this.forecastAppender = forecastAppender;
-		snowbird = new Snowbird();
+		this.forecastCalculator = forecastCalculator;
+		this.tactic = tactic;
+		this.executionEngine = executionEngine;
 		forecasts = new double[Product.count];
 		nextIntervalMillis = calcNextIntervalMillis(timeKeeper.epochMs());
 		consolidatedHistory = new ConsolidatedHistory(SECONDS_TO_KEEP / INTERVAL_SECONDS);
@@ -102,7 +110,7 @@ public class PeriodicEvaluator implements Runnable {
 
 		// update signals
 		for(Product product : Product.FAST_VALUES) {
-			forecasts[product.getIndex()] = snowbird.calculate(consolidatedHistory, product);
+			forecasts[product.getIndex()] = forecastCalculator.calculate(consolidatedHistory, product);
 		}
 		try {
 			forecastAppender.recordForecasts(nextIntervalMillis, forecasts);
@@ -111,6 +119,9 @@ public class PeriodicEvaluator implements Runnable {
 		}
 
 		// possibly trade
+		TradeInstruction[] instructions = tactic.decideTrades(consolidatedSnapshot, forecasts);
+		if(instructions != null && instructions.length > 0)
+			executionEngine.trade(instructions);
 	}
 
 	/**

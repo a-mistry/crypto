@@ -1,12 +1,18 @@
 package com.mistrycapital.cryptobot.sim;
 
+import com.mistrycapital.cryptobot.accounting.Accountant;
+import com.mistrycapital.cryptobot.accounting.EmptyPositionsProvider;
+import com.mistrycapital.cryptobot.accounting.PositionsProvider;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
 import com.mistrycapital.cryptobot.appender.ForecastAppender;
+import com.mistrycapital.cryptobot.execution.ExecutionEngine;
+import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.common.Product;
+import com.mistrycapital.cryptobot.tactic.Tactic;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
 import org.apache.commons.csv.CSVFormat;
@@ -29,6 +35,7 @@ public class SimRunner implements Runnable {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
 	private static final boolean LOG_FORECASTS = MCProperties.getBooleanProperty("sim.logForecasts", false);
+	private static final int STARTING_USD = MCProperties.getIntProperty("sim.startUsd", 10000);
 
 	private final Path dataDir;
 	private final SimTimeKeeper timeKeeper;
@@ -48,43 +55,43 @@ public class SimRunner implements Runnable {
 	public void run() {
 		try {
 
-			// first read sampled data
-			List<ConsolidatedSnapshot> consolidatedSnapshots = new ArrayList<>(365 * 24 * 12); // 1 year
-			ProductSnapshot[] productSnapshots = new ProductSnapshot[Product.count];
+			List<ConsolidatedSnapshot> consolidatedSnapshots = readMarketData();
 
-			for(Path sampleFile : getSampleFiles()) {
-				try(
-					Reader in = Files.newBufferedReader(sampleFile);
-					CSVParser parser = CSVFormat.EXCEL.withFirstRecordAsHeader().parse(in);
-				) {
-					for(CSVRecord record : parser) {
-						long timeNanos = Long.parseLong(record.get("unixTimestamp")) * 1000000000L;
-						timeKeeper.advanceTime(timeNanos);
-						ProductSnapshot productSnapshot = new ProductSnapshot(record);
-						productSnapshots[productSnapshot.product.getIndex()] = productSnapshot;
-
-						if(isFull(productSnapshots)) {
-							ConsolidatedSnapshot consolidatedSnapshot =
-								new ConsolidatedSnapshot(productSnapshots, timeNanos);
-							consolidatedSnapshots.add(consolidatedSnapshot);
-							productSnapshots = new ProductSnapshot[Product.count];
-						}
-					}
-				}
-			}
-
-			// now "sim"
-			ConsolidatedHistory history = new ConsolidatedHistory(SECONDS_TO_KEEP / INTERVAL_SECONDS);
-			SimTimeKeeper treatmentTimeKeeper = new SimTimeKeeper();
-			for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedSnapshots) {
-				treatmentTimeKeeper.advanceTime(consolidatedSnapshot.getTimeNanos());
-				history.add(consolidatedSnapshot);
-				evaluate(consolidatedSnapshot, history);
-			}
+			long startNanos = System.nanoTime();
+			simulate(consolidatedSnapshots);
+			log.debug("Simulation treatment ended in " + ((System.nanoTime()-startNanos)/1000000.0) + "ms");
 
 		} catch(IOException e) {
 			throw new RuntimeException(e);
 		}
+	}
+
+	private List<ConsolidatedSnapshot> readMarketData() throws IOException {
+		List<ConsolidatedSnapshot> consolidatedSnapshots = new ArrayList<>(365 * 24 * 12); // 1 year
+		ProductSnapshot[] productSnapshots = new ProductSnapshot[Product.count];
+
+		for(Path sampleFile : getSampleFiles()) {
+			try(
+				Reader in = Files.newBufferedReader(sampleFile);
+				CSVParser parser = CSVFormat.EXCEL.withFirstRecordAsHeader().parse(in);
+			) {
+				for(CSVRecord record : parser) {
+					long timeNanos = Long.parseLong(record.get("unixTimestamp")) * 1000000000L;
+					timeKeeper.advanceTime(timeNanos);
+					ProductSnapshot productSnapshot = new ProductSnapshot(record);
+					productSnapshots[productSnapshot.product.getIndex()] = productSnapshot;
+
+					if(isFull(productSnapshots)) {
+						ConsolidatedSnapshot consolidatedSnapshot =
+							new ConsolidatedSnapshot(productSnapshots, timeNanos);
+						consolidatedSnapshots.add(consolidatedSnapshot);
+						productSnapshots = new ProductSnapshot[Product.count];
+					}
+				}
+			}
+		}
+
+		return consolidatedSnapshots;
 	}
 
 	private List<Path> getSampleFiles()
@@ -108,10 +115,27 @@ public class SimRunner implements Runnable {
 		return true;
 	}
 
+	private void simulate(List<ConsolidatedSnapshot> consolidatedSnapshots) {
+		ConsolidatedHistory history = new ConsolidatedHistory(SECONDS_TO_KEEP / INTERVAL_SECONDS);
+		SimTimeKeeper treatmentTimeKeeper = new SimTimeKeeper();
+		PositionsProvider positionsProvider = new EmptyPositionsProvider(STARTING_USD);
+		Accountant accountant = new Accountant(positionsProvider);
+		Tactic tactic = new Tactic(accountant);
+		SimExecutionEngine executionEngine = new SimExecutionEngine();
+
+		for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedSnapshots) {
+			treatmentTimeKeeper.advanceTime(consolidatedSnapshot.getTimeNanos());
+			history.add(consolidatedSnapshot);
+			executionEngine.useSnapshot(consolidatedSnapshot);
+			evaluate(consolidatedSnapshot, history, tactic, executionEngine);
+		}
+	}
+
+	// TODO: merge this code with PeriodicEvaluator
 	/**
 	 * Evaluates forecasts and trades if warranted
 	 */
-	private void evaluate(ConsolidatedSnapshot snapshot, ConsolidatedHistory history) {
+	private void evaluate(ConsolidatedSnapshot snapshot, ConsolidatedHistory history, Tactic tactic, ExecutionEngine executionEngine) {
 		// update signals
 		for(Product product : Product.FAST_VALUES) {
 			forecasts[product.getIndex()] = forecastCalculator.calculate(history, product);
@@ -125,5 +149,8 @@ public class SimRunner implements Runnable {
 		}
 
 		// possibly trade
+		TradeInstruction[] instructions = tactic.decideTrades(snapshot, forecasts);
+		if(instructions != null && instructions.length > 0)
+			executionEngine.trade(instructions);
 	}
 }
