@@ -1,6 +1,7 @@
 package com.mistrycapital.cryptobot.sim;
 
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
+import org.eclipse.jetty.util.IO;
 import org.slf4j.Logger;
 
 import java.io.*;
@@ -17,6 +18,7 @@ import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
+import java.util.zip.ZipInputStream;
 
 /**
  * Reads all gdax message files (in zips) sequentially and gets each message string
@@ -57,55 +59,74 @@ public class GdaxMessageFileReader implements Runnable {
 	@Override
 	public void run() {
 		try {
-			log.info("Looking for zip files in " + dataDir);
-			final BiPredicate<Path,BasicFileAttributes> zipMatcher = (path, attributes) ->
-				path.getFileName().toString().matches("gdax-orders-\\d\\d\\d\\d-\\d\\d-\\d\\d.*.zip");
-			final List<Path> zips = Files
-				.find(dataDir, 1, zipMatcher)
-				.filter(GdaxMessageFileReader::hasNoCheckpoint)
-				.collect(Collectors.toList());
-
-			for(Path zipPath : zips) {
-				long startNanos = System.nanoTime();
-
+			for(Path zipPath : getZipFiles()) {
 				try {
-					ZipFile zipFile = new ZipFile(zipPath.toFile());
-					List<ZipEntry> entries = zipFile.stream()
-						.sorted(hourlyJsonSorter)
-						.collect(Collectors.toList());
-
-					for(ZipEntry entry : entries) {
-						log.info("Reading entry " + entry.getName() + " in zip " + zipPath);
-						InputStream inputStream = zipFile.getInputStream(entry);
-						BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-						reader.lines().forEach(line -> {
-							try {
-								if(messageStringQueue.remainingCapacity() == 0) {
-									Thread.sleep(1);
-									waitMs += 10;
-									if(waitMs % 100000 == 0)
-										log.debug("Waited " + (waitMs / 1000) + "s in string reader");
-								}
-								messageStringQueue.put(line);
-							} catch(InterruptedException e) {
-								throw new RuntimeException(e);
-							}
-						});
-					}
-
+					long startNanos = System.nanoTime();
+					readZipFile(zipPath);
 					writeCheckpoint(zipPath);
-
 					log.info("Completed " + zipPath + " in " + (System.nanoTime() - startNanos) / 1000000000.0 + "s");
-
 				} catch(ZipException e) {
 					log.error("Could not parse zip " + zipPath, e);
 				}
 			}
 			writer.markDone();
-
 		} catch(IOException e) {
 			throw new RuntimeException(e);
 		}
+	}
+
+	/**
+	 * @return List of all files in the dataDir folder that match gdax-orders-yyyy-MM-dd.zip
+	 */
+	private List<Path> getZipFiles()
+		throws IOException
+	{
+		final BiPredicate<Path,BasicFileAttributes> zipMatcher = (path, attributes) ->
+			path.getFileName().toString().matches("gdax-orders-\\d\\d\\d\\d-\\d\\d-\\d\\d.*.zip");
+
+		log.info("Looking for zip files in " + dataDir);
+		return Files
+			.find(dataDir, 1, zipMatcher)
+			.filter(GdaxMessageFileReader::hasNoCheckpoint)
+			.collect(Collectors.toList());
+	}
+
+	/**
+	 * Reads the zip file, sorts entries by hour, and reads the entries
+	 */
+	private void readZipFile(Path zipPath)
+		throws IOException
+	{
+		ZipFile zipFile = new ZipFile(zipPath.toFile());
+		List<ZipEntry> entries = zipFile.stream()
+			.sorted(hourlyJsonSorter)
+			.collect(Collectors.toList());
+
+		for(ZipEntry entry : entries) {
+			log.info("Reading entry " + entry.getName() + " in zip " + zipPath);
+			InputStream inputStream = zipFile.getInputStream(entry);
+			readJsonFile(inputStream);
+		}
+	}
+
+	/**
+	 * Reads the JSON file from the given input stream and sends all messages to the queue
+	 */
+	private void readJsonFile(InputStream inputStream) {
+		BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+		reader.lines().forEach(line -> {
+			try {
+				if(messageStringQueue.remainingCapacity() == 0) {
+					Thread.sleep(1);
+					waitMs += 10;
+					if(waitMs % 100000 == 0)
+						log.debug("Waited " + (waitMs / 1000) + "s in string reader");
+				}
+				messageStringQueue.put(line);
+			} catch(InterruptedException e) {
+				throw new RuntimeException(e);
+			}
+		});
 	}
 
 	static Path getCheckpointPath(Path zipPath) {
