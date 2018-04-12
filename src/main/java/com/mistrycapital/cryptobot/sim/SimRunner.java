@@ -14,6 +14,7 @@ import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.tactic.Tactic;
+import com.mistrycapital.cryptobot.time.Intervalizer;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
 import org.apache.commons.csv.CSVFormat;
@@ -29,27 +30,29 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static com.mistrycapital.cryptobot.PeriodicEvaluator.INTERVAL_SECONDS;
-import static com.mistrycapital.cryptobot.PeriodicEvaluator.SECONDS_TO_KEEP;
-
 public class SimRunner implements Runnable {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
-	private static final boolean LOG_FORECASTS = MCProperties.getBooleanProperty("sim.logForecasts", false);
-	private static final int STARTING_USD = MCProperties.getIntProperty("sim.startUsd", 10000);
-
 	private final Path dataDir;
 	private final SimTimeKeeper timeKeeper;
+	private final Intervalizer intervalizer;
 	private final ForecastAppender forecastAppender;
 	private final double[] forecasts;
 	private final ForecastCalculator forecastCalculator;
+	private final boolean shouldLogForecasts;
+	private final int startingUsd;
 
-	public SimRunner(Path dataDir, SimTimeKeeper timeKeeper, ForecastAppender forecastAppender) {
+	public SimRunner(MCProperties properties, Intervalizer intervalizer, Path dataDir, SimTimeKeeper timeKeeper,
+		ForecastAppender forecastAppender)
+	{
 		this.dataDir = dataDir;
 		this.timeKeeper = timeKeeper;
+		this.intervalizer = intervalizer;
 		this.forecastAppender = forecastAppender;
 		forecasts = new double[Product.count];
-		forecastCalculator = new Snowbird();
+		forecastCalculator = new Snowbird(properties);
+		shouldLogForecasts = properties.getBooleanProperty("sim.logForecasts", false);
+		startingUsd = properties.getIntProperty("sim.startUsd", 10000);
 	}
 
 	@Override
@@ -119,12 +122,13 @@ public class SimRunner implements Runnable {
 	}
 
 	private void simulate(List<ConsolidatedSnapshot> consolidatedSnapshots) {
-		ConsolidatedHistory history = new ConsolidatedHistory(SECONDS_TO_KEEP / INTERVAL_SECONDS);
+		ConsolidatedHistory history = new ConsolidatedHistory(intervalizer);
 		SimTimeKeeper treatmentTimeKeeper = new SimTimeKeeper();
-		PositionsProvider positionsProvider = new EmptyPositionsProvider(STARTING_USD);
+		PositionsProvider positionsProvider = new EmptyPositionsProvider(startingUsd);
 		Accountant accountant = new Accountant(positionsProvider);
 		Tactic tactic = new Tactic(accountant);
-		SimExecutionEngine executionEngine = new SimExecutionEngine(accountant);
+		MCProperties simProperties = new MCProperties();
+		SimExecutionEngine executionEngine = new SimExecutionEngine(simProperties, accountant);
 
 		for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedSnapshots) {
 			treatmentTimeKeeper.advanceTime(consolidatedSnapshot.getTimeNanos());
@@ -151,7 +155,7 @@ public class SimRunner implements Runnable {
 		for(Product product : Product.FAST_VALUES) {
 			forecasts[product.getIndex()] = forecastCalculator.calculate(history, product);
 		}
-		if(LOG_FORECASTS) {
+		if(shouldLogForecasts) {
 			try {
 				forecastAppender.recordForecasts(timeKeeper.epochMs(), forecasts);
 			} catch(IOException e) {

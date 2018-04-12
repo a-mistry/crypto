@@ -8,6 +8,7 @@ import com.mistrycapital.cryptobot.sim.GdaxMessageFileReader;
 import com.mistrycapital.cryptobot.sim.GdaxMessageTranslator;
 import com.mistrycapital.cryptobot.sim.GdaxSampleWriter;
 import com.mistrycapital.cryptobot.sim.SimTimeKeeper;
+import com.mistrycapital.cryptobot.time.Intervalizer;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
 import org.slf4j.Logger;
@@ -28,17 +29,19 @@ public class SampleData {
 
 	public static void main(String[] args)
 	{
-		Path dataDir = Paths.get(MCProperties.getProperty("dataDir"));
+		MCProperties properties = new MCProperties();
+		Path dataDir = Paths.get(properties.getProperty("dataDir"));
 		log.debug("Saving message and sample data to " + dataDir);
 
 		SimTimeKeeper timeKeeper = new SimTimeKeeper();
 		OrderBookManager orderBookManager = new OrderBookManager(timeKeeper);
 		IntervalDataAppender intervalAppender = new IntervalDataAppender(dataDir, INTERVAL_FILE_NAME, timeKeeper);
 		DynamicTracker dynamicTracker = new DynamicTracker();
+		Intervalizer intervalizer = new Intervalizer(properties);
 
 		BlockingQueue<GdaxMessage> messageQueue = new LinkedBlockingQueue<>();
 		BlockingQueue<String> messageStringQueue = new ArrayBlockingQueue<>(10000);
-		GdaxSampleWriter writer = new GdaxSampleWriter(timeKeeper, orderBookManager, dynamicTracker, intervalAppender, messageQueue);
+		GdaxSampleWriter writer = new GdaxSampleWriter(timeKeeper, intervalizer, orderBookManager, dynamicTracker, intervalAppender, messageQueue);
 		GdaxMessageTranslator translator = new GdaxMessageTranslator(messageStringQueue, messageQueue, writer);
 		GdaxMessageFileReader reader = new GdaxMessageFileReader(dataDir, messageStringQueue, translator);
 

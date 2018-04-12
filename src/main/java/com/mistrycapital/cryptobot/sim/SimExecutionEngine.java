@@ -12,13 +12,13 @@ import com.mistrycapital.cryptobot.util.MCProperties;
 import java.util.List;
 
 public class SimExecutionEngine implements ExecutionEngine {
-	private static final double TRANSACTION_COST = MCProperties.getDoubleProperty("sim.transactionCostOnes", 0.0030);
-
 	private final Accountant accountant;
+	private final double transactionCost;
 	private ConsolidatedSnapshot snapshot;
 
-	SimExecutionEngine(Accountant accountant) {
+	SimExecutionEngine(MCProperties properties, Accountant accountant) {
 		this.accountant = accountant;
+		transactionCost = properties.getDoubleProperty("sim.transactionCostOnes", 0.0030);
 	}
 
 	/** Store the given snapshot and use the quotes for fill prices */
@@ -34,13 +34,13 @@ public class SimExecutionEngine implements ExecutionEngine {
 			if(instruction.getOrderSide() == OrderSide.BUY) {
 				final double dollars = accountant.getAvailable(Currency.USD);
 				final double price = snapshot.getProductSnapshot(product).askPrice;
-				final double crypto = (1 - TRANSACTION_COST) * dollars / price;
+				final double crypto = (1 - transactionCost) * dollars / price;
 				accountant.recordTrade(Currency.USD, -dollars, product.getCryptoCurrency(), crypto);
 			} else {
 				final Currency cryptoCurrency = product.getCryptoCurrency();
 				final double crypto = accountant.getAvailable(cryptoCurrency);
 				final double price = snapshot.getProductSnapshot(product).bidPrice;
-				final double dollars = (1 - TRANSACTION_COST) * crypto * price;
+				final double dollars = (1 - transactionCost) * crypto * price;
 				accountant.recordTrade(Currency.USD, dollars, cryptoCurrency, -crypto);
 			}
 		}

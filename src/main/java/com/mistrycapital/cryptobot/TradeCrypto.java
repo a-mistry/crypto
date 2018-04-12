@@ -16,6 +16,7 @@ import com.mistrycapital.cryptobot.gdax.GdaxClientFactory;
 import com.mistrycapital.cryptobot.gdax.GdaxPositionsProvider;
 import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
 import com.mistrycapital.cryptobot.tactic.Tactic;
+import com.mistrycapital.cryptobot.time.Intervalizer;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.websocket.client.ClientUpgradeRequest;
 import org.eclipse.jetty.websocket.client.WebSocketClient;
@@ -40,8 +41,12 @@ public class TradeCrypto {
 	public static void main(String[] args)
 		throws Exception
 	{
-		Path dataDir = Paths.get(MCProperties.getProperty("dataDir"));
+		MCProperties properties = new MCProperties();
+		Path dataDir = Paths.get(properties.getProperty("dataDir"));
 		log.debug("Saving message and sample data to " + dataDir);
+		String apiFilename = properties.getProperty("gdax.client.apiFile");
+		Path gdaxApiFile = Paths.get(apiFilename);
+		log.debug("Reading gdax credentials from " + apiFilename);
 
 		TimeKeeper timeKeeper = new SystemTimeKeeper();
 		OrderBookManager orderBookManager = new OrderBookManager(timeKeeper);
@@ -49,20 +54,22 @@ public class TradeCrypto {
 			new GdaxMessageAppender(dataDir, BOOK_MESSAGE_FILE_NAME, ".json", timeKeeper, orderBookManager);
 		gdaxAppender.open();
 		GdaxWebSocket gdaxWebSocket = new GdaxWebSocket(timeKeeper, gdaxAppender);
+		Intervalizer intervalizer = new Intervalizer(properties);
 		IntervalDataAppender intervalAppender = new IntervalDataAppender(dataDir, INTERVAL_FILE_NAME, timeKeeper);
 		intervalAppender.open();
 		ForecastAppender forecastAppender = new ForecastAppender(dataDir, FORECAST_FILE_NAME, timeKeeper);
 		forecastAppender.open();
 		DynamicTracker dynamicTracker = new DynamicTracker();
-		ForecastCalculator snowbird = new Snowbird();
-		GdaxClient gdaxClient = GdaxClientFactory.createClientFromFile();
+		ForecastCalculator snowbird = new Snowbird(properties);
+
+		GdaxClient gdaxClient = GdaxClientFactory.createClientFromFile(gdaxApiFile);
 		GdaxPositionsProvider gdaxPositionsProvider = new GdaxPositionsProvider(timeKeeper, gdaxClient);
 		Accountant accountant = new Accountant(gdaxPositionsProvider);
 		Tactic tactic = new Tactic(accountant);
 		ExecutionEngine executionEngine = new GdaxExecutionEngine();
 		PeriodicEvaluator periodicEvaluator =
-			new PeriodicEvaluator(timeKeeper, orderBookManager, dynamicTracker, intervalAppender, forecastAppender,
-				snowbird, tactic, executionEngine);
+			new PeriodicEvaluator(timeKeeper, intervalizer, orderBookManager, dynamicTracker, intervalAppender,
+				forecastAppender, snowbird, tactic, executionEngine);
 
 		gdaxWebSocket.subscribe(orderBookManager);
 		gdaxWebSocket.subscribe(dynamicTracker);

@@ -13,6 +13,7 @@ import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.tactic.Tactic;
+import com.mistrycapital.cryptobot.time.Intervalizer;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
@@ -24,12 +25,8 @@ import java.util.List;
 public class PeriodicEvaluator implements Runnable {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
-	/** Total amount of history to track (default 1 day) */
-	public static final int SECONDS_TO_KEEP = MCProperties.getIntProperty("history.secondsToKeep", 60 * 60 * 24);
-	/** Length of each interval of data aggregation */
-	public static final int INTERVAL_SECONDS = MCProperties.getIntProperty("history.intervalSeconds", 5 * 60);
-
 	private final TimeKeeper timeKeeper;
+	private final Intervalizer intervalizer;
 	private final OrderBookManager orderBookManager;
 	private final DynamicTracker dynamicTracker;
 	private final IntervalDataAppender intervalDataAppender;
@@ -42,11 +39,12 @@ public class PeriodicEvaluator implements Runnable {
 	private long nextIntervalMillis;
 	private double[] forecasts;
 
-	public PeriodicEvaluator(TimeKeeper timeKeeper, OrderBookManager orderBookManager, DynamicTracker dynamicTracker,
-		IntervalDataAppender intervalDataAppender, ForecastAppender forecastAppender,
+	public PeriodicEvaluator(TimeKeeper timeKeeper, Intervalizer intervalizer, OrderBookManager orderBookManager,
+		DynamicTracker dynamicTracker, IntervalDataAppender intervalDataAppender, ForecastAppender forecastAppender,
 		ForecastCalculator forecastCalculator, Tactic tactic, ExecutionEngine executionEngine)
 	{
 		this.timeKeeper = timeKeeper;
+		this.intervalizer = intervalizer;
 		this.orderBookManager = orderBookManager;
 		this.dynamicTracker = dynamicTracker;
 		this.intervalDataAppender = intervalDataAppender;
@@ -55,8 +53,8 @@ public class PeriodicEvaluator implements Runnable {
 		this.tactic = tactic;
 		this.executionEngine = executionEngine;
 		forecasts = new double[Product.count];
-		nextIntervalMillis = calcNextIntervalMillis(timeKeeper.epochMs());
-		consolidatedHistory = new ConsolidatedHistory(SECONDS_TO_KEEP / INTERVAL_SECONDS);
+		nextIntervalMillis = intervalizer.calcNextIntervalMillis(timeKeeper.epochMs());
+		consolidatedHistory = new ConsolidatedHistory(intervalizer);
 	}
 
 	@Override
@@ -68,7 +66,7 @@ public class PeriodicEvaluator implements Runnable {
 					log.trace("snapshot");
 					evaluateInterval();
 					final long timeMs = timeKeeper.epochMs();
-					nextIntervalMillis = calcNextIntervalMillis(timeMs);
+					nextIntervalMillis = intervalizer.calcNextIntervalMillis(timeMs);
 					remainingMs = nextIntervalMillis - timeMs;
 				}
 
@@ -124,15 +122,4 @@ public class PeriodicEvaluator implements Runnable {
 		if(instructions != null && instructions.size() > 0)
 			executionEngine.trade(instructions);
 	}
-
-	/**
-	 * Used to determine when a sampling interval has ended
-	 *
-	 * @param curMillis Current time in millis since epoch
-	 * @return Time when the next interval will end, in millis since epoch
-	 */
-	public static final long calcNextIntervalMillis(long curMillis) {
-		return (curMillis / 1000L / INTERVAL_SECONDS + 1) * 1000L * INTERVAL_SECONDS;
-	}
-
 }

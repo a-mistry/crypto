@@ -5,18 +5,18 @@ import com.mistrycapital.cryptobot.appender.IntervalDataAppender;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
 import com.mistrycapital.cryptobot.gdax.websocket.GdaxMessage;
+import com.mistrycapital.cryptobot.time.Intervalizer;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.util.concurrent.BlockingQueue;
 
-import static com.mistrycapital.cryptobot.PeriodicEvaluator.calcNextIntervalMillis;
-
 public class GdaxSampleWriter {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
 	private final SimTimeKeeper timeKeeper;
+	private final Intervalizer intervalizer;
 	private final OrderBookManager orderBookManager;
 	private final DynamicTracker dynamicTracker;
 	private final IntervalDataAppender intervalDataAppender;
@@ -24,10 +24,10 @@ public class GdaxSampleWriter {
 	private volatile boolean done;
 	private long nextIntervalMillis;
 
-	public GdaxSampleWriter(SimTimeKeeper timeKeeper, OrderBookManager orderBookManager, DynamicTracker dynamicTracker,
-		IntervalDataAppender intervalDataAppender, BlockingQueue<GdaxMessage> messageQueue)
+	public GdaxSampleWriter(SimTimeKeeper timeKeeper, Intervalizer intervalizer, OrderBookManager orderBookManager, DynamicTracker dynamicTracker,		IntervalDataAppender intervalDataAppender, BlockingQueue<GdaxMessage> messageQueue)
 	{
 		this.timeKeeper = timeKeeper;
+		this.intervalizer = intervalizer;
 		this.orderBookManager = orderBookManager;
 		this.dynamicTracker = dynamicTracker;
 		this.intervalDataAppender = intervalDataAppender;
@@ -62,7 +62,7 @@ public class GdaxSampleWriter {
 
 			// check for next interval time
 			if(nextIntervalMillis == 0) {
-				nextIntervalMillis = calcNextIntervalMillis(timeKeeper.epochMs());
+				nextIntervalMillis = intervalizer.calcNextIntervalMillis(timeKeeper.epochMs());
 			} else if(timeKeeper.epochMs() >= nextIntervalMillis) {
 				try {
 					final ConsolidatedSnapshot consolidatedSnapshot =
@@ -72,7 +72,7 @@ public class GdaxSampleWriter {
 					log.error("Could not store snapshot, time=" + timeKeeper.epochNanos() + " " + timeKeeper.iso8601(),
 						e);
 				}
-				nextIntervalMillis = calcNextIntervalMillis(timeKeeper.epochMs());
+				nextIntervalMillis = intervalizer.calcNextIntervalMillis(timeKeeper.epochMs());
 				sampleCount++;
 				if(sampleCount % 100 == 0) {
 					log.debug("Processed " + sampleCount + " intervals in "

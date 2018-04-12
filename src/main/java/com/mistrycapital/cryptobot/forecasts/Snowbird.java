@@ -5,21 +5,26 @@ import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
 import com.mistrycapital.cryptobot.gdax.common.Product;
+import com.mistrycapital.cryptobot.util.MCProperties;
 
 public class Snowbird implements ForecastCalculator {
-	private static final int THREE_HOUR_DATAPOINTS = 3 * 60 * 60 / PeriodicEvaluator.INTERVAL_SECONDS;
-	private static final int SIX_HOUR_DATAPOINTS = THREE_HOUR_DATAPOINTS * 2;
+	private final int threeHourDatapoints;
+	private final int sixHourDatapoints;
+	private final double[] coeffs;
 
-	private static final double[] coeffs = new double[] {
-		-0.000550307499740531,
-		-0.0010944365777197412,
-		-0.001180854132159011,
-		0.0012972390272206194,
-		5.45821367886466e-06,
-		-8.92223968701952e-06,
-		0.00015720230759043175,
-		-0.00024395633450024047
-	};
+	public Snowbird(MCProperties properties) {
+		final int intervalSeconds = properties.getIntProperty("history.intervalSeconds");
+		threeHourDatapoints = 3 * 60 * 60 / intervalSeconds;
+		sixHourDatapoints = threeHourDatapoints * 2;
+
+		final String coeffsString = properties.getProperty("forecast.snowbird.coeffs");
+		final String[] split = coeffsString.split(",");
+		coeffs = new double[8];
+		if(split.length != coeffs.length)
+			throw new RuntimeException("Wrong number of snowbird coeffs: " + coeffsString);
+		for(int i=0; i<coeffs.length; i++)
+			coeffs[i] = Double.parseDouble(split[i]);
+	}
 
 	@Override
 	public double calculate(final ConsolidatedHistory consolidatedHistory, final Product product) {
@@ -39,14 +44,14 @@ public class Snowbird implements ForecastCalculator {
 		double tradePrice6h = lastTradePrice;
 		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values()) {
 			ProductSnapshot data = snapshot.getProductSnapshot(product);
-			if(dataPoints < THREE_HOUR_DATAPOINTS) {
+			if(dataPoints < threeHourDatapoints) {
 				bidTradeCount += data.bidTradeCount;
 				askTradeCount += data.askTradeCount;
 				bidCancelCount += data.bidCancelCount;
 				askCancelCount += data.askCancelCount;
 			}
 
-			if(dataPoints < SIX_HOUR_DATAPOINTS) {
+			if(dataPoints < sixHourDatapoints) {
 				if(dataPoints == 0) {
 					lastTradePrice = data.lastPrice;
 				}
@@ -65,8 +70,5 @@ public class Snowbird implements ForecastCalculator {
 		return coeffs[0] + coeffs[1] * bookRatio + coeffs[2] * bidTradeToBook + coeffs[3] * askTradeToBook
 			+ coeffs[4] * bidCancelToBook + coeffs[5] * askCancelToBook
 			+ coeffs[6] * bidCancelToBook * ret6h + coeffs[7] * askCancelToBook * ret6h;
-	}
-
-	public Snowbird() {
 	}
 }

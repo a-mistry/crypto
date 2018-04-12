@@ -1,5 +1,7 @@
 package com.mistrycapital.cryptobot.aggregatedata;
 
+import com.mistrycapital.cryptobot.time.Intervalizer;
+
 import java.util.Iterator;
 
 /**
@@ -22,8 +24,8 @@ public class ConsolidatedHistory {
 		}
 	}
 
-	public ConsolidatedHistory(int maxIntervals) {
-		this.maxIntervals = maxIntervals;
+	public ConsolidatedHistory(Intervalizer intervalizer) {
+		maxIntervals = intervalizer.getHistoryIntervals();
 	}
 
 	public synchronized void add(ConsolidatedSnapshot newData) {
