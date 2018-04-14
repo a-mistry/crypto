@@ -2,10 +2,14 @@ package com.mistrycapital.cryptobot.tactic;
 
 import com.mistrycapital.cryptobot.accounting.Accountant;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
+import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
 import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.Product;
+import com.mistrycapital.cryptobot.util.MCLoggerFactory;
+import com.mistrycapital.cryptobot.util.MCProperties;
+import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,14 +18,31 @@ import java.util.List;
  * Determines trades based on our view of the world. Note that this class is NOT thread safe.
  */
 public class Tactic {
+	private static final Logger log = MCLoggerFactory.getLogger();
+
 	private final Accountant accountant;
 
-	private final double[] inThresholds = new double[] { -0.05, -0.05, -0.05, -0.05 };
-	private final double[] outThresholds = new double[] { -0.15, -0.15, -0.15, -0.15 };
-	private final double[] pctAllocation = new double[] { 0.25, 0.25, 0.25, 0.25 };
+	private final double[] inThresholds;
+	private final double[] outThresholds;
+	private final double[] pctAllocation;
 
-	public Tactic(Accountant accountant) {
+	public Tactic(MCProperties properties, Accountant accountant) {
 		this.accountant = accountant;
+		final double defaultInThreshold = properties.getDoubleProperty("tactic.inThreshold.default");
+		final double defaultOutThreshold = properties.getDoubleProperty("tactic.outThreshold.default");
+		final double defaultPctAllocation = properties.getDoubleProperty("tactic.pctAllocation.default");
+		inThresholds = new double[Product.count];
+		outThresholds = new double[Product.count];
+		pctAllocation = new double[Product.count];
+		for(Product product : Product.FAST_VALUES) {
+			int productIndex = product.getIndex();
+			inThresholds[productIndex] =
+				properties.getDoubleProperty("tactic.inThreshold." + product, defaultInThreshold);
+			outThresholds[productIndex] =
+				properties.getDoubleProperty("tactic.outThreshold." + product, defaultOutThreshold);
+			pctAllocation[productIndex] =
+				properties.getDoubleProperty("tactic.pctAllocation." + product, defaultPctAllocation);
+		}
 	}
 
 	/**
@@ -40,17 +61,28 @@ public class Tactic {
 			final boolean shouldBeOut = forecast < outThresholds[productIndex];
 
 			if(in && shouldBeOut) {
-				if(trades==null) trades = new ArrayList<>(Product.count);
+				if(trades == null) trades = new ArrayList<>(Product.count);
 				final double amount = accountant.getAvailable(product.getCryptoCurrency());
 				trades.add(new TradeInstruction(product, amount, OrderSide.SELL));
 			}
 			if(!in && shouldBeIn) {
-				if(trades==null) trades = new ArrayList<>(Product.count);
-				// TODO: this is incorrect - need to account for whole portfolio
-				final double amount = accountant.getAvailable(Currency.USD) * pctAllocation[productIndex];
+				if(trades == null) trades = new ArrayList<>(Product.count);
+				final double amount = calcBuyAmount(snapshot, product);
 				trades.add(new TradeInstruction(product, amount, OrderSide.BUY));
 			}
 		}
 		return trades;
+	}
+
+	/**
+	 * Calculates how much to buy, given that we don't want the position in any product to be more than the
+	 * given allocation percentage
+	 */
+	private double calcBuyAmount(final ConsolidatedSnapshot snapshot, final Product product) {
+		final double dollarsAvailable = accountant.getAvailable(Currency.USD);
+		final double maxPositionUsd = accountant.getPositionValueUsd(snapshot) * pctAllocation[product.getIndex()];
+		final double dollarsToBuy = Math.min(dollarsAvailable, maxPositionUsd);
+		final double askPrice = snapshot.getProductSnapshot(product).askPrice;
+		return dollarsToBuy / askPrice;
 	}
 }

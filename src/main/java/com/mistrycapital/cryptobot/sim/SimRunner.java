@@ -11,6 +11,7 @@ import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.forecasts.Snowbird;
+import com.mistrycapital.cryptobot.forecasts.Solitude;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.tactic.Tactic;
@@ -50,7 +51,7 @@ public class SimRunner implements Runnable {
 		this.intervalizer = intervalizer;
 		this.forecastAppender = forecastAppender;
 		forecasts = new double[Product.count];
-		forecastCalculator = new Snowbird(properties);
+		forecastCalculator = new Solitude(properties);
 		shouldLogForecasts = properties.getBooleanProperty("sim.logForecasts", false);
 		startingUsd = properties.getIntProperty("sim.startUsd", 10000);
 	}
@@ -126,8 +127,8 @@ public class SimRunner implements Runnable {
 		SimTimeKeeper treatmentTimeKeeper = new SimTimeKeeper();
 		PositionsProvider positionsProvider = new EmptyPositionsProvider(startingUsd);
 		Accountant accountant = new Accountant(positionsProvider);
-		Tactic tactic = new Tactic(accountant);
 		MCProperties simProperties = new MCProperties();
+		Tactic tactic = new Tactic(simProperties, accountant);
 		SimExecutionEngine executionEngine = new SimExecutionEngine(simProperties, accountant);
 
 		for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedSnapshots) {
@@ -136,11 +137,13 @@ public class SimRunner implements Runnable {
 			executionEngine.useSnapshot(consolidatedSnapshot);
 			evaluate(consolidatedSnapshot, history, tactic, executionEngine);
 		}
+		ConsolidatedSnapshot lastSnapshot = consolidatedSnapshots.get(consolidatedSnapshots.size() - 1);
 		log.debug("Ending positions USD " + accountant.getAvailable(Currency.USD)
 			+ " BTC " + accountant.getAvailable(Currency.BTC)
 			+ " BCH " + accountant.getAvailable(Currency.BCH)
 			+ " ETH " + accountant.getAvailable(Currency.ETH)
 			+ " LTC " + accountant.getAvailable(Currency.LTC));
+		log.debug("Total ending position " + accountant.getPositionValueUsd(lastSnapshot));
 	}
 
 	// TODO: merge this code with PeriodicEvaluator
@@ -167,5 +170,7 @@ public class SimRunner implements Runnable {
 		List<TradeInstruction> instructions = tactic.decideTrades(snapshot, forecasts);
 		if(instructions != null && instructions.size() > 0)
 			executionEngine.trade(instructions);
+
+		// TODO: record positions and trades in decision log
 	}
 }

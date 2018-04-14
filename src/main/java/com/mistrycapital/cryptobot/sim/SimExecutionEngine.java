@@ -32,13 +32,13 @@ public class SimExecutionEngine implements ExecutionEngine {
 			final Product product = instruction.getProduct();
 
 			if(instruction.getOrderSide() == OrderSide.BUY) {
-				final double dollars = accountant.getAvailable(Currency.USD);
+				final double dollars = instruction.getAmount();
 				final double price = snapshot.getProductSnapshot(product).askPrice;
 				final double crypto = (1 - transactionCost) * dollars / price;
 				accountant.recordTrade(Currency.USD, -dollars, product.getCryptoCurrency(), crypto);
 			} else {
 				final Currency cryptoCurrency = product.getCryptoCurrency();
-				final double crypto = accountant.getAvailable(cryptoCurrency);
+				final double crypto = instruction.getAmount();
 				final double price = snapshot.getProductSnapshot(product).bidPrice;
 				final double dollars = (1 - transactionCost) * crypto * price;
 				accountant.recordTrade(Currency.USD, dollars, cryptoCurrency, -crypto);

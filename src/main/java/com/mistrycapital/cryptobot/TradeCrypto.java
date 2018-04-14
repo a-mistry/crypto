@@ -65,7 +65,7 @@ public class TradeCrypto {
 		GdaxClient gdaxClient = GdaxClientFactory.createClientFromFile(gdaxApiFile);
 		GdaxPositionsProvider gdaxPositionsProvider = new GdaxPositionsProvider(timeKeeper, gdaxClient);
 		Accountant accountant = new Accountant(gdaxPositionsProvider);
-		Tactic tactic = new Tactic(accountant);
+		Tactic tactic = new Tactic(properties, accountant);
 		ExecutionEngine executionEngine = new GdaxExecutionEngine();
 		PeriodicEvaluator periodicEvaluator =
 			new PeriodicEvaluator(timeKeeper, intervalizer, orderBookManager, dynamicTracker, intervalAppender,
