@@ -6,7 +6,7 @@ import com.mistrycapital.cryptobot.gdax.common.Product;
 public class TradeInstruction {
 	/** Product to buy/sell */
 	private final Product product;
-	/** Amount to buy/sell */
+	/** Amount of the crypto to buy/sell */
 	private final double amount;
 	/** Order side from our perspective - BUY means we are buying */
 	private final OrderSide orderSide;
@@ -22,7 +22,7 @@ public class TradeInstruction {
 		return product;
 	}
 
-	/** @return Amount to buy/sell */
+	/** @return Amount of the crypto to buy/sell */
 	public final double getAmount() {
 		return amount;
 	}
