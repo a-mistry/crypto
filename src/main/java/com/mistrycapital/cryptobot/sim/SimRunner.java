@@ -9,6 +9,7 @@ import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
 import com.mistrycapital.cryptobot.appender.ForecastAppender;
 import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.execution.TradeInstruction;
+import com.mistrycapital.cryptobot.forecasts.ForecastCalculationLogger;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.forecasts.Solitude;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
@@ -38,10 +39,11 @@ public class SimRunner implements Runnable {
 	private final Intervalizer intervalizer;
 	private final ForecastAppender forecastAppender;
 	private final double[] forecasts;
-	private final ForecastCalculator forecastCalculator;
 	private final boolean shouldLogForecasts;
 	private final boolean shouldLogDecisions;
+	private final boolean shouldLogForecastCalc;
 	private final Path decisionFile;
+	private final Path forecastCalcFile;
 	private final int startingUsd;
 
 	public SimRunner(MCProperties properties, Intervalizer intervalizer, Path dataDir, SimTimeKeeper timeKeeper,
@@ -52,10 +54,11 @@ public class SimRunner implements Runnable {
 		this.intervalizer = intervalizer;
 		this.forecastAppender = forecastAppender;
 		forecasts = new double[Product.count];
-		forecastCalculator = new Solitude(properties);
 		shouldLogForecasts = properties.getBooleanProperty("sim.logForecasts", false);
 		shouldLogDecisions = properties.getBooleanProperty("sim.logDecisions", false);
+		shouldLogForecastCalc = properties.getBooleanProperty("sim.logForecastCalc", false);
 		decisionFile = dataDir.resolve(properties.getProperty("sim.decisionFile", "decisions.csv"));
+		forecastCalcFile = dataDir.resolve(properties.getProperty("sim.forecastCalcFile", "forecast-calcs.csv"));
 		startingUsd = properties.getIntProperty("sim.startUsd", 10000);
 	}
 
@@ -131,6 +134,12 @@ public class SimRunner implements Runnable {
 		PositionsProvider positionsProvider = new EmptyPositionsProvider(startingUsd);
 		Accountant accountant = new Accountant(positionsProvider);
 		MCProperties simProperties = new MCProperties();
+		ForecastCalculationLogger calculationLogger = null;
+		if(shouldLogForecastCalc) {
+			calculationLogger = new ForecastCalculationLogger(timeKeeper, forecastCalcFile);
+			calculationLogger.open();
+		}
+		ForecastCalculator forecastCalculator = new Solitude(simProperties, treatmentTimeKeeper, calculationLogger);
 		Tactic tactic = new Tactic(simProperties, accountant);
 		SimExecutionEngine executionEngine = new SimExecutionEngine(simProperties, accountant);
 		DecisionLogger decisionLogger = null;
@@ -143,7 +152,8 @@ public class SimRunner implements Runnable {
 			treatmentTimeKeeper.advanceTime(consolidatedSnapshot.getTimeNanos());
 			history.add(consolidatedSnapshot);
 			executionEngine.useSnapshot(consolidatedSnapshot);
-			evaluate(consolidatedSnapshot, history, tactic, executionEngine, treatmentTimeKeeper, decisionLogger);
+			evaluate(consolidatedSnapshot, history, forecastCalculator, tactic, executionEngine, treatmentTimeKeeper,
+				decisionLogger);
 		}
 		ConsolidatedSnapshot lastSnapshot = consolidatedSnapshots.get(consolidatedSnapshots.size() - 1);
 		log.debug("Ending positions USD " + accountant.getAvailable(Currency.USD)
@@ -154,6 +164,7 @@ public class SimRunner implements Runnable {
 		log.debug("Total ending position " + accountant.getPositionValueUsd(lastSnapshot));
 
 		if(decisionLogger != null) decisionLogger.close();
+		if(calculationLogger != null) calculationLogger.close();
 	}
 
 	// TODO: merge this code with PeriodicEvaluator
@@ -161,8 +172,9 @@ public class SimRunner implements Runnable {
 	/**
 	 * Evaluates forecasts and trades if warranted
 	 */
-	private void evaluate(ConsolidatedSnapshot snapshot, ConsolidatedHistory history, Tactic tactic,
-		ExecutionEngine executionEngine, SimTimeKeeper treatmentTimeKeeper, DecisionLogger decisionLogger)
+	private void evaluate(ConsolidatedSnapshot snapshot, ConsolidatedHistory history,
+		ForecastCalculator forecastCalculator, Tactic tactic, ExecutionEngine executionEngine,
+		SimTimeKeeper treatmentTimeKeeper, DecisionLogger decisionLogger)
 	{
 		// update signals
 		for(Product product : Product.FAST_VALUES) {

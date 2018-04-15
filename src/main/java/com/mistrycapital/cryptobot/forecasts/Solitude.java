@@ -4,6 +4,7 @@ import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
 import com.mistrycapital.cryptobot.gdax.common.Product;
+import com.mistrycapital.cryptobot.time.TimeKeeper;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
 import org.slf4j.Logger;
@@ -11,11 +12,15 @@ import org.slf4j.Logger;
 public class Solitude implements ForecastCalculator {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
+	private final TimeKeeper timeKeeper;
+	private final ForecastCalculationLogger calculationLogger;
 	private final int threeHourDatapoints;
 	private final double[][] coeffs;
 
-	public Solitude(MCProperties properties) {
+	public Solitude(MCProperties properties, TimeKeeper timeKeeper, ForecastCalculationLogger calculationLogger) {
 		log.info("Using forecast calculator Solitude");
+		this.timeKeeper = timeKeeper;
+		this.calculationLogger = calculationLogger;
 		final int intervalSeconds = properties.getIntProperty("history.intervalSeconds");
 		threeHourDatapoints = 3 * 60 * 60 / intervalSeconds;
 
@@ -61,7 +66,28 @@ public class Solitude implements ForecastCalculator {
 		final double tradeRatio = (bidTradeCount - askTradeCount) / ((double) book5PctCount);
 
 		final double[] productCoeffs = coeffs[product.getIndex()];
+		final double forecast = productCoeffs[0] + productCoeffs[1] * bookRatio + productCoeffs[2] * tradeRatio;
 
-		return productCoeffs[0] + productCoeffs[1] * bookRatio + productCoeffs[2] * tradeRatio;
+		if(calculationLogger != null) {
+			Object[] values = new Object[14];
+			int index = 0;
+			values[index++] = timeKeeper.iso8601();
+			values[index++] = timeKeeper.epochMs() / 1000L;
+			values[index++] = product;
+			values[index++] = latest.midPrice;
+			values[index++] = latest.bidCount5Pct;
+			values[index++] = book5PctCount;
+			values[index++] = bidTradeCount;
+			values[index++] = askTradeCount;
+			values[index++] = productCoeffs[0];
+			values[index++] = productCoeffs[1];
+			values[index++] = productCoeffs[2];
+			values[index++] = bookRatio;
+			values[index++] = tradeRatio;
+			values[index++] = forecast;
+			calculationLogger.logCalculation(values);
+		}
+
+		return forecast;
 	}
 }
