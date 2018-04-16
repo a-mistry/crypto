@@ -11,7 +11,7 @@ import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculationLogger;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
-import com.mistrycapital.cryptobot.forecasts.Solitude;
+import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.tactic.Tactic;
@@ -139,7 +139,7 @@ public class SimRunner implements Runnable {
 			calculationLogger = new ForecastCalculationLogger(timeKeeper, forecastCalcFile);
 			calculationLogger.open();
 		}
-		ForecastCalculator forecastCalculator = new Solitude(simProperties, treatmentTimeKeeper, calculationLogger);
+		ForecastCalculator forecastCalculator = new Snowbird(simProperties);
 		Tactic tactic = new Tactic(simProperties, accountant);
 		SimExecutionEngine executionEngine = new SimExecutionEngine(simProperties, accountant);
 		DecisionLogger decisionLogger = null;
