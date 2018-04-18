@@ -235,4 +235,68 @@ class OrderBookTest {
 		assertEquals(21.5, bbo.midPrice(), EPSILON);
 		assertEquals(3.14, book.getAskSize(), EPSILON);
 	}
+
+	@Test
+	void shouldFixCrossedMarket() {
+		TimeKeeper timeKeeper = new FakeTimeKeeper();
+		OrderBook book = new OrderBook(timeKeeper, Product.BTC_USD);
+		GdaxMessageProcessor processor = book.getBookProcessor();
+
+		UUID orderId1 = UUID.randomUUID();
+		UUID orderId2 = UUID.randomUUID();
+		UUID orderId3 = UUID.randomUUID();
+		UUID orderId4 = UUID.randomUUID();
+
+		JsonObject msgJson = new JsonObject();
+		msgJson.addProperty("side", "buy");
+		msgJson.addProperty("product_id", "BTC-USD");
+		msgJson.addProperty("time", "2014-11-07T08:19:27.028459Z");
+		msgJson.addProperty("sequence", 10L);
+		msgJson.addProperty("order_id", orderId1.toString());
+		msgJson.addProperty("price", 20.0);
+		msgJson.addProperty("remaining_size", 1.0);
+		processor.process(new Open(msgJson));
+
+		msgJson.addProperty("side", "sell");
+		msgJson.addProperty("order_id", orderId2.toString());
+		msgJson.addProperty("price", 22.0);
+		msgJson.addProperty("remaining_size", 2.0);
+		processor.process(new Open(msgJson));
+		msgJson.addProperty("order_id", orderId3.toString());
+		msgJson.addProperty("price", 22.0);
+		msgJson.addProperty("remaining_size", 0.5);
+		processor.process(new Open(msgJson));
+		msgJson.addProperty("order_id", orderId4.toString());
+		msgJson.addProperty("price", 23.0);
+		msgJson.addProperty("remaining_size", 3.14);
+		processor.process(new Open(msgJson));
+
+		// first do ask side
+		UUID orderId5 = UUID.randomUUID();
+		msgJson.addProperty("side", "buy");
+		msgJson.addProperty("order_id", orderId5.toString());
+		msgJson.addProperty("price", 22.5);
+		msgJson.addProperty("remaining_size", 4.0);
+		processor.process(new Open(msgJson));
+
+		BBO bbo = book.getBBO();
+		assertEquals(22.5, bbo.bidPrice, EPSILON);
+		assertEquals(23.0, bbo.askPrice, EPSILON);
+		assertEquals(4.0, bbo.bidSize, EPSILON);
+		assertEquals(3.14, bbo.askSize, EPSILON);
+
+		// now do bid side and lock, not cross
+		UUID orderId6 = UUID.randomUUID();
+		msgJson.addProperty("side", "sell");
+		msgJson.addProperty("order_id", orderId6.toString());
+		msgJson.addProperty("price", 22.5);
+		msgJson.addProperty("remaining_size", 5.0);
+		processor.process(new Open(msgJson));
+
+		bbo = book.getBBO();
+		assertEquals(20.0, bbo.bidPrice, EPSILON);
+		assertEquals(22.5, bbo.askPrice, EPSILON);
+		assertEquals(1.0, bbo.bidSize, EPSILON);
+		assertEquals(5.0, bbo.askSize, EPSILON);
+	}
 }

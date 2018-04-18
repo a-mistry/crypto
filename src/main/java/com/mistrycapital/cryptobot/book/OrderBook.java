@@ -1,10 +1,6 @@
 package com.mistrycapital.cryptobot.book;
 
-import java.util.ArrayDeque;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Queue;
-import java.util.UUID;
+import java.util.*;
 
 import org.slf4j.Logger;
 
@@ -238,6 +234,11 @@ public class OrderBook {
 		Order order = orderPool.remove();
 		order.reset(orderId, price, size, timeMicros, side);
 
+		// if we see locked/crossed markets, remove resting orders as they are likely invalid
+		boolean bidCrossed = order.getSide() == OrderSide.BUY && order.getPrice() >= asks.getFirstPrice();
+		boolean askCrossed = order.getSide() == OrderSide.SELL && order.getPrice() <= bids.getFirstPrice();
+		if(bidCrossed || askCrossed) removeLockedCrossed(order);
+
 		// now add to map and to order line
 		activeOrders.put(order.getId(), order);
 		final OrderLine line;
@@ -247,6 +248,32 @@ public class OrderBook {
 			line = asks.findOrCreate(order.getPrice());
 		}
 		order.setLine(line);
+	}
+
+	/**
+	 * Remove any resting orders that cross with the given order (since they are invalid). This scenario
+	 * can happen with gaps in data
+	 */
+	private void removeLockedCrossed(final Order order) {
+		// This could be made more efficient by pointing back to orders from the line
+		// but hopefully this doesn't happen much or at all in live trading
+		final double orderPrice = order.getPrice();
+		final boolean orderIsBid = order.getSide() == OrderSide.BUY;
+		final boolean orderIsAsk = !orderIsBid;
+		List<Order> toRemove = new LinkedList<>();
+		for(Order resting : activeOrders.values()) {
+			final boolean bidCrossed =
+				orderIsBid && resting.getSide() == OrderSide.SELL && resting.getPrice() <= orderPrice;
+			final boolean askCrossed =
+				orderIsAsk && resting.getSide() == OrderSide.BUY && resting.getPrice() >= orderPrice;
+			if(bidCrossed || askCrossed)
+				toRemove.add(resting);
+		}
+		for(Order resting : toRemove) {
+			activeOrders.remove(resting.getId());
+			resting.destroy();
+			orderPool.add(resting);
+		}
 	}
 
 	/**
