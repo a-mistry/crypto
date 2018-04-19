@@ -32,6 +32,7 @@ public class SimExecutionEngine implements ExecutionEngine {
 	public void trade(final List<TradeInstruction> instructions) {
 		ConsolidatedSnapshot snapshot = history.latest();
 
+		// TODO: Take line size into account, i.e. add market impact
 		for(TradeInstruction instruction : instructions) {
 			final Product product = instruction.getProduct();
 			final Currency cryptoCurrency = product.getCryptoCurrency();

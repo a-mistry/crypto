@@ -1,4 +1,4 @@
-package com.mistrycapital.cryptobot.sim;
+package com.mistrycapital.cryptobot.appender;
 
 import com.mistrycapital.cryptobot.accounting.Accountant;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
@@ -16,47 +16,36 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 
-public class DecisionLogger {
+public class DecisionAppender extends CommonFileAppender {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
 	private final TimeKeeper timeKeeper;
 	private final Accountant accountant;
-	private final Path decisionFile;
-	private BufferedWriter writer;
 
-	public DecisionLogger(Accountant accountant, TimeKeeper timeKeeper, Path decisionFile) {
+	public DecisionAppender(Accountant accountant, TimeKeeper timeKeeper, Path dataDir, String filename) {
+		super(timeKeeper, dataDir, filename.replace(".csv", ""), ".csv", RollingPolicy.NEVER,
+			FlushPolicy.FLUSH_EACH_WRITE);
 		this.timeKeeper = timeKeeper;
 		this.accountant = accountant;
-		this.decisionFile = decisionFile;
 	}
 
-	public void open() {
-		try {
-			writer =
-				Files.newBufferedWriter(decisionFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-			writer.write("date,unixTimestamp,USD,");
-			for(Product product : Product.FAST_VALUES) {
-				Currency crypto = product.getCryptoCurrency();
-				writer.write(
-					"MidPrice" + crypto + ",Forecast" + crypto + ",AmountTraded" + crypto + ",Action" + crypto +
-						",Pos" + crypto + ",");
-			}
-			writer.write("TotalPositionUsd");
-			writer.newLine();
-		} catch(IOException e) {
-			log.error("Could not open decision log", e);
+	@Override
+	protected void addNewFileHeader()
+		throws IOException
+	{
+		StringBuilder builder = new StringBuilder();
+		builder.append("date,unixTimestamp,USD,");
+		for(Product product : Product.FAST_VALUES) {
+			Currency crypto = product.getCryptoCurrency();
+			builder.append("MidPrice" + crypto + ",Forecast" + crypto + ",AmountTraded" + crypto + ",Action" + crypto
+				+ ",Pos" + crypto + ",");
 		}
-	}
-
-	public void close() {
-		try {
-			writer.close();
-		} catch(IOException e) {
-			log.error("Could not close decision log", e);
-		}
+		builder.append("TotalPositionUsd");
+		append(builder.toString());
 	}
 
 	public void logDecision(ConsolidatedSnapshot snapshot, double[] forecasts, List<TradeInstruction> tradeInstructions)
+		throws IOException
 	{
 		StringBuilder builder = new StringBuilder();
 		builder.append(timeKeeper.iso8601());
@@ -88,12 +77,6 @@ public class DecisionLogger {
 			builder.append(',');
 		}
 		builder.append(accountant.getPositionValueUsd(snapshot));
-
-		try {
-			writer.write(builder.toString());
-			writer.newLine();
-		} catch(IOException e) {
-			log.error("Could not record decision log", e);
-		}
+		append(builder.toString());
 	}
 }

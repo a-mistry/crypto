@@ -2,7 +2,6 @@ package com.mistrycapital.cryptobot.tactic;
 
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
-import com.mistrycapital.cryptobot.appender.ForecastAppender;
 import com.mistrycapital.cryptobot.appender.IntervalDataAppender;
 import com.mistrycapital.cryptobot.book.BBO;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
@@ -10,7 +9,7 @@ import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
 import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.gdax.common.Product;
-import com.mistrycapital.cryptobot.sim.DecisionLogger;
+import com.mistrycapital.cryptobot.appender.DecisionAppender;
 import com.mistrycapital.cryptobot.time.Intervalizer;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
@@ -33,8 +32,8 @@ public class OrderBookPeriodicEvaluator implements Runnable {
 
 	public OrderBookPeriodicEvaluator(TimeKeeper timeKeeper, Intervalizer intervalizer,
 		OrderBookManager orderBookManager, DynamicTracker dynamicTracker, IntervalDataAppender intervalDataAppender,
-		ForecastAppender forecastAppender, ForecastCalculator forecastCalculator, Tactic tactic,
-		ExecutionEngine executionEngine, DecisionLogger decisionLogger)
+		ForecastCalculator forecastCalculator, Tactic tactic,
+		ExecutionEngine executionEngine, DecisionAppender decisionAppender)
 	{
 		this.timeKeeper = timeKeeper;
 		this.intervalizer = intervalizer;
@@ -43,8 +42,8 @@ public class OrderBookPeriodicEvaluator implements Runnable {
 		this.intervalDataAppender = intervalDataAppender;
 		nextIntervalMillis = intervalizer.calcNextIntervalMillis(timeKeeper.epochMs());
 		consolidatedHistory = new ConsolidatedHistory(intervalizer);
-		tradeEvaluator = new TradeEvaluator(consolidatedHistory, forecastAppender, forecastCalculator, tactic,
-			executionEngine, decisionLogger);
+		tradeEvaluator =
+			new TradeEvaluator(consolidatedHistory, forecastCalculator, tactic, executionEngine, decisionAppender);
 	}
 
 	@Override

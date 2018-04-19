@@ -6,7 +6,7 @@ import com.mistrycapital.cryptobot.accounting.PositionsProvider;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
-import com.mistrycapital.cryptobot.appender.ForecastAppender;
+import com.mistrycapital.cryptobot.appender.DecisionAppender;
 import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculationLogger;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
@@ -34,30 +34,23 @@ import java.util.stream.Collectors;
 public class SimRunner implements Runnable {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
-	private final Path dataDir;
-	private final SimTimeKeeper timeKeeper;
 	private final Intervalizer intervalizer;
-	private final ForecastAppender forecastAppender;
+	private final Path dataDir;
 	private final double[] forecasts;
-	private final boolean shouldLogForecasts;
 	private final boolean shouldLogDecisions;
 	private final boolean shouldLogForecastCalc;
-	private final Path decisionFile;
+	private final String decisionFile;
 	private final Path forecastCalcFile;
 	private final int startingUsd;
 
-	public SimRunner(MCProperties properties, Intervalizer intervalizer, Path dataDir, SimTimeKeeper timeKeeper,
-		ForecastAppender forecastAppender)
+	public SimRunner(MCProperties properties, Path dataDir)
 	{
 		this.dataDir = dataDir;
-		this.timeKeeper = timeKeeper;
-		this.intervalizer = intervalizer;
-		this.forecastAppender = forecastAppender;
+		intervalizer = new Intervalizer(properties);
 		forecasts = new double[Product.count];
-		shouldLogForecasts = properties.getBooleanProperty("sim.logForecasts", false);
 		shouldLogDecisions = properties.getBooleanProperty("sim.logDecisions", false);
 		shouldLogForecastCalc = properties.getBooleanProperty("sim.logForecastCalc", false);
-		decisionFile = dataDir.resolve(properties.getProperty("sim.decisionFile", "decisions.csv"));
+		decisionFile = properties.getProperty("sim.decisionFile", "decisions.csv");
 		forecastCalcFile = dataDir.resolve(properties.getProperty("sim.forecastCalcFile", "forecast-calcs.csv"));
 		startingUsd = properties.getIntProperty("sim.startUsd", 10000);
 	}
@@ -80,6 +73,7 @@ public class SimRunner implements Runnable {
 	private List<ConsolidatedSnapshot> readMarketData()
 		throws IOException
 	{
+		SimTimeKeeper timeKeeper = new SimTimeKeeper();
 		List<ConsolidatedSnapshot> consolidatedSnapshots = new ArrayList<>(365 * 24 * 12); // 1 year
 		ProductSnapshot[] productSnapshots = new ProductSnapshot[Product.count];
 
@@ -128,9 +122,11 @@ public class SimRunner implements Runnable {
 		return true;
 	}
 
-	private void simulate(List<ConsolidatedSnapshot> consolidatedSnapshots) {
+	private void simulate(List<ConsolidatedSnapshot> consolidatedSnapshots)
+		throws IOException
+	{
 		ConsolidatedHistory history = new ConsolidatedHistory(intervalizer);
-		SimTimeKeeper treatmentTimeKeeper = new SimTimeKeeper();
+		SimTimeKeeper timeKeeper = new SimTimeKeeper();
 		PositionsProvider positionsProvider = new EmptyPositionsProvider(startingUsd);
 		Accountant accountant = new Accountant(positionsProvider);
 		MCProperties simProperties = new MCProperties();
@@ -142,15 +138,16 @@ public class SimRunner implements Runnable {
 		ForecastCalculator forecastCalculator = new Snowbird(simProperties);
 		Tactic tactic = new Tactic(simProperties, accountant);
 		ExecutionEngine executionEngine = new SimExecutionEngine(simProperties, accountant, history);
-		DecisionLogger decisionLogger = null;
+		DecisionAppender decisionAppender = null;
 		if(shouldLogDecisions) {
-			decisionLogger = new DecisionLogger(accountant, treatmentTimeKeeper, decisionFile);
-			decisionLogger.open();
+			decisionAppender = new DecisionAppender(accountant, timeKeeper, dataDir, decisionFile);
+			decisionAppender.open();
 		}
-		TradeEvaluator tradeEvaluator = new TradeEvaluator(history, forecastAppender, forecastCalculator, tactic, executionEngine, decisionLogger);
+		TradeEvaluator tradeEvaluator = new TradeEvaluator(history, forecastCalculator, tactic, executionEngine,
+			decisionAppender);
 
 		for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedSnapshots) {
-			treatmentTimeKeeper.advanceTime(consolidatedSnapshot.getTimeNanos());
+			timeKeeper.advanceTime(consolidatedSnapshot.getTimeNanos());
 			history.add(consolidatedSnapshot);
 			tradeEvaluator.evaluate();
 		}
@@ -163,7 +160,7 @@ public class SimRunner implements Runnable {
 			+ " LTC " + accountant.getAvailable(Currency.LTC));
 		log.debug("Total ending position " + accountant.getPositionValueUsd(lastSnapshot));
 
-		if(decisionLogger != null) decisionLogger.close();
+		if(decisionAppender != null) decisionAppender.close();
 		if(calculationLogger != null) calculationLogger.close();
 	}
 }

@@ -7,6 +7,7 @@ import java.time.format.DateTimeFormatter;
  * Instructs the appender on when to roll to a new file
  */
 enum RollingPolicy {
+	NEVER(10000L * 365 * 24 * 3600000L, ""), // 10000 years, effectively never
 	HOURLY(3600000L, "yyyy-MM-dd-HH"),
 	DAILY(24 * 3600000L, "yyyy-MM-dd");
 

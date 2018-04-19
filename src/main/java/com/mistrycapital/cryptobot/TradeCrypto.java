@@ -5,7 +5,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import com.mistrycapital.cryptobot.accounting.Accountant;
-import com.mistrycapital.cryptobot.appender.ForecastAppender;
 import com.mistrycapital.cryptobot.appender.IntervalDataAppender;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
 import com.mistrycapital.cryptobot.execution.ExecutionEngine;
@@ -15,10 +14,9 @@ import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.GdaxClientFactory;
 import com.mistrycapital.cryptobot.gdax.GdaxPositionsProvider;
 import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
-import com.mistrycapital.cryptobot.sim.DecisionLogger;
+import com.mistrycapital.cryptobot.appender.DecisionAppender;
 import com.mistrycapital.cryptobot.tactic.OrderBookPeriodicEvaluator;
 import com.mistrycapital.cryptobot.tactic.Tactic;
-import com.mistrycapital.cryptobot.tactic.TradeEvaluator;
 import com.mistrycapital.cryptobot.time.Intervalizer;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.websocket.client.ClientUpgradeRequest;
@@ -40,6 +38,7 @@ public class TradeCrypto {
 	private static final String BOOK_MESSAGE_FILE_NAME = "gdax-orders";
 	public static final String INTERVAL_FILE_NAME = "samples";
 	public static final String FORECAST_FILE_NAME = "forecasts";
+	public static final String DECISION_FILE_NAME = "decisions";
 
 	public static void main(String[] args)
 		throws Exception
@@ -57,24 +56,22 @@ public class TradeCrypto {
 			new GdaxMessageAppender(dataDir, BOOK_MESSAGE_FILE_NAME, ".json", timeKeeper, orderBookManager);
 		gdaxAppender.open();
 		GdaxWebSocket gdaxWebSocket = new GdaxWebSocket(timeKeeper, gdaxAppender);
-		Intervalizer intervalizer = new Intervalizer(properties);
-		IntervalDataAppender intervalAppender = new IntervalDataAppender(dataDir, INTERVAL_FILE_NAME, timeKeeper);
-		intervalAppender.open();
-		ForecastAppender forecastAppender = new ForecastAppender(dataDir, FORECAST_FILE_NAME, timeKeeper);
-		forecastAppender.open();
-		DynamicTracker dynamicTracker = new DynamicTracker();
-		ForecastCalculator snowbird = new Snowbird(properties);
-
 		GdaxClient gdaxClient = GdaxClientFactory.createClientFromFile(gdaxApiFile);
 		GdaxPositionsProvider gdaxPositionsProvider = new GdaxPositionsProvider(timeKeeper, gdaxClient);
 		Accountant accountant = new Accountant(gdaxPositionsProvider);
+		Intervalizer intervalizer = new Intervalizer(properties);
+		IntervalDataAppender intervalAppender = new IntervalDataAppender(dataDir, INTERVAL_FILE_NAME, timeKeeper);
+		intervalAppender.open();
+		DecisionAppender decisionAppender = new DecisionAppender(accountant, timeKeeper, dataDir, DECISION_FILE_NAME);
+		decisionAppender.open();
+		DynamicTracker dynamicTracker = new DynamicTracker();
+		ForecastCalculator snowbird = new Snowbird(properties);
+
 		Tactic tactic = new Tactic(properties, accountant);
 		ExecutionEngine executionEngine = new GdaxExecutionEngine();
-		// TODO: Add decision logger to prod
-		DecisionLogger decisionLogger = null;
 		OrderBookPeriodicEvaluator periodicEvaluator =
 			new OrderBookPeriodicEvaluator(timeKeeper, intervalizer, orderBookManager, dynamicTracker, intervalAppender,
-				forecastAppender, snowbird, tactic, executionEngine, decisionLogger);
+				snowbird, tactic, executionEngine, decisionAppender);
 
 		gdaxWebSocket.subscribe(orderBookManager);
 		gdaxWebSocket.subscribe(dynamicTracker);
