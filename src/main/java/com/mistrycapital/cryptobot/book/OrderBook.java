@@ -257,6 +257,7 @@ public class OrderBook {
 	private void removeLockedCrossed(final Order order) {
 		// This could be made more efficient by pointing back to orders from the line
 		// but hopefully this doesn't happen much or at all in live trading
+		log.debug("Removing locked/crossed orders on " + product + " at " + timeKeeper.iso8601());
 		final double orderPrice = order.getPrice();
 		final boolean orderIsBid = order.getSide() == OrderSide.BUY;
 		final boolean orderIsAsk = !orderIsBid;

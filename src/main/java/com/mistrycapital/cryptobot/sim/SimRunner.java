@@ -8,13 +8,13 @@ import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
 import com.mistrycapital.cryptobot.appender.ForecastAppender;
 import com.mistrycapital.cryptobot.execution.ExecutionEngine;
-import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculationLogger;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.tactic.Tactic;
+import com.mistrycapital.cryptobot.tactic.TradeEvaluator;
 import com.mistrycapital.cryptobot.time.Intervalizer;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
@@ -141,20 +141,20 @@ public class SimRunner implements Runnable {
 		}
 		ForecastCalculator forecastCalculator = new Snowbird(simProperties);
 		Tactic tactic = new Tactic(simProperties, accountant);
-		SimExecutionEngine executionEngine = new SimExecutionEngine(simProperties, accountant);
+		ExecutionEngine executionEngine = new SimExecutionEngine(simProperties, accountant, history);
 		DecisionLogger decisionLogger = null;
 		if(shouldLogDecisions) {
 			decisionLogger = new DecisionLogger(accountant, treatmentTimeKeeper, decisionFile);
 			decisionLogger.open();
 		}
+		TradeEvaluator tradeEvaluator = new TradeEvaluator(history, forecastAppender, forecastCalculator, tactic, executionEngine, decisionLogger);
 
 		for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedSnapshots) {
 			treatmentTimeKeeper.advanceTime(consolidatedSnapshot.getTimeNanos());
 			history.add(consolidatedSnapshot);
-			executionEngine.useSnapshot(consolidatedSnapshot);
-			evaluate(consolidatedSnapshot, history, forecastCalculator, tactic, executionEngine, treatmentTimeKeeper,
-				decisionLogger);
+			tradeEvaluator.evaluate();
 		}
+
 		ConsolidatedSnapshot lastSnapshot = consolidatedSnapshots.get(consolidatedSnapshots.size() - 1);
 		log.debug("Ending positions USD " + accountant.getAvailable(Currency.USD)
 			+ " BTC " + accountant.getAvailable(Currency.BTC)
@@ -165,34 +165,5 @@ public class SimRunner implements Runnable {
 
 		if(decisionLogger != null) decisionLogger.close();
 		if(calculationLogger != null) calculationLogger.close();
-	}
-
-	// TODO: merge this code with PeriodicEvaluator
-
-	/**
-	 * Evaluates forecasts and trades if warranted
-	 */
-	private void evaluate(ConsolidatedSnapshot snapshot, ConsolidatedHistory history,
-		ForecastCalculator forecastCalculator, Tactic tactic, ExecutionEngine executionEngine,
-		SimTimeKeeper treatmentTimeKeeper, DecisionLogger decisionLogger)
-	{
-		// update signals
-		for(Product product : Product.FAST_VALUES) {
-			forecasts[product.getIndex()] = forecastCalculator.calculate(history, product);
-		}
-		if(shouldLogForecasts) {
-			try {
-				forecastAppender.recordForecasts(treatmentTimeKeeper.epochMs(), forecasts);
-			} catch(IOException e) {
-				log.error("Error saving forecast data", e);
-			}
-		}
-
-		// possibly trade
-		List<TradeInstruction> instructions = tactic.decideTrades(snapshot, forecasts);
-		if(instructions != null && instructions.size() > 0)
-			executionEngine.trade(instructions);
-
-		decisionLogger.logDecision(snapshot, forecasts, instructions);
 	}
 }

@@ -1,7 +1,9 @@
 package com.mistrycapital.cryptobot.sim;
 
 import com.mistrycapital.cryptobot.accounting.Accountant;
+import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
+import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
 import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
@@ -18,20 +20,18 @@ public class SimExecutionEngine implements ExecutionEngine {
 
 	private final Accountant accountant;
 	private final double transactionCost;
-	private ConsolidatedSnapshot snapshot;
+	private final ConsolidatedHistory history;
 
-	SimExecutionEngine(MCProperties properties, Accountant accountant) {
+	SimExecutionEngine(MCProperties properties, Accountant accountant, ConsolidatedHistory history) {
 		this.accountant = accountant;
+		this.history = history;
 		transactionCost = properties.getDoubleProperty("sim.transactionCostOnes", 0.0030);
-	}
-
-	/** Store the given snapshot and use the quotes for fill prices */
-	public void useSnapshot(ConsolidatedSnapshot snapshot) {
-		this.snapshot = snapshot;
 	}
 
 	@Override
 	public void trade(final List<TradeInstruction> instructions) {
+		ConsolidatedSnapshot snapshot = history.latest();
+
 		for(TradeInstruction instruction : instructions) {
 			final Product product = instruction.getProduct();
 			final Currency cryptoCurrency = product.getCryptoCurrency();

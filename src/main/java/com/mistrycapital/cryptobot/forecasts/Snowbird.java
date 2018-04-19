@@ -1,6 +1,5 @@
 package com.mistrycapital.cryptobot.forecasts;
 
-import com.mistrycapital.cryptobot.PeriodicEvaluator;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;

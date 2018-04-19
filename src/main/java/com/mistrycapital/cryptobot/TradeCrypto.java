@@ -15,7 +15,10 @@ import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.GdaxClientFactory;
 import com.mistrycapital.cryptobot.gdax.GdaxPositionsProvider;
 import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
+import com.mistrycapital.cryptobot.sim.DecisionLogger;
+import com.mistrycapital.cryptobot.tactic.OrderBookPeriodicEvaluator;
 import com.mistrycapital.cryptobot.tactic.Tactic;
+import com.mistrycapital.cryptobot.tactic.TradeEvaluator;
 import com.mistrycapital.cryptobot.time.Intervalizer;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.websocket.client.ClientUpgradeRequest;
@@ -67,9 +70,11 @@ public class TradeCrypto {
 		Accountant accountant = new Accountant(gdaxPositionsProvider);
 		Tactic tactic = new Tactic(properties, accountant);
 		ExecutionEngine executionEngine = new GdaxExecutionEngine();
-		PeriodicEvaluator periodicEvaluator =
-			new PeriodicEvaluator(timeKeeper, intervalizer, orderBookManager, dynamicTracker, intervalAppender,
-				forecastAppender, snowbird, tactic, executionEngine);
+		// TODO: Add decision logger to prod
+		DecisionLogger decisionLogger = null;
+		OrderBookPeriodicEvaluator periodicEvaluator =
+			new OrderBookPeriodicEvaluator(timeKeeper, intervalizer, orderBookManager, dynamicTracker, intervalAppender,
+				forecastAppender, snowbird, tactic, executionEngine, decisionLogger);
 
 		gdaxWebSocket.subscribe(orderBookManager);
 		gdaxWebSocket.subscribe(dynamicTracker);

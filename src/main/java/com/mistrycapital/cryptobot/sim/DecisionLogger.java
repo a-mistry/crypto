@@ -56,8 +56,7 @@ public class DecisionLogger {
 		}
 	}
 
-	public void logDecision(ConsolidatedSnapshot snapshot, double[] forecasts,
-		List<TradeInstruction> tradeInstructions)
+	public void logDecision(ConsolidatedSnapshot snapshot, double[] forecasts, List<TradeInstruction> tradeInstructions)
 	{
 		StringBuilder builder = new StringBuilder();
 		builder.append(timeKeeper.iso8601());
