@@ -7,6 +7,7 @@ import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.appender.DecisionAppender;
+import com.mistrycapital.cryptobot.risk.TradeRiskValidator;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import org.slf4j.Logger;
 
@@ -20,6 +21,7 @@ public class TradeEvaluator {
 	private final ConsolidatedHistory consolidatedHistory;
 	private final ForecastCalculator forecastCalculator;
 	private final Tactic tactic;
+	private final TradeRiskValidator tradeRiskValidator;
 	private final ExecutionEngine executionEngine;
 	private final DecisionAppender decisionAppender;
 
@@ -30,11 +32,13 @@ public class TradeEvaluator {
 	 * Note that forecast appender and decision logger can be null if we do not want to log
 	 */
 	public TradeEvaluator(ConsolidatedHistory consolidatedHistory, ForecastCalculator forecastCalculator, Tactic tactic,
-		ExecutionEngine executionEngine, @Nullable DecisionAppender decisionAppender)
+		TradeRiskValidator tradeRiskValidator, ExecutionEngine executionEngine,
+		@Nullable DecisionAppender decisionAppender)
 	{
 		this.consolidatedHistory = consolidatedHistory;
 		this.forecastCalculator = forecastCalculator;
 		this.tactic = tactic;
+		this.tradeRiskValidator = tradeRiskValidator;
 		this.executionEngine = executionEngine;
 		this.decisionAppender = decisionAppender;
 		forecasts = new double[Product.count];
@@ -52,8 +56,7 @@ public class TradeEvaluator {
 		}
 
 		// possibly trade
-		List<TradeInstruction> instructions = tactic.decideTrades(snapshot, forecasts);
-		// TODO: pass trades through risk checks
+		List<TradeInstruction> instructions = tradeRiskValidator.validate(tactic.decideTrades(snapshot, forecasts));
 		if(instructions != null && instructions.size() > 0)
 			executionEngine.trade(instructions);
 

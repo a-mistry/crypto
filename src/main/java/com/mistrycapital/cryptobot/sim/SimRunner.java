@@ -13,6 +13,7 @@ import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.Product;
+import com.mistrycapital.cryptobot.risk.TradeRiskValidator;
 import com.mistrycapital.cryptobot.tactic.Tactic;
 import com.mistrycapital.cryptobot.tactic.TradeEvaluator;
 import com.mistrycapital.cryptobot.time.Intervalizer;
@@ -146,14 +147,15 @@ public class SimRunner implements Runnable {
 		}
 		ForecastCalculator forecastCalculator = new Snowbird(simProperties);
 		Tactic tactic = new Tactic(simProperties, accountant);
+		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(timeKeeper, accountant);
 		ExecutionEngine executionEngine = new SimExecutionEngine(simProperties, accountant, history);
 		DecisionAppender decisionAppender = null;
 		if(shouldLogDecisions) {
 			decisionAppender = new DecisionAppender(accountant, timeKeeper, dataDir, decisionFile);
 			decisionAppender.open();
 		}
-		TradeEvaluator tradeEvaluator = new TradeEvaluator(history, forecastCalculator, tactic, executionEngine,
-			decisionAppender);
+		TradeEvaluator tradeEvaluator = new TradeEvaluator(history, forecastCalculator, tactic, tradeRiskValidator,
+			executionEngine, decisionAppender);
 
 		for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedSnapshots) {
 			timeKeeper.advanceTime(consolidatedSnapshot.getTimeNanos());

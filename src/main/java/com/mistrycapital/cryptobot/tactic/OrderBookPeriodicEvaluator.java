@@ -10,6 +10,7 @@ import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.appender.DecisionAppender;
+import com.mistrycapital.cryptobot.risk.TradeRiskValidator;
 import com.mistrycapital.cryptobot.time.Intervalizer;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
@@ -32,7 +33,7 @@ public class OrderBookPeriodicEvaluator implements Runnable {
 
 	public OrderBookPeriodicEvaluator(TimeKeeper timeKeeper, Intervalizer intervalizer,
 		OrderBookManager orderBookManager, DynamicTracker dynamicTracker, IntervalDataAppender intervalDataAppender,
-		ForecastCalculator forecastCalculator, Tactic tactic,
+		ForecastCalculator forecastCalculator, Tactic tactic, TradeRiskValidator tradeRiskValidator,
 		ExecutionEngine executionEngine, DecisionAppender decisionAppender)
 	{
 		this.timeKeeper = timeKeeper;
@@ -42,8 +43,8 @@ public class OrderBookPeriodicEvaluator implements Runnable {
 		this.intervalDataAppender = intervalDataAppender;
 		nextIntervalMillis = intervalizer.calcNextIntervalMillis(timeKeeper.epochMs());
 		consolidatedHistory = new ConsolidatedHistory(intervalizer);
-		tradeEvaluator =
-			new TradeEvaluator(consolidatedHistory, forecastCalculator, tactic, executionEngine, decisionAppender);
+		tradeEvaluator = new TradeEvaluator(consolidatedHistory, forecastCalculator, tactic, tradeRiskValidator,
+			executionEngine, decisionAppender);
 	}
 
 	@Override
