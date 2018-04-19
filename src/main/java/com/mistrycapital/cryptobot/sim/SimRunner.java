@@ -52,6 +52,15 @@ public class SimRunner implements Runnable {
 		shouldLogForecastCalc = properties.getBooleanProperty("sim.logForecastCalc", false);
 		decisionFile = properties.getProperty("sim.decisionFile", "decisions.csv");
 		forecastCalcFile = dataDir.resolve(properties.getProperty("sim.forecastCalcFile", "forecast-calcs.csv"));
+		try {
+			if(shouldLogDecisions)
+				Files.deleteIfExists(dataDir.resolve(decisionFile));
+			if(shouldLogForecastCalc)
+				Files.deleteIfExists(forecastCalcFile);
+		} catch(IOException e) {
+			log.error("Could not delete existing file", e);
+			throw new RuntimeException(e);
+		}
 		startingUsd = properties.getIntProperty("sim.startUsd", 10000);
 	}
 

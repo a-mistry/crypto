@@ -101,8 +101,10 @@ abstract class CommonFileAppender implements FileAppender {
 
 		StringBuilder builder = new StringBuilder();
 		builder.append(baseFilename);
-		builder.append('-');
-		builder.append(rollingPolicy.format(dateTime));
+		if(rollingPolicy != RollingPolicy.NEVER) {
+			builder.append('-');
+			builder.append(rollingPolicy.format(dateTime));
+		}
 		builder.append('.');
 		builder.append(extension);
 		return builder.toString();
