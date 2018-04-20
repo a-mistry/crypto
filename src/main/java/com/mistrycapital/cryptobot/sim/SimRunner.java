@@ -70,10 +70,38 @@ public class SimRunner implements Runnable {
 		try {
 
 			List<ConsolidatedSnapshot> consolidatedSnapshots = readMarketData();
+			MCProperties simProperties = new MCProperties();
 
-			long startNanos = System.nanoTime();
-			simulate(consolidatedSnapshots);
-			log.debug("Simulation treatment ended in " + ((System.nanoTime() - startNanos) / 1000000.0) + "ms");
+			boolean singleSim = false;
+			if(singleSim) {
+				long startNanos = System.nanoTime();
+				simulate(consolidatedSnapshots, simProperties);
+				log.debug("Simulation treatment ended in " + ((System.nanoTime() - startNanos) / 1000000.0) + "ms");
+			} else {
+				// ladder on in/out thresholds
+				simProperties.put("sim.logDecisions", "false");
+				simProperties.put("sim.logForecastCalc", "false");
+				double maxReturn = Double.NEGATIVE_INFINITY;
+				double maxInThreshold = 0.0;
+				double maxOutThreshold = 0.0;
+				final int points = 10;
+				for(int i = 0; i < points; i++)
+					for(int j = 0; j < points; j++) {
+						double inThreshold = 0.0 + i * 0.2 / points;
+						double outThreshold = inThreshold - j * (0.2 + inThreshold) / points;
+						simProperties.put("tactic.inThreshold.default", Double.toString(inThreshold));
+						simProperties.put("tactic.outThreshold.default", Double.toString(outThreshold));
+						double ret = simulate(consolidatedSnapshots, simProperties);
+						log.debug("In=" + inThreshold + " Out=" + outThreshold + " return=" + ret);
+						if(ret > maxReturn) {
+							maxReturn = ret;
+							maxInThreshold = inThreshold;
+							maxOutThreshold = outThreshold;
+						}
+					}
+				log.info(
+					"Max return of " + maxReturn + " achieved at in=" + maxInThreshold + " out=" + maxOutThreshold);
+			}
 
 		} catch(IOException e) {
 			throw new RuntimeException(e);
@@ -132,14 +160,13 @@ public class SimRunner implements Runnable {
 		return true;
 	}
 
-	private void simulate(List<ConsolidatedSnapshot> consolidatedSnapshots)
+	private double simulate(List<ConsolidatedSnapshot> consolidatedSnapshots, MCProperties simProperties)
 		throws IOException
 	{
 		ConsolidatedHistory history = new ConsolidatedHistory(intervalizer);
 		SimTimeKeeper timeKeeper = new SimTimeKeeper();
 		PositionsProvider positionsProvider = new EmptyPositionsProvider(startingUsd);
 		Accountant accountant = new Accountant(positionsProvider);
-		MCProperties simProperties = new MCProperties();
 		ForecastCalculationLogger calculationLogger = null;
 		if(shouldLogForecastCalc) {
 			calculationLogger = new ForecastCalculationLogger(timeKeeper, forecastCalcFile);
@@ -164,14 +191,17 @@ public class SimRunner implements Runnable {
 		}
 
 		ConsolidatedSnapshot lastSnapshot = consolidatedSnapshots.get(consolidatedSnapshots.size() - 1);
-		log.debug("Ending positions USD " + accountant.getAvailable(Currency.USD)
+		log.trace("Ending positions USD " + accountant.getAvailable(Currency.USD)
 			+ " BTC " + accountant.getAvailable(Currency.BTC)
 			+ " BCH " + accountant.getAvailable(Currency.BCH)
 			+ " ETH " + accountant.getAvailable(Currency.ETH)
 			+ " LTC " + accountant.getAvailable(Currency.LTC));
-		log.debug("Total ending position " + accountant.getPositionValueUsd(lastSnapshot));
+		log.trace("Total ending position " + accountant.getPositionValueUsd(lastSnapshot));
 
 		if(decisionAppender != null) decisionAppender.close();
 		if(calculationLogger != null) calculationLogger.close();
+
+		// for now, just return the total return. eventually add more metrics
+		return accountant.getPositionValueUsd(lastSnapshot) / startingUsd - 1;
 	}
 }

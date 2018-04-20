@@ -20,8 +20,14 @@ public class TradeRiskValidator {
 	}
 
 	public List<TradeInstruction> validate(List<TradeInstruction> instructions) {
-		if(instructions != null)
-			log.debug("Checking risk on " + instructions.size() + " trades at " + timeKeeper.iso8601());
+		// checks to implement
+		// 1. No more than X trades in past 24 hours
+		// 2. Do not trade more than we have
+		// 3. Don't buy more than position limit in any currency
+
+		// NEED TO UNIT TEST THESE!
+//		if(instructions != null)
+//			log.debug("Checking risk on " + instructions.size() + " trades at " + timeKeeper.iso8601());
 		return instructions; // no op
 	}
 }
