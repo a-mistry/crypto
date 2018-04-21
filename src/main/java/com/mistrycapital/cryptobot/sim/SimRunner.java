@@ -8,9 +8,7 @@ import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
 import com.mistrycapital.cryptobot.appender.DecisionAppender;
 import com.mistrycapital.cryptobot.execution.ExecutionEngine;
-import com.mistrycapital.cryptobot.forecasts.ForecastCalculationLogger;
-import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
-import com.mistrycapital.cryptobot.forecasts.Snowbird;
+import com.mistrycapital.cryptobot.forecasts.*;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.risk.TradeRiskValidator;
@@ -67,8 +65,8 @@ public class SimRunner implements Runnable {
 				double maxReturn = Double.NEGATIVE_INFINITY;
 				double maxInThreshold = 0.0;
 				double maxOutThreshold = 0.0;
-				final int points = 10;
-				final double upperBound = 0.10;
+				final int points = 20;
+				final double upperBound = 0.05;
 				for(int i = 0; i < points; i++)
 					for(int j = 0; j < points; j++) {
 						double inThreshold = 0.0 + i * upperBound / points;
@@ -175,7 +173,7 @@ public class SimRunner implements Runnable {
 			calculationLogger = new ForecastCalculationLogger(timeKeeper, forecastCalcFile);
 			calculationLogger.open();
 		}
-		ForecastCalculator forecastCalculator = new Snowbird(simProperties);
+		ForecastCalculator forecastCalculator = new Brighton(simProperties); //new Snowbird(simProperties);
 		Tactic tactic = new Tactic(simProperties, accountant);
 		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(timeKeeper, accountant);
 		ExecutionEngine executionEngine = new SimExecutionEngine(simProperties, accountant, history);
