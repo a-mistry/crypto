@@ -38,8 +38,6 @@ public class SimRunner implements Runnable {
 	private final Intervalizer intervalizer;
 	private final Path dataDir;
 	private final double[] forecasts;
-	private final boolean shouldLogDecisions;
-	private final boolean shouldLogForecastCalc;
 	private final String decisionFile;
 	private final Path forecastCalcFile;
 	private final int startingUsd;
@@ -49,19 +47,8 @@ public class SimRunner implements Runnable {
 		this.dataDir = dataDir;
 		intervalizer = new Intervalizer(properties);
 		forecasts = new double[Product.count];
-		shouldLogDecisions = properties.getBooleanProperty("sim.logDecisions", false);
-		shouldLogForecastCalc = properties.getBooleanProperty("sim.logForecastCalc", false);
 		decisionFile = properties.getProperty("sim.decisionFile", "decisions.csv");
 		forecastCalcFile = dataDir.resolve(properties.getProperty("sim.forecastCalcFile", "forecast-calcs.csv"));
-		try {
-			if(shouldLogDecisions)
-				Files.deleteIfExists(dataDir.resolve(decisionFile));
-			if(shouldLogForecastCalc)
-				Files.deleteIfExists(forecastCalcFile);
-		} catch(IOException e) {
-			log.error("Could not delete existing file", e);
-			throw new RuntimeException(e);
-		}
 		startingUsd = properties.getIntProperty("sim.startUsd", 10000);
 	}
 
@@ -72,12 +59,8 @@ public class SimRunner implements Runnable {
 			List<ConsolidatedSnapshot> consolidatedSnapshots = readMarketData();
 			MCProperties simProperties = new MCProperties();
 
-			boolean singleSim = false;
-			if(singleSim) {
-				long startNanos = System.nanoTime();
-				simulate(consolidatedSnapshots, simProperties);
-				log.debug("Simulation treatment ended in " + ((System.nanoTime() - startNanos) / 1000000.0) + "ms");
-			} else {
+			boolean search = true;
+			if(search) {
 				// ladder on in/out thresholds
 				simProperties.put("sim.logDecisions", "false");
 				simProperties.put("sim.logForecastCalc", "false");
@@ -85,10 +68,11 @@ public class SimRunner implements Runnable {
 				double maxInThreshold = 0.0;
 				double maxOutThreshold = 0.0;
 				final int points = 10;
+				final double upperBound = 0.10;
 				for(int i = 0; i < points; i++)
 					for(int j = 0; j < points; j++) {
-						double inThreshold = 0.0 + i * 0.2 / points;
-						double outThreshold = inThreshold - j * (0.2 + inThreshold) / points;
+						double inThreshold = 0.0 + i * upperBound / points;
+						double outThreshold = inThreshold - j * (upperBound + inThreshold) / points;
 						simProperties.put("tactic.inThreshold.default", Double.toString(inThreshold));
 						simProperties.put("tactic.outThreshold.default", Double.toString(outThreshold));
 						double ret = simulate(consolidatedSnapshots, simProperties);
@@ -101,7 +85,14 @@ public class SimRunner implements Runnable {
 					}
 				log.info(
 					"Max return of " + maxReturn + " achieved at in=" + maxInThreshold + " out=" + maxOutThreshold);
+				simProperties.put("tactic.inThreshold.default", Double.toString(maxInThreshold));
+				simProperties.put("tactic.outThreshold.default", Double.toString(maxOutThreshold));
 			}
+			simProperties.put("sim.logDecisions", "true");
+			long startNanos = System.nanoTime();
+			double ret = simulate(consolidatedSnapshots, simProperties);
+			log.debug("Simulation treatment ended in " + ((System.nanoTime() - startNanos) / 1000000.0) + "ms");
+			log.debug("Ending return: " + ret);
 
 		} catch(IOException e) {
 			throw new RuntimeException(e);
@@ -163,6 +154,18 @@ public class SimRunner implements Runnable {
 	private double simulate(List<ConsolidatedSnapshot> consolidatedSnapshots, MCProperties simProperties)
 		throws IOException
 	{
+		final boolean shouldLogDecisions = simProperties.getBooleanProperty("sim.logDecisions", false);
+		final boolean shouldLogForecastCalc = simProperties.getBooleanProperty("sim.logForecastCalc", false);
+		try {
+			if(shouldLogDecisions)
+				Files.deleteIfExists(dataDir.resolve(decisionFile));
+			if(shouldLogForecastCalc)
+				Files.deleteIfExists(forecastCalcFile);
+		} catch(IOException e) {
+			log.error("Could not delete existing file", e);
+			throw new RuntimeException(e);
+		}
+
 		ConsolidatedHistory history = new ConsolidatedHistory(intervalizer);
 		SimTimeKeeper timeKeeper = new SimTimeKeeper();
 		PositionsProvider positionsProvider = new EmptyPositionsProvider(startingUsd);
@@ -191,12 +194,12 @@ public class SimRunner implements Runnable {
 		}
 
 		ConsolidatedSnapshot lastSnapshot = consolidatedSnapshots.get(consolidatedSnapshots.size() - 1);
-		log.trace("Ending positions USD " + accountant.getAvailable(Currency.USD)
+		log.debug("Ending positions USD " + accountant.getAvailable(Currency.USD)
 			+ " BTC " + accountant.getAvailable(Currency.BTC)
 			+ " BCH " + accountant.getAvailable(Currency.BCH)
 			+ " ETH " + accountant.getAvailable(Currency.ETH)
 			+ " LTC " + accountant.getAvailable(Currency.LTC));
-		log.trace("Total ending position " + accountant.getPositionValueUsd(lastSnapshot));
+		log.debug("Total ending position " + accountant.getPositionValueUsd(lastSnapshot));
 
 		if(decisionAppender != null) decisionAppender.close();
 		if(calculationLogger != null) calculationLogger.close();

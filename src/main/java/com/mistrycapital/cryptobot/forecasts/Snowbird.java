@@ -11,18 +11,20 @@ import org.slf4j.Logger;
 public class Snowbird implements ForecastCalculator {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
-	private static final long TWO_HOUR_NANOS = 3 * 60 * 60 * 1000000000L;
-	private static final long SIX_HOUR_NANOS = 6 * 60 * 60 * 1000000000L;
-	private static final long SEVEN_HOUR_NANOS = 7 * 60 * 60 * 1000000000L;
-
+	private final int threeHourDatapoints;
+	private final int sixHourDatapoints;
 	private final double[][] coeffs;
 
 	public Snowbird(MCProperties properties) {
-		coeffs = new double[Product.count][8];
+		final int intervalSeconds = properties.getIntProperty("history.intervalSeconds");
+		threeHourDatapoints = 3 * 60 * 60 / intervalSeconds;
+		sixHourDatapoints = threeHourDatapoints * 2;
+
+		coeffs = new double[Product.count][7];
 		for(Product product : Product.FAST_VALUES) {
 			int productIndex = product.getIndex();
 			final String coeffsString = properties.getProperty("forecast.snowbird.coeffs." + product);
-			log.trace(product + " coeffs " + coeffsString);
+			log.debug(product + " coeffs " + coeffsString);
 			if(coeffsString == null)
 				throw new RuntimeException("Could not find coeffs for product " + product);
 			final String[] split = coeffsString.split(",");
@@ -43,6 +45,7 @@ public class Snowbird implements ForecastCalculator {
 		final double bookRatio = ((double) latest.bidCount5Pct) / book5PctCount;
 
 		// calc dynamic metrics
+		int dataPoints = 0;
 		int bidTradeCount = 0;
 		int askTradeCount = 0;
 		int bidCancelCount = 0;
@@ -51,14 +54,9 @@ public class Snowbird implements ForecastCalculator {
 		int newAskCount = 0;
 		double lastTradePrice = latest.midPrice;
 		double tradePrice6h = lastTradePrice;
-		double btcLastTradePrice = 0.0;
-		double btcTradePrice2h = 0.0;
-		final long latestTimeNanos = consolidatedHistory.latest().getTimeNanos();
 		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values()) {
 			ProductSnapshot data = snapshot.getProductSnapshot(product);
-			ProductSnapshot btc = snapshot.getProductSnapshot(Product.BTC_USD);
-
-			if(latestTimeNanos - snapshot.getTimeNanos() <= SIX_HOUR_NANOS) {
+			if(dataPoints < sixHourDatapoints) {
 				bidTradeCount += data.bidTradeCount;
 				askTradeCount += data.askTradeCount;
 				bidCancelCount += data.bidCancelCount;
@@ -67,32 +65,24 @@ public class Snowbird implements ForecastCalculator {
 				newAskCount += data.newAskCount;
 			}
 
-			if(latestTimeNanos - snapshot.getTimeNanos() <= SIX_HOUR_NANOS) {
-				if(latestTimeNanos == snapshot.getTimeNanos()) {
-					// most recent data point
+			if(dataPoints < sixHourDatapoints) {
+				if(dataPoints == 0) {
 					lastTradePrice = data.lastPrice;
 				}
 				tradePrice6h = data.lastPrice;
 			}
 
-			if(latestTimeNanos - snapshot.getTimeNanos() <= TWO_HOUR_NANOS) {
-				if(latestTimeNanos == snapshot.getTimeNanos()) {
-					// most recent data point
-					btcLastTradePrice = btc.lastPrice;
-				}
-				btcTradePrice2h = btc.lastPrice;
-			}
+			dataPoints++;
 		}
 
 		final double tradeRatio = (bidTradeCount - askTradeCount) / ((double) book5PctCount);
 		final double cancelRatio = (bidCancelCount - askCancelCount) / ((double) book5PctCount);
 		final double newRatio = (newBidCount - newAskCount) / ((double) book5PctCount);
 		final double ret6h = tradePrice6h == 0 ? 0.0 : lastTradePrice / tradePrice6h - 1.0;
-		final double btcRet2h = btcTradePrice2h == 0 ? 0.0 : btcLastTradePrice / btcTradePrice2h - 1.0;
 
 		final double[] productCoeffs = coeffs[product.getIndex()];
 		return productCoeffs[0] + productCoeffs[1] * bookRatio + productCoeffs[2] * tradeRatio
 			+ productCoeffs[3] * cancelRatio + productCoeffs[4] * cancelRatio * ret6h + productCoeffs[5] * newRatio
-			+ productCoeffs[6] * newRatio * ret6h * productCoeffs[7] * btcRet2h;
+			+ productCoeffs[6] * newRatio * ret6h;
 	}
 }

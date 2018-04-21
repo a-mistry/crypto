@@ -42,6 +42,8 @@ public class Tactic {
 				properties.getDoubleProperty("tactic.outThreshold." + product, defaultOutThreshold);
 			pctAllocation[productIndex] =
 				properties.getDoubleProperty("tactic.pctAllocation." + product, defaultPctAllocation);
+			log.debug("Tactic " + product + " in at " + inThresholds[productIndex] + " out at " +
+				outThresholds[productIndex] + " alloc " + (100 * pctAllocation[productIndex]) + "%");
 		}
 	}
 
@@ -57,10 +59,13 @@ public class Tactic {
 			final int productIndex = product.getIndex();
 			final boolean in = accountant.getAvailable(product.getCryptoCurrency()) > 0.0;
 			final double forecast = forecasts[productIndex];
+
 			final boolean shouldBeIn = forecast > inThresholds[productIndex];
 			final boolean shouldBeOut = forecast < outThresholds[productIndex];
 
-			if(in && shouldBeOut) {
+			if(Double.isNaN(forecast)) {
+				// do nothing
+			} else if(in && shouldBeOut) {
 				if(trades == null) trades = new ArrayList<>(Product.count);
 				final double amount = accountant.getAvailable(product.getCryptoCurrency());
 				trades.add(new TradeInstruction(product, amount, OrderSide.SELL));
