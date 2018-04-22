@@ -12,6 +12,7 @@ import com.mistrycapital.cryptobot.forecasts.*;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.risk.TradeRiskValidator;
+import com.mistrycapital.cryptobot.sim.ParameterOptimizer.ParameterSearch;
 import com.mistrycapital.cryptobot.tactic.Tactic;
 import com.mistrycapital.cryptobot.tactic.TradeEvaluator;
 import com.mistrycapital.cryptobot.time.Intervalizer;
@@ -27,6 +28,7 @@ import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -39,6 +41,7 @@ public class SimRunner implements Runnable {
 	private final String decisionFile;
 	private final Path forecastCalcFile;
 	private final int startingUsd;
+	private final ParameterOptimizer parameterOptimizer;
 
 	public SimRunner(MCProperties properties, Path dataDir)
 	{
@@ -48,6 +51,7 @@ public class SimRunner implements Runnable {
 		decisionFile = properties.getProperty("sim.decisionFile", "decisions.csv");
 		forecastCalcFile = dataDir.resolve(properties.getProperty("sim.forecastCalcFile", "forecast-calcs.csv"));
 		startingUsd = properties.getIntProperty("sim.startUsd", 10000);
+		parameterOptimizer = new ParameterOptimizer(properties.getIntProperty("sim.ladderPoints", 5));
 	}
 
 	@Override
@@ -62,29 +66,31 @@ public class SimRunner implements Runnable {
 				// ladder on in/out thresholds
 				simProperties.put("sim.logDecisions", "false");
 				simProperties.put("sim.logForecastCalc", "false");
-				double maxReturn = Double.NEGATIVE_INFINITY;
-				double maxInThreshold = 0.0;
-				double maxOutThreshold = 0.0;
-				final int points = 20;
-				final double upperBound = 0.05;
-				for(int i = 0; i < points; i++)
-					for(int j = 0; j < points; j++) {
-						double inThreshold = 0.0 + i * upperBound / points;
-						double outThreshold = inThreshold - j * (upperBound + inThreshold) / points;
-						simProperties.put("tactic.inThreshold.default", Double.toString(inThreshold));
-						simProperties.put("tactic.outThreshold.default", Double.toString(outThreshold));
-						double ret = simulate(consolidatedSnapshots, simProperties);
-						log.debug("In=" + inThreshold + " Out=" + outThreshold + " return=" + ret);
-						if(ret > maxReturn) {
-							maxReturn = ret;
-							maxInThreshold = inThreshold;
-							maxOutThreshold = outThreshold;
+				double ret = parameterOptimizer.optimize(simProperties,
+					Arrays.asList(
+						new ParameterSearch("tactic.inThreshold.default", 0.02, 0.05),
+						new ParameterSearch("tactic.outThreshold.default", -0.03, 0.02)
+//						new ParameterSearch("tactic.pctAllocation.BCH-USD", 0, 1),
+//						new ParameterSearch("tactic.pctAllocation.BTC-USD", 0, 1),
+//						new ParameterSearch("tactic.pctAllocation.ETH-USD", 0, 1),
+//						new ParameterSearch("tactic.pctAllocation.LTC-USD", 0, 1)
+					),
+					properties -> {
+						try {
+							return simulate(consolidatedSnapshots, properties);
+						} catch(IOException e) {
+							log.error("IO error running simulation", e);
+							throw new RuntimeException(e);
 						}
 					}
-				log.info(
-					"Max return of " + maxReturn + " achieved at in=" + maxInThreshold + " out=" + maxOutThreshold);
-				simProperties.put("tactic.inThreshold.default", Double.toString(maxInThreshold));
-				simProperties.put("tactic.outThreshold.default", Double.toString(maxOutThreshold));
+				);
+				log.info("Max return of " + ret + " achieved at in="
+					+ simProperties.getDoubleProperty("tactic.inThreshold.default") + " out="
+					+ simProperties.getDoubleProperty("tactic.outThreshold.default")
+					+ "\nBCH=" + simProperties.getDoubleProperty("tactic.pctAllocation.BCH-USD" )
+					+ "\nBTC=" + simProperties.getDoubleProperty("tactic.pctAllocation.BTC-USD" )
+					+ "\nETH=" + simProperties.getDoubleProperty("tactic.pctAllocation.ETH-USD" )
+					+ "\nLTC=" + simProperties.getDoubleProperty("tactic.pctAllocation.LTC-USD" ));
 			}
 			simProperties.put("sim.logDecisions", "true");
 			long startNanos = System.nanoTime();
@@ -173,7 +179,7 @@ public class SimRunner implements Runnable {
 			calculationLogger = new ForecastCalculationLogger(timeKeeper, forecastCalcFile);
 			calculationLogger.open();
 		}
-		ForecastCalculator forecastCalculator = new Brighton(simProperties); //new Snowbird(simProperties);
+		ForecastCalculator forecastCalculator = new Brighton(simProperties);
 		Tactic tactic = new Tactic(simProperties, accountant);
 		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(timeKeeper, accountant);
 		ExecutionEngine executionEngine = new SimExecutionEngine(simProperties, accountant, history);
