@@ -63,7 +63,7 @@ public class TradeCrypto {
 		intervalAppender.open();
 		DecisionAppender decisionAppender = new DecisionAppender(accountant, timeKeeper, dataDir, DECISION_FILE_NAME);
 		decisionAppender.open();
-		DailyAppender dailyAppender = new DailyAppender(accountant, timeKeeper, dataDir, DAILY_FILE_NAME);
+		DailyAppender dailyAppender = new DailyAppender(accountant, timeKeeper, intervalizer, dataDir, DAILY_FILE_NAME);
 		dailyAppender.open();
 		DynamicTracker dynamicTracker = new DynamicTracker();
 		ForecastCalculator snowbird = new Snowbird(properties);
@@ -72,8 +72,9 @@ public class TradeCrypto {
 		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(properties, timeKeeper, accountant);
 		ExecutionEngine executionEngine = new GdaxExecutionEngine();
 		OrderBookPeriodicEvaluator periodicEvaluator =
-			new OrderBookPeriodicEvaluator(timeKeeper, intervalizer, orderBookManager, dynamicTracker, intervalAppender,
-				snowbird, tactic, tradeRiskValidator, executionEngine, decisionAppender, dailyAppender);
+			new OrderBookPeriodicEvaluator(timeKeeper, intervalizer, accountant, orderBookManager, dynamicTracker,
+				intervalAppender, snowbird, tactic, tradeRiskValidator, executionEngine, decisionAppender,
+				dailyAppender);
 
 		gdaxWebSocket.subscribe(orderBookManager);
 		gdaxWebSocket.subscribe(dynamicTracker);

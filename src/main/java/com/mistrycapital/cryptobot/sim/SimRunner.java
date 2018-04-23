@@ -193,7 +193,7 @@ public class SimRunner implements Runnable {
 		if(shouldLogDecisions) {
 			decisionAppender = new DecisionAppender(accountant, timeKeeper, dataDir, decisionFile);
 			decisionAppender.open();
-			dailyAppender = new DailyAppender(accountant, timeKeeper, dataDir, dailyFile);
+			dailyAppender = new DailyAppender(accountant, timeKeeper, intervalizer, dataDir, dailyFile);
 			dailyAppender.open();
 		}
 		TradeEvaluator tradeEvaluator = new TradeEvaluator(history, forecastCalculator, tactic, tradeRiskValidator,

@@ -4,6 +4,7 @@ import com.mistrycapital.cryptobot.accounting.Accountant;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.Product;
+import com.mistrycapital.cryptobot.time.Intervalizer;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import org.slf4j.Logger;
@@ -17,14 +18,16 @@ public class DailyAppender extends CommonFileAppender {
 	private static final long ONE_DAY_MILLIS = 24 * 60 * 60 * 1000L;
 
 	private final TimeKeeper timeKeeper;
+	private final Intervalizer intervalizer;
 	private final Accountant accountant;
 	private double prevTotalPositionUsd;
 	private long nextDayMillis;
 
-	public DailyAppender(Accountant accountant, TimeKeeper timeKeeper, Path dataDir, String filename) {
+	public DailyAppender(Accountant accountant, TimeKeeper timeKeeper, Intervalizer intervalizer, Path dataDir, String filename) {
 		super(timeKeeper, dataDir, filename.replace(".csv", ""), ".csv", RollingPolicy.NEVER,
 			FlushPolicy.FLUSH_EACH_WRITE);
 		this.timeKeeper = timeKeeper;
+		this.intervalizer = intervalizer;
 		this.accountant = accountant;
 		nextDayMillis = timeKeeper.epochMs();
 	}
