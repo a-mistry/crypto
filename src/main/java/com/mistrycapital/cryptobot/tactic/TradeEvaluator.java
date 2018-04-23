@@ -2,6 +2,7 @@ package com.mistrycapital.cryptobot.tactic;
 
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
+import com.mistrycapital.cryptobot.appender.DailyAppender;
 import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
@@ -24,6 +25,7 @@ public class TradeEvaluator {
 	private final TradeRiskValidator tradeRiskValidator;
 	private final ExecutionEngine executionEngine;
 	private final DecisionAppender decisionAppender;
+	private final DailyAppender dailyAppender;
 
 	private double[] forecasts;
 
@@ -33,7 +35,7 @@ public class TradeEvaluator {
 	 */
 	public TradeEvaluator(ConsolidatedHistory consolidatedHistory, ForecastCalculator forecastCalculator, Tactic tactic,
 		TradeRiskValidator tradeRiskValidator, ExecutionEngine executionEngine,
-		@Nullable DecisionAppender decisionAppender)
+		@Nullable DecisionAppender decisionAppender, @Nullable DailyAppender dailyAppender)
 	{
 		this.consolidatedHistory = consolidatedHistory;
 		this.forecastCalculator = forecastCalculator;
@@ -41,6 +43,7 @@ public class TradeEvaluator {
 		this.tradeRiskValidator = tradeRiskValidator;
 		this.executionEngine = executionEngine;
 		this.decisionAppender = decisionAppender;
+		this.dailyAppender = dailyAppender;
 		forecasts = new double[Product.count];
 	}
 
@@ -60,11 +63,13 @@ public class TradeEvaluator {
 		if(instructions != null && instructions.size() > 0)
 			executionEngine.trade(instructions);
 
-		if(decisionAppender != null)
-			try {
+		try {
+			if(decisionAppender != null)
 				decisionAppender.logDecision(snapshot, forecasts, instructions);
-			} catch(IOException e) {
-				log.error("Error saving decision data", e);
-			}
+			if(dailyAppender != null)
+				dailyAppender.writeDaily(snapshot);
+		} catch(IOException e) {
+			log.error("Error saving decision or daily data", e);
+		}
 	}
 }

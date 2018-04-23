@@ -6,6 +6,7 @@ import com.mistrycapital.cryptobot.accounting.PositionsProvider;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
+import com.mistrycapital.cryptobot.appender.DailyAppender;
 import com.mistrycapital.cryptobot.appender.DecisionAppender;
 import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.forecasts.*;
@@ -39,6 +40,7 @@ public class SimRunner implements Runnable {
 	private final Path dataDir;
 	private final double[] forecasts;
 	private final String decisionFile;
+	private final String dailyFile;
 	private final Path forecastCalcFile;
 	private final int startingUsd;
 	private final ParameterOptimizer parameterOptimizer;
@@ -49,9 +51,10 @@ public class SimRunner implements Runnable {
 		intervalizer = new Intervalizer(properties);
 		forecasts = new double[Product.count];
 		decisionFile = properties.getProperty("sim.decisionFile", "decisions.csv");
+		dailyFile = properties.getProperty("sim.dailyFile", "daily.csv");
 		forecastCalcFile = dataDir.resolve(properties.getProperty("sim.forecastCalcFile", "forecast-calcs.csv"));
 		startingUsd = properties.getIntProperty("sim.startUsd", 10000);
-		parameterOptimizer = new ParameterOptimizer(properties.getIntProperty("sim.ladderPoints", 5));
+		parameterOptimizer = new ParameterOptimizer(properties.getIntProperty("sim.ladderPoints", 10));
 	}
 
 	@Override
@@ -61,15 +64,15 @@ public class SimRunner implements Runnable {
 			List<ConsolidatedSnapshot> consolidatedSnapshots = readMarketData();
 			MCProperties simProperties = new MCProperties();
 
-			boolean search = true;
+			boolean search = false;
 			if(search) {
 				// ladder on in/out thresholds
 				simProperties.put("sim.logDecisions", "false");
 				simProperties.put("sim.logForecastCalc", "false");
 				double ret = parameterOptimizer.optimize(simProperties,
 					Arrays.asList(
-						new ParameterSearch("tactic.inThreshold.default", 0.02, 0.05),
-						new ParameterSearch("tactic.outThreshold.default", -0.03, 0.02)
+						new ParameterSearch("tactic.inThreshold.default", 0.03, 0.06),
+						new ParameterSearch("tactic.outThreshold.default", -0.025, 0.02)
 //						new ParameterSearch("tactic.pctAllocation.BCH-USD", 0, 1),
 //						new ParameterSearch("tactic.pctAllocation.BTC-USD", 0, 1),
 //						new ParameterSearch("tactic.pctAllocation.ETH-USD", 0, 1),
@@ -87,10 +90,10 @@ public class SimRunner implements Runnable {
 				log.info("Max return of " + ret + " achieved at in="
 					+ simProperties.getDoubleProperty("tactic.inThreshold.default") + " out="
 					+ simProperties.getDoubleProperty("tactic.outThreshold.default")
-					+ "\nBCH=" + simProperties.getDoubleProperty("tactic.pctAllocation.BCH-USD" )
-					+ "\nBTC=" + simProperties.getDoubleProperty("tactic.pctAllocation.BTC-USD" )
-					+ "\nETH=" + simProperties.getDoubleProperty("tactic.pctAllocation.ETH-USD" )
-					+ "\nLTC=" + simProperties.getDoubleProperty("tactic.pctAllocation.LTC-USD" ));
+					+ "\nBCH=" + simProperties.getDoubleProperty("tactic.pctAllocation.BCH-USD")
+					+ "\nBTC=" + simProperties.getDoubleProperty("tactic.pctAllocation.BTC-USD")
+					+ "\nETH=" + simProperties.getDoubleProperty("tactic.pctAllocation.ETH-USD")
+					+ "\nLTC=" + simProperties.getDoubleProperty("tactic.pctAllocation.LTC-USD"));
 			}
 			simProperties.put("sim.logDecisions", "true");
 			long startNanos = System.nanoTime();
@@ -161,8 +164,10 @@ public class SimRunner implements Runnable {
 		final boolean shouldLogDecisions = simProperties.getBooleanProperty("sim.logDecisions", false);
 		final boolean shouldLogForecastCalc = simProperties.getBooleanProperty("sim.logForecastCalc", false);
 		try {
-			if(shouldLogDecisions)
+			if(shouldLogDecisions) {
 				Files.deleteIfExists(dataDir.resolve(decisionFile));
+				Files.deleteIfExists(dataDir.resolve(dailyFile));
+			}
 			if(shouldLogForecastCalc)
 				Files.deleteIfExists(forecastCalcFile);
 		} catch(IOException e) {
@@ -181,15 +186,18 @@ public class SimRunner implements Runnable {
 		}
 		ForecastCalculator forecastCalculator = new Brighton(simProperties);
 		Tactic tactic = new Tactic(simProperties, accountant);
-		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(timeKeeper, accountant);
+		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(simProperties, timeKeeper, accountant);
 		ExecutionEngine executionEngine = new SimExecutionEngine(simProperties, accountant, history);
 		DecisionAppender decisionAppender = null;
+		DailyAppender dailyAppender = null;
 		if(shouldLogDecisions) {
 			decisionAppender = new DecisionAppender(accountant, timeKeeper, dataDir, decisionFile);
 			decisionAppender.open();
+			dailyAppender = new DailyAppender(accountant, timeKeeper, dataDir, dailyFile);
+			dailyAppender.open();
 		}
 		TradeEvaluator tradeEvaluator = new TradeEvaluator(history, forecastCalculator, tactic, tradeRiskValidator,
-			executionEngine, decisionAppender);
+			executionEngine, decisionAppender, dailyAppender);
 
 		for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedSnapshots) {
 			timeKeeper.advanceTime(consolidatedSnapshot.getTimeNanos());
@@ -206,6 +214,7 @@ public class SimRunner implements Runnable {
 		log.debug("Total ending position " + accountant.getPositionValueUsd(lastSnapshot));
 
 		if(decisionAppender != null) decisionAppender.close();
+		if(dailyAppender != null) dailyAppender.close();
 		if(calculationLogger != null) calculationLogger.close();
 
 		// for now, just return the total return. eventually add more metrics
