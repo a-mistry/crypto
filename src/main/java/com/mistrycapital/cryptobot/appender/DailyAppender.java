@@ -52,7 +52,7 @@ public class DailyAppender extends CommonFileAppender {
 		if(timeKeeper.epochMs() < nextDayMillis)
 			return;
 
-		nextDayMillis = (timeKeeper.epochMs() / ONE_DAY_MILLIS + 1) * ONE_DAY_MILLIS;
+		nextDayMillis = intervalizer.calcNextDayMillis(timeKeeper.epochMs());
 		StringBuilder builder = new StringBuilder();
 		builder.append(timeKeeper.iso8601());
 		builder.append(',');

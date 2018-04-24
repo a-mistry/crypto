@@ -71,7 +71,7 @@ public class SimRunner implements Runnable {
 				simProperties.put("sim.logForecastCalc", "false");
 				double ret = parameterOptimizer.optimize(simProperties,
 					Arrays.asList(
-						new ParameterSearch("tactic.inThreshold.default", 0.03, 0.06),
+						new ParameterSearch("tactic.inThreshold.default", 0.00, 0.06),
 						new ParameterSearch("tactic.outThreshold.default", -0.025, 0.02)
 //						new ParameterSearch("tactic.pctAllocation.BCH-USD", 0, 1),
 //						new ParameterSearch("tactic.pctAllocation.BTC-USD", 0, 1),
