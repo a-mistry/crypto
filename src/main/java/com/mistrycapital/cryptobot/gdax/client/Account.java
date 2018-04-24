@@ -17,7 +17,7 @@ public class Account {
 	/** Funds on hold */
 	private final double hold;
 
-	Account(JsonObject json) {
+	public Account(JsonObject json) {
 		id = UUID.fromString(json.get("id").getAsString());
 		currency = Currency.valueOf(json.get("currency").getAsString());
 		balance = Double.parseDouble(json.get("balance").getAsString());

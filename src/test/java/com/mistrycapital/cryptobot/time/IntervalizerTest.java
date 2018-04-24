@@ -25,8 +25,8 @@ class IntervalizerTest {
 		MCProperties properties = new MCProperties();
 		Intervalizer intervalizer = new Intervalizer(properties);
 
-		assertEquals(1524536902000L, intervalizer.calcNextDayMillis(1524536902000L)); // 4/24 2:28
-		assertEquals(1524536902000L, intervalizer.calcNextHourMillis(1524536902000L));
-		assertEquals(1524542400000L, intervalizer.calcNextHourMillis(1524536902000L));
+		assertEquals(1524614400000L, intervalizer.calcNextDayMillis(1524536902000L)); // 4/24 2:28
+		assertEquals(1524538800000L, intervalizer.calcNextHourMillis(1524536902000L));
+		assertEquals(1524542400000L, intervalizer.calcNextHourMillis(1524538800000L));
 	}
 }

@@ -5,7 +5,7 @@ import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 
 /**
- * Tracks positions. Note that this class is not thread-safe
+ * Tracks positions. This class is thread safe
  */
 public class Accountant {
 	private final PositionsProvider positionsProvider;
@@ -25,9 +25,13 @@ public class Accountant {
 		return balance[currency.getIndex()];
 	}
 
-	public synchronized void refreshPositions() {
-		available = positionsProvider.getAvailable();
-		balance = positionsProvider.getBalance();
+	public void refreshPositions() {
+		double[] availableFound = positionsProvider.getAvailable();
+		double[] balanceFound = positionsProvider.getBalance();
+		synchronized(this) {
+			available = availableFound;
+			balance = balanceFound;
+		}
 	}
 
 	public synchronized void recordTrade(Currency source, double sourcePosChange, Currency dest, double destPosChange) {
