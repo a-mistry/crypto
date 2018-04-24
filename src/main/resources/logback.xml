@@ -11,7 +11,7 @@
 
     <appender name="file" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>${dataDir}${fileSeparator}output-%d{yyyy-MM-dd, UTC}.log.gz</fileNamePattern>
+            <fileNamePattern>${logDir}${fileSeparator}output-%d{yyyy-MM-dd, UTC}.log.gz</fileNamePattern>
         </rollingPolicy>
         <append>true</append>
         <immediateFlush>true</immediateFlush>

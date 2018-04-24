@@ -9,8 +9,8 @@ import com.mistrycapital.cryptobot.appender.*;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
 import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.execution.GdaxExecutionEngine;
+import com.mistrycapital.cryptobot.forecasts.Brighton;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
-import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.GdaxClientFactory;
 import com.mistrycapital.cryptobot.gdax.GdaxPositionsProvider;
 import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
@@ -66,14 +66,14 @@ public class TradeCrypto {
 		DailyAppender dailyAppender = new DailyAppender(accountant, timeKeeper, intervalizer, dataDir, DAILY_FILE_NAME);
 		dailyAppender.open();
 		DynamicTracker dynamicTracker = new DynamicTracker();
-		ForecastCalculator snowbird = new Snowbird(properties);
+		ForecastCalculator forecastCalculator = new Brighton(properties);
 
 		Tactic tactic = new Tactic(properties, accountant);
 		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(properties, timeKeeper, accountant);
 		ExecutionEngine executionEngine = new GdaxExecutionEngine();
 		OrderBookPeriodicEvaluator periodicEvaluator =
 			new OrderBookPeriodicEvaluator(timeKeeper, intervalizer, accountant, orderBookManager, dynamicTracker,
-				intervalAppender, snowbird, tactic, tradeRiskValidator, executionEngine, decisionAppender,
+				intervalAppender, forecastCalculator, tactic, tradeRiskValidator, executionEngine, decisionAppender,
 				dailyAppender);
 
 		gdaxWebSocket.subscribe(orderBookManager);
