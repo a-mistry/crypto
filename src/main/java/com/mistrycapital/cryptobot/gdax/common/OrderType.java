@@ -1,4 +1,4 @@
-package com.mistrycapital.cryptobot.gdax.websocket;
+package com.mistrycapital.cryptobot.gdax.common;
 
 import java.util.Locale;
 

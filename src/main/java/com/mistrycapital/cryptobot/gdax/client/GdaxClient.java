@@ -4,6 +4,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.mistrycapital.cryptobot.gdax.common.OrderSide;
+import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
 import jdk.incubator.http.HttpClient;
@@ -58,6 +60,30 @@ public class GdaxClient {
 				for(JsonElement arrayElement : jsonArray)
 					accounts.add(new Account(arrayElement.getAsJsonObject()));
 				return accounts;
+			});
+	}
+
+	/**
+	 * Executes a market order
+	 *
+	 * @param product    Product to trade (e.g. BTC-USD)
+	 * @param side       BUY if we should buy the first item in the pair
+	 * @param sizingType SIZE if size is given, FUNDS if funds is given
+	 * @param amount     The amount - either size or funds (based on sizingType)
+	 * @return Execution returned by gdax
+	 */
+	public CompletableFuture<Void> placeMarketOrder(Product product, OrderSide side, MarketOrderSizingType sizingType,
+		double amount)
+	{
+		JsonObject body = new JsonObject();
+		body.addProperty("type", "market");
+		body.addProperty("side", side == OrderSide.BUY ? "buy" : "sell");
+		body.addProperty("product_id", product.toString());
+		body.addProperty(sizingType == MarketOrderSizingType.SIZE ? "size" : "funds", amount);
+		return submit("/orders", "POST", body)
+			.thenApply(jsonElement -> {
+				// do something
+				return null;
 			});
 	}
 
