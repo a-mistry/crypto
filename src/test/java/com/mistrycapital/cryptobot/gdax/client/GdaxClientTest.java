@@ -63,9 +63,12 @@ class GdaxClientTest {
 		assertEquals(TimeInForce.GTC, orderInfo.getTimeInForce());
 		assertFalse(orderInfo.isPostOnly());
 
+		System.out.println(orderInfo);
+
 		// now repeatedly check order until executed
+		orderInfo = gdaxClient.getOrder(orderId).get();
 
 		System.out.println(orderInfo);
-		fail("not yet implemented");
+		fail("not yet implemented - need to get funds,specified_funds from object, then done_reason");
 	}
 }

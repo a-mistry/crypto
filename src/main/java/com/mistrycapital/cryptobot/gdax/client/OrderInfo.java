@@ -44,12 +44,14 @@ public class OrderInfo {
 	private final boolean settled;
 
 	public OrderInfo(JsonObject json) {
+		System.err.println(json.toString());
 		orderId = UUID.fromString(json.get("id").getAsString());
 		price = getOrDefault(json, "price", Double.NaN);
 		size = getOrDefault(json, "size", Double.NaN);
 		product = Product.parse(json.get("product_id").getAsString());
 		side = OrderSide.parse(json.get("side").getAsString());
-		selfTradePreventionFlag = SelfTradePreventionFlag.parse(json.get("stp").getAsString());
+		selfTradePreventionFlag = json.has("stp")
+			? SelfTradePreventionFlag.parse(json.get("stp").getAsString()) : SelfTradePreventionFlag.defaultValue;
 		type = OrderType.parse(json.get("type").getAsString());
 		timeInForce = json.has("time_in_force")
 			? TimeInForce.parse(json.get("time_in_force").getAsString()) : TimeInForce.defaultValue;

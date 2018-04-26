@@ -26,10 +26,7 @@ import java.nio.file.Paths;
 import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -83,6 +80,18 @@ public class GdaxClient {
 					accounts.add(new Account(arrayElement.getAsJsonObject()));
 				return accounts;
 			});
+	}
+
+	/**
+	 * Looks up information about the given order
+	 *
+	 * @param orderId Order id
+	 * @return Order information
+	 */
+	public CompletableFuture<OrderInfo> getOrder(UUID orderId) {
+		return submit("/orders/" + orderId, "GET", null)
+			.thenApply(JsonElement::getAsJsonObject)
+			.thenApply(OrderInfo::new);
 	}
 
 	/**

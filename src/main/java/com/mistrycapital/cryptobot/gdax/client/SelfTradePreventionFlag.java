@@ -21,4 +21,6 @@ public enum SelfTradePreventionFlag {
 	public static SelfTradePreventionFlag parse(String stp) {
 		return valueOf(stp.toUpperCase(Locale.US));
 	}
+
+	public static final SelfTradePreventionFlag defaultValue = DC;
 }
