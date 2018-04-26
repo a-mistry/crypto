@@ -51,7 +51,8 @@ public class OrderInfo {
 		side = OrderSide.parse(json.get("side").getAsString());
 		selfTradePreventionFlag = SelfTradePreventionFlag.parse(json.get("stp").getAsString());
 		type = OrderType.parse(json.get("type").getAsString());
-		timeInForce = TimeInForce.parse(json.get("time_in_force").getAsString());
+		timeInForce = json.has("time_in_force")
+			? TimeInForce.parse(json.get("time_in_force").getAsString()) : TimeInForce.defaultValue;
 		postOnly = getOrDefault(json, "post_only", false);
 		timeMicros = parseTimeMicros(json.get("created_at").getAsString());
 		fillFees = getOrDefault(json, "fill_fees", Double.NaN);
@@ -62,33 +63,113 @@ public class OrderInfo {
 	}
 
 	/** @return Order id */
-	public final UUID getOrderId() { return orderId; }
+	public final UUID getOrderId() {
+		return orderId;
+	}
+
 	/** @return Price */
-	public final double getPrice() { return price; }
+	public final double getPrice() {
+		return price;
+	}
+
 	/** @return Size */
-	public final double getSize() { return size; }
+	public final double getSize() {
+		return size;
+	}
+
 	/** @return Product */
-	public final Product getProduct() { return product; }
+	public final Product getProduct() {
+		return product;
+	}
+
 	/** @return Order side */
-	public final OrderSide getOrderSide() { return side; }
+	public final OrderSide getOrderSide() {
+		return side;
+	}
+
 	/** @return Self trade prevention */
-	public final SelfTradePreventionFlag getSelfTradePreventionFlag() { return selfTradePreventionFlag; }
+	public final SelfTradePreventionFlag getSelfTradePreventionFlag() {
+		return selfTradePreventionFlag;
+	}
+
 	/** @return Order type */
-	public final OrderType getType() { return type; }
+	public final OrderType getType() {
+		return type;
+	}
+
 	/** @return Time in force */
-	public final TimeInForce getTimeInForce() { return timeInForce; }
+	public final TimeInForce getTimeInForce() {
+		return timeInForce;
+	}
+
 	/** @return True if post only on limit order */
-	public final boolean isPostOnly() { return postOnly; }
+	public final boolean isPostOnly() {
+		return postOnly;
+	}
+
 	/** @return UTC time in microseconds when order was created */
-	public final long getTimeMicros() { return timeMicros; }
+	public final long getTimeMicros() {
+		return timeMicros;
+	}
+
 	/** @return Fill fees */
-	public final double getFillFees() { return fillFees; }
+	public final double getFillFees() {
+		return fillFees;
+	}
+
 	/** @return Filled size */
-	public final double getFilledSize() { return filledSize; }
+	public final double getFilledSize() {
+		return filledSize;
+	}
+
 	/** @return Executed value */
-	public final double getExecutedValue() { return executedValue; }
+	public final double getExecutedValue() {
+		return executedValue;
+	}
+
 	/** @return Status */
-	public final OrderStatus getStatus() { return status; }
+	public final OrderStatus getStatus() {
+		return status;
+	}
+
 	/** @return True if settled */
-	public final boolean isSettled() { return settled; }
+	public final boolean isSettled() {
+		return settled;
+	}
+
+	@Override
+	public String toString() {
+		StringBuilder builder = new StringBuilder();
+		builder.append("Order\t");
+		builder.append(orderId);
+		builder.append("\nprice\t");
+		builder.append(price);
+		builder.append("\nsize\t");
+		builder.append(size);
+		builder.append("\nproduct\t");
+		builder.append(product);
+		builder.append("\nside\t");
+		builder.append(side);
+		builder.append("\nselfTradePreventionFlag\t");
+		builder.append(selfTradePreventionFlag);
+		builder.append("\ntype\t");
+		builder.append(type);
+		builder.append("\ntimeInForce\t");
+		builder.append(timeInForce);
+		builder.append("\npostOnly\t");
+		builder.append(postOnly);
+		builder.append("\ntimeMicros\t");
+		builder.append(timeMicros);
+		builder.append("\nfillFees\t");
+		builder.append(fillFees);
+		builder.append("\nfilledSize\t");
+		builder.append(filledSize);
+		builder.append("\nexecutedValue\t");
+		builder.append(executedValue);
+		builder.append("\nstatus\t");
+		builder.append(status);
+		builder.append("\nsettled\t");
+		builder.append(settled);
+		return builder.toString();
+	}
 }

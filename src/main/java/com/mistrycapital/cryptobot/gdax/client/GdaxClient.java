@@ -29,6 +29,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -38,20 +39,41 @@ import java.util.stream.Collectors;
 public class GdaxClient {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
-	private final HttpClient httpClient;
+	private final URI apiURI;
 	private final String apiKey;
-	private final Key secretKeySpec;
 	private final String passPhrase;
+	private final Mac savedMac;
+	private final HttpClient httpClient;
 	private final JsonParser jsonParser;
 
-	public GdaxClient(String apiKey, String apiSecret, String passPhrase) {
-		httpClient = HttpClient.newHttpClient();
+	/**
+	 * Create a new client
+	 *
+	 * @param apiURI     API base URL, e.g. https://api.gdax.com
+	 * @param apiKey     key
+	 * @param apiSecret  secret
+	 * @param passPhrase pass phrase
+	 */
+	public GdaxClient(URI apiURI, String apiKey, String apiSecret, String passPhrase) {
+		this.apiURI = apiURI;
 		this.apiKey = apiKey;
-		this.secretKeySpec = new SecretKeySpec(Base64.getDecoder().decode(apiSecret), "HmacSHA256");
 		this.passPhrase = passPhrase;
+		SecretKeySpec secretKeySpec = new SecretKeySpec(Base64.getDecoder().decode(apiSecret), "HmacSHA256");
+		try {
+			savedMac = Mac.getInstance(secretKeySpec.getAlgorithm());
+			savedMac.init(secretKeySpec);
+		} catch(NoSuchAlgorithmException | InvalidKeyException e) {
+			throw new RuntimeException(e);
+		}
+		httpClient = HttpClient.newHttpClient();
 		jsonParser = new JsonParser();
 	}
 
+	/**
+	 * Gets account balance and available funds information
+	 *
+	 * @return List of accounts
+	 */
 	public CompletableFuture<List<Account>> getAccounts() {
 		return submit("/accounts", "GET", null)
 			.thenApply(jsonElement -> {
@@ -72,19 +94,18 @@ public class GdaxClient {
 	 * @param amount     The amount - either size or funds (based on sizingType)
 	 * @return Execution returned by gdax
 	 */
-	public CompletableFuture<Void> placeMarketOrder(Product product, OrderSide side, MarketOrderSizingType sizingType,
+	public CompletableFuture<OrderInfo> placeMarketOrder(Product product, OrderSide side,
+		MarketOrderSizingType sizingType,
 		double amount)
 	{
 		JsonObject body = new JsonObject();
 		body.addProperty("type", "market");
 		body.addProperty("side", side == OrderSide.BUY ? "buy" : "sell");
 		body.addProperty("product_id", product.toString());
-		body.addProperty(sizingType == MarketOrderSizingType.SIZE ? "size" : "funds", amount);
+		body.addProperty(sizingType == MarketOrderSizingType.SIZE ? "size" : "funds", Double.toString(amount));
 		return submit("/orders", "POST", body)
-			.thenApply(jsonElement -> {
-				// do something
-				return null;
-			});
+			.thenApply(JsonElement::getAsJsonObject)
+			.thenApply(OrderInfo::new);
 	}
 
 	/**
@@ -99,23 +120,19 @@ public class GdaxClient {
 		final boolean isPost = method.equals("POST");
 		final String bodyString = isPost ? body.toString() : "";
 		final long timestamp = System.currentTimeMillis() / 1000;
-
-		final URI uri;
-		try {
-			uri = new URI("https://api.gdax.com" + path);
-		} catch(URISyntaxException e) {
-			throw new RuntimeException(e);
-		}
+		final URI uri = apiURI.resolve(path);
 
 		HttpRequest request = HttpRequest.newBuilder()
 			.uri(uri)
 			.method(method, isPost ? BodyPublisher.fromString(bodyString) : BodyPublisher.noBody())
 			.header("User-Agent", "Custom")
+			.header("Content-type", "application/json")
 			.header("CB-ACCESS-SIGN", getSignature(timestamp, path, method, bodyString))
 			.header("CB-ACCESS-TIMESTAMP", Long.toString(timestamp))
 			.header("CB-ACCESS-KEY", apiKey)
 			.header("CB-ACCESS-PASSPHRASE", passPhrase)
 			.build();
+
 		return httpClient.sendAsync(request, HttpResponse.BodyHandler.asString())
 			.thenApply(response -> {
 				if(response.statusCode() / 100 == 2) {
@@ -154,13 +171,12 @@ public class GdaxClient {
 	 * @return CB-ACCESS-SIGN signature
 	 */
 	private String getSignature(final long timestamp, final String path, final String method, final String body) {
-		final String toEncode = timestamp + method + path + body;
+		final String toEncode = timestamp + method.toUpperCase(Locale.US) + path + body;
 		try {
-			Mac mac = Mac.getInstance(secretKeySpec.getAlgorithm());
-			mac.init(secretKeySpec);
+			Mac mac = (Mac) savedMac.clone();
 			final byte[] encoded = mac.doFinal(toEncode.getBytes(StandardCharsets.UTF_8));
 			return Base64.getEncoder().encodeToString(encoded);
-		} catch(InvalidKeyException | NoSuchAlgorithmException e) {
+		} catch(CloneNotSupportedException e) {
 			throw new RuntimeException(e);
 		}
 	}

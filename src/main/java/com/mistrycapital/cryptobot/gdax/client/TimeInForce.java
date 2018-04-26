@@ -21,4 +21,6 @@ public enum TimeInForce {
 	public static TimeInForce parse(String timeInForceString) {
 		return valueOf(timeInForceString.toUpperCase(Locale.US));
 	}
+
+	public static final TimeInForce defaultValue = GTC;
 }
