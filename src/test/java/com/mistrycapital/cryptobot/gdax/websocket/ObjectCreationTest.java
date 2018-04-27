@@ -10,6 +10,7 @@ import java.util.function.Consumer;
 
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.Product;
+import com.mistrycapital.cryptobot.gdax.common.Reason;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

@@ -4,6 +4,9 @@ import com.google.gson.JsonObject;
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.OrderType;
 import com.mistrycapital.cryptobot.gdax.common.Product;
+import com.mistrycapital.cryptobot.gdax.common.Reason;
+import com.mistrycapital.cryptobot.util.MCLoggerFactory;
+import org.slf4j.Logger;
 
 import java.util.UUID;
 
@@ -12,6 +15,8 @@ import static com.mistrycapital.cryptobot.gdax.client.JsonObjectUtil.parseTimeMi
 
 /** Stores information about an order placed, as returned when placing an order or checking it */
 public class OrderInfo {
+	private static final Logger log = MCLoggerFactory.getLogger();
+
 	/** Order id */
 	private final UUID orderId;
 	/** Price */
@@ -42,9 +47,17 @@ public class OrderInfo {
 	private final OrderStatus status;
 	/** True if settled */
 	private final boolean settled;
+	/** Funds (market order) */
+	private final double funds;
+	/** Specified funds (market order) */
+	private final double specifiedFunds;
+	/** UTC time in microseconds when order was done */
+	private final long doneMicros;
+	/** Reason done (filled or canceled) */
+	private final Reason doneReason;
 
 	public OrderInfo(JsonObject json) {
-		System.err.println(json.toString());
+		log.debug("Received order info from gdax " + json);
 		orderId = UUID.fromString(json.get("id").getAsString());
 		price = getOrDefault(json, "price", Double.NaN);
 		size = getOrDefault(json, "size", Double.NaN);
@@ -62,6 +75,12 @@ public class OrderInfo {
 		executedValue = getOrDefault(json, "executed_value", Double.NaN);
 		status = OrderStatus.parse(json.get("status").getAsString());
 		settled = getOrDefault(json, "settled", false);
+		funds = getOrDefault(json, "funds", Double.NaN);
+		specifiedFunds = getOrDefault(json, "specified_funds", Double.NaN);
+		doneMicros = json.has("done_at")
+			? parseTimeMicros(json.get("done_at").getAsString()) : 0L;
+		doneReason = json.has("done_reason")
+			? Reason.parse(json.get("done_reason").getAsString()) : null;
 	}
 
 	/** @return Order id */
@@ -139,6 +158,26 @@ public class OrderInfo {
 		return settled;
 	}
 
+	/** @return Funds (market order) */
+	public final double getFunds() {
+		return funds;
+	}
+
+	/** @return Specified funds (market order) */
+	public final double getSpecifiedFunds() {
+		return specifiedFunds;
+	}
+
+	/** @return UTC time in microseconds when order was done */
+	public final long getDoneMicros() {
+		return doneMicros;
+	}
+
+	/** @return Reason done (filled or canceled) */
+	public final Reason getDoneReason() {
+		return doneReason;
+	}
+
 	@Override
 	public String toString() {
 		StringBuilder builder = new StringBuilder();
@@ -172,6 +211,14 @@ public class OrderInfo {
 		builder.append(status);
 		builder.append("\nsettled\t");
 		builder.append(settled);
+		builder.append("\nfunds\n");
+		builder.append(funds);
+		builder.append("\nspecifiedFunds\n");
+		builder.append(specifiedFunds);
+		builder.append("\ndoneMicros\n");
+		builder.append(doneMicros);
+		builder.append("\ndoneReason\n");
+		builder.append(doneReason);
 		return builder.toString();
 	}
 }

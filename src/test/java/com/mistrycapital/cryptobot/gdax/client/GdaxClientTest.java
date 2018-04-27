@@ -61,14 +61,19 @@ class GdaxClientTest {
 		assertEquals(OrderSide.BUY, orderInfo.getOrderSide());
 		assertEquals(OrderType.MARKET, orderInfo.getType());
 		assertEquals(TimeInForce.GTC, orderInfo.getTimeInForce());
+		assertEquals(SelfTradePreventionFlag.DC, orderInfo.getSelfTradePreventionFlag());
 		assertFalse(orderInfo.isPostOnly());
 
 		System.out.println(orderInfo);
 
 		// now repeatedly check order until executed
-		orderInfo = gdaxClient.getOrder(orderId).get();
+		for(int i=0; i<10; i++) {
+			orderInfo = gdaxClient.getOrder(orderId).get();
+			if(orderInfo.getStatus() == OrderStatus.DONE)
+				break;
+			Thread.sleep(1000);
+		}
 
 		System.out.println(orderInfo);
-		fail("not yet implemented - need to get funds,specified_funds from object, then done_reason");
 	}
 }

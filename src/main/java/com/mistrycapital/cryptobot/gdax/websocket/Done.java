@@ -1,6 +1,7 @@
 package com.mistrycapital.cryptobot.gdax.websocket;
 
 import com.google.gson.JsonObject;
+import com.mistrycapital.cryptobot.gdax.common.Reason;
 
 public class Done extends OrderGdaxMessage {
 	/** True if limit order, false if market */

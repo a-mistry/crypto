@@ -1,6 +1,7 @@
 package com.mistrycapital.cryptobot.dynamic;
 
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
+import com.mistrycapital.cryptobot.gdax.common.Reason;
 import com.mistrycapital.cryptobot.gdax.websocket.*;
 
 class ProductTracker implements GdaxMessageProcessor {
