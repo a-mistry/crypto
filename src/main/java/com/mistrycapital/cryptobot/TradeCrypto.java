@@ -70,7 +70,7 @@ public class TradeCrypto {
 
 		Tactic tactic = new Tactic(properties, accountant);
 		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(properties, timeKeeper, accountant);
-		ExecutionEngine executionEngine = new GdaxExecutionEngine();
+		ExecutionEngine executionEngine = new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager, gdaxClient);
 		OrderBookPeriodicEvaluator periodicEvaluator =
 			new OrderBookPeriodicEvaluator(timeKeeper, intervalizer, accountant, orderBookManager, dynamicTracker,
 				intervalAppender, forecastCalculator, tactic, tradeRiskValidator, executionEngine, decisionAppender,

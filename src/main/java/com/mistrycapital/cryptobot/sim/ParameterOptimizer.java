@@ -30,6 +30,7 @@ public class ParameterOptimizer {
 	private double ladderSearch(List<ParameterSearch> searchList, MCProperties properties,
 		Function<MCProperties,Double> function, int index)
 	{
+		// TODO: Fix this code. It is not correct; later values are overwritten by different numbers
 		if(index >= searchList.size())
 			return function.apply(properties);
 

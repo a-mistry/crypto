@@ -37,11 +37,11 @@ public class OrderInfo {
 	private final boolean postOnly;
 	/** UTC time in microseconds when order was created */
 	private final long timeMicros;
-	/** Fill fees */
+	/** Fill fees (this is the dollar amount of transaction cost paid in a XXX-USD trade) */
 	private final double fillFees;
-	/** Filled size */
+	/** Filled size (this is the amount of crypto bought or sold in a XXX-USD trade) */
 	private final double filledSize;
-	/** Executed value */
+	/** Executed value (this is the dollar amount of crypto bought/sold in a XXX-USD trade) */
 	private final double executedValue;
 	/** Status */
 	private final OrderStatus status;
@@ -133,17 +133,17 @@ public class OrderInfo {
 		return timeMicros;
 	}
 
-	/** @return Fill fees */
+	/** @return Fill fees (this is the dollar amount of transaction cost paid in a XXX-USD trade) */
 	public final double getFillFees() {
 		return fillFees;
 	}
 
-	/** @return Filled size */
+	/** @return Filled size (this is the amount of crypto bought or sold in a XXX-USD trade) */
 	public final double getFilledSize() {
 		return filledSize;
 	}
 
-	/** @return Executed value */
+	/** @return Executed value (this is the dollar amount of crypto bought/sold in a XXX-USD trade) */
 	public final double getExecutedValue() {
 		return executedValue;
 	}
@@ -211,13 +211,13 @@ public class OrderInfo {
 		builder.append(status);
 		builder.append("\nsettled\t");
 		builder.append(settled);
-		builder.append("\nfunds\n");
+		builder.append("\nfunds\t");
 		builder.append(funds);
-		builder.append("\nspecifiedFunds\n");
+		builder.append("\nspecifiedFunds\t");
 		builder.append(specifiedFunds);
-		builder.append("\ndoneMicros\n");
+		builder.append("\ndoneMicros\t");
 		builder.append(doneMicros);
-		builder.append("\ndoneReason\n");
+		builder.append("\ndoneReason\t");
 		builder.append(doneReason);
 		return builder.toString();
 	}
