@@ -28,6 +28,7 @@ public class GdaxExecutionEngine implements ExecutionEngine {
 	private final OrderBookManager orderBookManager;
 	private final GdaxClient gdaxClient;
 	private final ScheduledExecutorService executorService;
+	private int waitForOrderSeconds = 15;
 
 	public GdaxExecutionEngine(TimeKeeper timeKeeper, Accountant accountant, OrderBookManager orderBookManager,
 		GdaxClient gdaxClient)
@@ -60,7 +61,14 @@ public class GdaxExecutionEngine implements ExecutionEngine {
 		}
 	}
 
-	public synchronized void verifyOrderComplete(OrderInfo orderInfo) {
+	/**
+	 * Used for testing - sets the interval that execution waits before checking if an order is complete to zero
+	 */
+	void setOrderWaitForTesting() {
+		waitForOrderSeconds = 0;
+	}
+
+	private synchronized void verifyOrderComplete(OrderInfo orderInfo) {
 		// only try getting status for a minute, then log error and continue
 		if(orderInfo.getStatus() != OrderStatus.DONE
 			&& timeKeeper.epochMs() - orderInfo.getTimeMicros() / 1000L > 60000L) {
@@ -71,10 +79,10 @@ public class GdaxExecutionEngine implements ExecutionEngine {
 		}
 
 		if(orderInfo.getStatus() != OrderStatus.DONE) {
-			// wait 15 seconds before trying again to avoid rate limit problems
+			// wait before trying again to avoid rate limit problems
 			Runnable getOrderInfo = () -> gdaxClient.getOrder(orderInfo.getOrderId())
 				.thenAccept(this::verifyOrderComplete);
-			executorService.schedule(getOrderInfo, 15, TimeUnit.SECONDS);
+			executorService.schedule(getOrderInfo, waitForOrderSeconds, TimeUnit.SECONDS);
 		} else if(orderInfo.getDoneReason() == Reason.CANCELED) {
 			log.error("Order was canceled: " + orderInfo);
 		} else if(orderInfo.getDoneReason() == Reason.FILLED) {
