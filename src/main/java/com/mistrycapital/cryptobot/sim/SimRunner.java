@@ -13,7 +13,6 @@ import com.mistrycapital.cryptobot.forecasts.*;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.risk.TradeRiskValidator;
-import com.mistrycapital.cryptobot.sim.ParameterOptimizer.ParameterSearch;
 import com.mistrycapital.cryptobot.tactic.Tactic;
 import com.mistrycapital.cryptobot.tactic.TradeEvaluator;
 import com.mistrycapital.cryptobot.time.Intervalizer;
@@ -64,19 +63,15 @@ public class SimRunner implements Runnable {
 			List<ConsolidatedSnapshot> consolidatedSnapshots = readMarketData();
 			MCProperties simProperties = new MCProperties();
 
-			boolean search = false;
+			boolean search = true;
 			if(search) {
 				// ladder on in/out thresholds
 				simProperties.put("sim.logDecisions", "false");
 				simProperties.put("sim.logForecastCalc", "false");
-				double ret = parameterOptimizer.optimize(simProperties,
+				SimResult result = parameterOptimizer.optimize(simProperties,
 					Arrays.asList(
-						new ParameterSearch("tactic.inThreshold.default", 0.02, 0.06),
-						new ParameterSearch("tactic.outThreshold.default", -0.03, 0.02)
-//						new ParameterSearch("tactic.pctAllocation.BCH-USD", 0, 1),
-//						new ParameterSearch("tactic.pctAllocation.BTC-USD", 0, 1),
-//						new ParameterSearch("tactic.pctAllocation.ETH-USD", 0, 1),
-//						new ParameterSearch("tactic.pctAllocation.LTC-USD", 0, 1)
+						new ParameterSearchSpace("tactic.inThreshold.default", 0.0, 0.06),
+						new ParameterSearchSpace("tactic.outThreshold.default", -0.06, 0.0)
 					),
 					properties -> {
 						try {
@@ -87,19 +82,19 @@ public class SimRunner implements Runnable {
 						}
 					}
 				);
-				log.info("Max return of " + ret + " achieved at in="
-					+ simProperties.getDoubleProperty("tactic.inThreshold.default") + " out="
-					+ simProperties.getDoubleProperty("tactic.outThreshold.default")
-					+ "\nBCH=" + simProperties.getDoubleProperty("tactic.pctAllocation.BCH-USD")
-					+ "\nBTC=" + simProperties.getDoubleProperty("tactic.pctAllocation.BTC-USD")
-					+ "\nETH=" + simProperties.getDoubleProperty("tactic.pctAllocation.ETH-USD")
-					+ "\nLTC=" + simProperties.getDoubleProperty("tactic.pctAllocation.LTC-USD"));
+				log.info("Max return of " + result.holdingPeriodReturn + " sharpe of " + result.sharpeRatio
+					+ " achieved at"
+					+ " in=" + simProperties.getDoubleProperty("tactic.inThreshold.default")
+					+ " out=" + simProperties.getDoubleProperty("tactic.outThreshold.default"));
 			}
 			simProperties.put("sim.logDecisions", "true");
 			long startNanos = System.nanoTime();
-			double ret = simulate(consolidatedSnapshots, simProperties);
+			SimResult result = simulate(consolidatedSnapshots, simProperties);
 			log.debug("Simulation treatment ended in " + ((System.nanoTime() - startNanos) / 1000000.0) + "ms");
-			log.debug("Ending return: " + ret);
+			log.debug("Holding period return:\t" + result.holdingPeriodReturn);
+			log.debug("Daily avg return:     \t" + result.dailyAvgReturn);
+			log.debug("Daily volatility:     \t" + result.dailyVolatility);
+			log.debug("Sharpe Ratio:         \t" + result.sharpeRatio);
 
 		} catch(IOException e) {
 			throw new RuntimeException(e);
@@ -158,7 +153,7 @@ public class SimRunner implements Runnable {
 		return true;
 	}
 
-	private double simulate(List<ConsolidatedSnapshot> consolidatedSnapshots, MCProperties simProperties)
+	private SimResult simulate(List<ConsolidatedSnapshot> consolidatedSnapshots, MCProperties simProperties)
 		throws IOException
 	{
 		final boolean shouldLogDecisions = simProperties.getBooleanProperty("sim.logDecisions", false);
@@ -199,13 +194,24 @@ public class SimRunner implements Runnable {
 		TradeEvaluator tradeEvaluator = new TradeEvaluator(history, forecastCalculator, tactic, tradeRiskValidator,
 			executionEngine, decisionAppender, dailyAppender);
 
+		long nextDay = intervalizer.calcNextDayMillis(0);
+		List<Double> dailyPositionValuesUsd = new ArrayList<>(365);
 		for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedSnapshots) {
+			if(consolidatedSnapshot.getTimeNanos() < 1517448021000000000L)
+				continue; // spotty data before 2/1, just skip
+
 			timeKeeper.advanceTime(consolidatedSnapshot.getTimeNanos());
+			if(timeKeeper.epochMs() >= nextDay) {
+				nextDay = intervalizer.calcNextDayMillis(timeKeeper.epochMs());
+				dailyPositionValuesUsd.add(accountant.getPositionValueUsd(consolidatedSnapshot));
+			}
 			history.add(consolidatedSnapshot);
 			tradeEvaluator.evaluate();
 		}
 
 		ConsolidatedSnapshot lastSnapshot = consolidatedSnapshots.get(consolidatedSnapshots.size() - 1);
+		dailyPositionValuesUsd.add(accountant.getPositionValueUsd(lastSnapshot));
+
 		log.debug("Ending positions USD " + accountant.getAvailable(Currency.USD)
 			+ " BTC " + accountant.getAvailable(Currency.BTC)
 			+ " BCH " + accountant.getAvailable(Currency.BCH)
@@ -217,7 +223,45 @@ public class SimRunner implements Runnable {
 		if(dailyAppender != null) dailyAppender.close();
 		if(calculationLogger != null) calculationLogger.close();
 
-		// for now, just return the total return. eventually add more metrics
-		return accountant.getPositionValueUsd(lastSnapshot) / startingUsd - 1;
+		return new SimResult(dailyPositionValuesUsd);
+	}
+
+	class SimResult implements Comparable<SimResult> {
+		final List<Double> dailyPositionValuesUsd;
+		final double holdingPeriodReturn;
+		final double dailyAvgReturn;
+		final double dailyVolatility;
+		final double sharpeRatio;
+
+		SimResult(List<Double> dailyPositionValuesUsd) {
+			this.dailyPositionValuesUsd = dailyPositionValuesUsd;
+			holdingPeriodReturn =
+				dailyPositionValuesUsd.get(dailyPositionValuesUsd.size() - 1) / dailyPositionValuesUsd.get(0) - 1;
+
+			final double[] dailyReturns = new double[dailyPositionValuesUsd.size() - 1];
+			for(int i = 0; i < dailyReturns.length; i++)
+				dailyReturns[i] = dailyPositionValuesUsd.get(i + 1) / dailyPositionValuesUsd.get(i) - 1;
+			double dailySum = 0.0;
+			for(final double val : dailyReturns)
+				dailySum += val;
+			dailyAvgReturn = dailySum / dailyReturns.length;
+
+			dailySum = 0.0;
+			for(final double val : dailyReturns) {
+				final double diff = val - dailyAvgReturn;
+				dailySum += diff * diff;
+			}
+			dailyVolatility = Math.sqrt(dailySum / dailyReturns.length);
+
+			sharpeRatio = dailyVolatility != 0.0 ? dailyAvgReturn / dailyVolatility : 0.0;
+		}
+
+		/**
+		 * This is our objective function - currently optimizing for return
+		 */
+		public int compareTo(SimResult b) {
+//			return Double.compare(holdingPeriodReturn, b.holdingPeriodReturn);
+			return Double.compare(sharpeRatio, b.sharpeRatio);
+		}
 	}
 }

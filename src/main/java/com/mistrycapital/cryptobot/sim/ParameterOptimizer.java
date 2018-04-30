@@ -17,53 +17,56 @@ public class ParameterOptimizer {
 	}
 
 	/**
-	 * Searches the given parameters for the optimal parameter values. Modifies properties with the
-	 * optimal values.
+	 * Searches the given parameters for the parameter values that optimize the given function. Modifies properties
+	 * with the optimal values.
+	 *
 	 * @return Function result at the optimal parameters
 	 */
-	public double optimize(MCProperties properties, List<ParameterSearch> searchList,
-		Function<MCProperties,Double> function)
+	public <T extends Comparable> T optimize(MCProperties properties, List<ParameterSearchSpace> searchList,
+		Function<MCProperties,T> function)
 	{
-		return ladderSearch(searchList, properties, function, 0);
+		LadderSearchResult<T> searchResult = ladderSearch(properties, searchList, function, 0);
+		for(int i = 0; i < searchList.size(); i++)
+			properties.setProperty(searchList.get(i).parameterName, Double.toString(searchResult.optimalParameters[i]));
+		return searchResult.functionResult;
 	}
 
-	private double ladderSearch(List<ParameterSearch> searchList, MCProperties properties,
-		Function<MCProperties,Double> function, int index)
+	private <T extends Comparable> LadderSearchResult<T> ladderSearch(MCProperties properties,
+		List<ParameterSearchSpace> searchList, Function<MCProperties,T> function, int index)
 	{
-		// TODO: Fix this code. It is not correct; later values are overwritten by different numbers
 		if(index >= searchList.size())
-			return function.apply(properties);
+			return new LadderSearchResult<>(null, function.apply(properties));
 
-		ParameterSearch parameter = searchList.get(index);
+		ParameterSearchSpace searchSpace = searchList.get(index);
 
-		double bestFunctionResult = Double.NEGATIVE_INFINITY;
-		double bestPropertyValue = Double.NaN;
+		T bestFunctionResult = null;
+		double[] bestParameterValues = new double[searchList.size() - index];
 		for(int i = 0; i <= ladderPoints; i++) {
-			final double propertyValue =
-				parameter.lowerBound + i * (parameter.upperBound - parameter.lowerBound) / ladderPoints;
+			final double parameterValue =
+				searchSpace.lowerBound + i * (searchSpace.upperBound - searchSpace.lowerBound) / ladderPoints;
 
-			properties.put(parameter.parameterName, Double.toString(propertyValue));
-			final double functionResult = ladderSearch(searchList, properties, function, index + 1);
+			properties.put(searchSpace.parameterName, Double.toString(parameterValue));
+			final LadderSearchResult<T> recursiveResult =
+				ladderSearch(properties, searchList, function, index + 1);
 
-			if(functionResult > bestFunctionResult) {
-				bestFunctionResult = functionResult;
-				bestPropertyValue = propertyValue;
+			if(bestFunctionResult == null || recursiveResult.functionResult.compareTo(bestFunctionResult) > 0) {
+				bestFunctionResult = recursiveResult.functionResult;
+				bestParameterValues[0] = parameterValue;
+				for(int j = 1; j < bestParameterValues.length; j++)
+					bestParameterValues[j] = recursiveResult.optimalParameters[j - 1];
 			}
 		}
 
-		properties.put(parameter.parameterName, Double.toString(bestPropertyValue));
-		return bestFunctionResult;
+		return new LadderSearchResult<>(bestParameterValues, bestFunctionResult);
 	}
 
-	static class ParameterSearch {
-		final String parameterName;
-		final double lowerBound;
-		final double upperBound;
+	private static class LadderSearchResult<T> {
+		final double[] optimalParameters;
+		final T functionResult;
 
-		ParameterSearch(String parameterName, double lowerBound, double upperBound) {
-			this.parameterName = parameterName;
-			this.lowerBound = lowerBound;
-			this.upperBound = upperBound;
+		LadderSearchResult(double[] optimalParameters, T functionResult) {
+			this.optimalParameters = optimalParameters;
+			this.functionResult = functionResult;
 		}
 	}
 }
