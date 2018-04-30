@@ -10,11 +10,15 @@ import com.mistrycapital.cryptobot.gdax.client.OrderStatus;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.Product;
+import com.mistrycapital.cryptobot.gdax.common.Reason;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import org.slf4j.Logger;
 
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class GdaxExecutionEngine implements ExecutionEngine {
 	private static final Logger log = MCLoggerFactory.getLogger();
@@ -23,6 +27,7 @@ public class GdaxExecutionEngine implements ExecutionEngine {
 	private final Accountant accountant;
 	private final OrderBookManager orderBookManager;
 	private final GdaxClient gdaxClient;
+	private final ScheduledExecutorService executorService;
 
 	public GdaxExecutionEngine(TimeKeeper timeKeeper, Accountant accountant, OrderBookManager orderBookManager,
 		GdaxClient gdaxClient)
@@ -31,6 +36,7 @@ public class GdaxExecutionEngine implements ExecutionEngine {
 		this.accountant = accountant;
 		this.orderBookManager = orderBookManager;
 		this.gdaxClient = gdaxClient;
+		executorService = Executors.newScheduledThreadPool(1);
 	}
 
 	public void trade(List<TradeInstruction> instructions) {
@@ -64,7 +70,14 @@ public class GdaxExecutionEngine implements ExecutionEngine {
 			return;
 		}
 
-		if(orderInfo.getStatus() == OrderStatus.DONE) {
+		if(orderInfo.getStatus() != OrderStatus.DONE) {
+			// wait 15 seconds before trying again to avoid rate limit problems
+			Runnable getOrderInfo = () -> gdaxClient.getOrder(orderInfo.getOrderId())
+				.thenAccept(this::verifyOrderComplete);
+			executorService.schedule(getOrderInfo, 15, TimeUnit.SECONDS);
+		} else if(orderInfo.getDoneReason() == Reason.CANCELED) {
+			log.error("Order was canceled: " + orderInfo);
+		} else if(orderInfo.getDoneReason() == Reason.FILLED) {
 			if(orderInfo.getOrderSide() == OrderSide.BUY) {
 				final double dollarsSpent = orderInfo.getExecutedValue() + orderInfo.getFillFees();
 				final double cryptoPurchased = orderInfo.getFilledSize();
@@ -77,10 +90,7 @@ public class GdaxExecutionEngine implements ExecutionEngine {
 					-cryptoSold);
 			}
 		} else {
-			// try again in a min
-			gdaxClient.getOrder(orderInfo.getOrderId())
-				.thenAccept(this::verifyOrderComplete);
+			log.error("Order was neither canceled nor filled: " + orderInfo);
 		}
-
 	}
 }

@@ -15,6 +15,7 @@ import java.nio.file.Paths;
 import java.sql.Time;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -34,27 +35,56 @@ class GdaxClientTest {
 		gdaxClient = new GdaxClient(sandboxURI, apiKey, apiSecret, passPhrase);
 	}
 
+	/**
+	 * Print balances to stdout and return dollars
+	 *
+	 * @return USD balance
+	 */
+	private double listBalances()
+		throws ExecutionException, InterruptedException
+	{
+		System.out.println("Currency Balances");
+		var accounts = gdaxClient.getAccounts().get();
+		accounts.stream()
+			.forEach(account -> System.out.println(account.getCurrency() + " " + account.getAvailable()));
+
+		return accounts.stream()
+			.filter(account -> account.getCurrency() == Currency.USD)
+			.findAny()
+			.get()
+			.getAvailable();
+	}
+
+	private OrderInfo waitForOrderComplete(UUID orderId)
+		throws ExecutionException, InterruptedException
+	{
+		for(int i = 0; i < 10; i++) {
+			var orderInfo = gdaxClient.getOrder(orderId).get();
+			if(orderInfo.getStatus() == OrderStatus.DONE)
+				return orderInfo;
+			Thread.sleep(1000);
+		}
+		fail("Checked order info 10 times but it was still not done");
+		return null;
+	}
+
 	@Test
 	void shouldPlaceMarketOrder()
 		throws Exception
 	{
 		// get dollar balance
-		List<Account> accountList = gdaxClient.getAccounts().get();
-		double dollars = accountList.stream()
-			.filter(account -> account.getCurrency() == Currency.USD)
-			.findAny()
-			.get()
-			.getAvailable();
+		System.out.println("Starting balances");
+		double dollars = listBalances();
 
 		// nothing to test if balance too low
-		if(dollars < 100) {
+		if(dollars < 10) {
 			System.err.println("Not testing market orders - sandbox balance is too low");
 			return;
 		}
-		System.err.println("Dollars = " + dollars);
 
+		// First test is to buy $10 of ETH specifying funds
 		var orderFuture =
-			gdaxClient.placeMarketOrder(Product.ETH_USD, OrderSide.BUY, MarketOrderSizingType.FUNDS, 100);
+			gdaxClient.placeMarketOrder(Product.ETH_USD, OrderSide.BUY, MarketOrderSizingType.FUNDS, 10);
 		var orderInfo = orderFuture.get();
 		UUID orderId = orderInfo.getOrderId();
 
@@ -65,37 +95,29 @@ class GdaxClientTest {
 		assertEquals(SelfTradePreventionFlag.DC, orderInfo.getSelfTradePreventionFlag());
 		assertFalse(orderInfo.isPostOnly());
 
+		System.out.println("Initial order info");
 		System.out.println(orderInfo);
 
-		// now repeatedly check order until executed
-		for(int i = 0; i < 10; i++) {
-			orderInfo = gdaxClient.getOrder(orderId).get();
-			if(orderInfo.getStatus() == OrderStatus.DONE)
-				break;
-			Thread.sleep(1000);
-		}
+		orderInfo = waitForOrderComplete(orderId);
 
+		System.out.println("Completed order info");
 		System.out.println(orderInfo);
 		double ethFilled = orderInfo.getFilledSize();
 
-		gdaxClient.getAccounts().get().stream()
-			.forEach(account -> System.err.println(account.getCurrency() + " " + account.getAvailable()));
+		double dollarsAfterPurchase = listBalances();
+		assertEquals(dollarsAfterPurchase, dollars - orderInfo.getExecutedValue() - orderInfo.getFillFees());
+		assertEquals(0.0030, orderInfo.getFillFees() / orderInfo.getExecutedValue());
 
+		// Now sell the ETH we just bought using amount (similar to actual execution)
 		orderInfo =
 			gdaxClient.placeMarketOrder(Product.ETH_USD, OrderSide.SELL, MarketOrderSizingType.SIZE, ethFilled).get();
-		orderId = orderInfo.getOrderId();
+		orderInfo = waitForOrderComplete(orderInfo.getOrderId());
 
-		// now repeatedly check order until executed
-		for(int i = 0; i < 10; i++) {
-			orderInfo = gdaxClient.getOrder(orderId).get();
-			if(orderInfo.getStatus() == OrderStatus.DONE)
-				break;
-			Thread.sleep(1000);
-		}
-
+		System.out.println("Completed ETH sale");
 		System.out.println(orderInfo);
 
-		gdaxClient.getAccounts().get().stream()
-			.forEach(account -> System.err.println(account.getCurrency() + " " + account.getAvailable()));
+		double dollarsAfterSale = listBalances();
+		assertEquals(dollarsAfterSale, dollarsAfterPurchase + orderInfo.getExecutedValue() - orderInfo.getFillFees());
+		assertEquals(0.0030, orderInfo.getFillFees() / orderInfo.getExecutedValue());
 	}
 }
