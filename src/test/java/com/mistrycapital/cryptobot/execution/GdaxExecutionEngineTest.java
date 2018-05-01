@@ -46,30 +46,47 @@ class GdaxExecutionEngineTest {
 			return null;
 		}).when(btcBook).recordBBO(any());
 
-		final double fillFees = 10.0 * 0.0030;
-		final double executedValue = 10.0 - fillFees;
-		final double filledSize = executedValue / 10000.0;
+		// first time order is pending
 		JsonObject json = new JsonObject();
 		json.addProperty("id", UUID.randomUUID().toString());
 		json.addProperty("product_id", Product.BTC_USD.toString());
 		json.addProperty("side","buy");
 		json.addProperty("type","market");
 		json.addProperty("created_at", timeKeeper.iso8601());
-		json.addProperty("fillFees", Double.toString(fillFees));
-		json.addProperty("filledSize", Double.toString(filledSize));
-		json.addProperty("executedValue", Double.toString(executedValue));
-		json.addProperty("staus", OrderStatus.DONE.toString().toLowerCase());
+		json.addProperty("status", OrderStatus.PENDING.toString().toLowerCase());
+		json.addProperty("settled", false);
+		json.addProperty("funds", "10.0");
+		json.addProperty("specified_funds", "10.0");
+		OrderInfo orderInfo = new OrderInfo(json);
+		when(gdaxClient.placeMarketOrder(Product.BTC_USD, OrderSide.BUY, MarketOrderSizingType.FUNDS, 10.0))
+			.thenReturn(CompletableFuture.supplyAsync(() -> orderInfo));
+
+		// second time order is still pending
+		// third time order is complete
+		final double fillFees = 10.0 * 0.0030;
+		final double executedValue = 10.0 - fillFees;
+		final double filledSize = executedValue / 10000.0;
+		json.addProperty("fill_fees", Double.toString(fillFees));
+		json.addProperty("filled_size", Double.toString(filledSize));
+		json.addProperty("executed_value", Double.toString(executedValue));
+		json.addProperty("status", OrderStatus.DONE.toString().toLowerCase());
 		json.addProperty("settled", true);
 		json.addProperty("funds", "10.0");
-		json.addProperty("specifiedFunds", "10.0");
+		json.addProperty("specified_funds", "10.0");
 		json.addProperty("done_at", timeKeeper.iso8601());
 		json.addProperty("done_reason", Reason.FILLED.toString().toLowerCase());
-		when(gdaxClient.placeMarketOrder(Product.BTC_USD, OrderSide.BUY, MarketOrderSizingType.FUNDS, 10.0))
-			.thenReturn(CompletableFuture.supplyAsync(() -> new OrderInfo(json)));
+		var orderInfo2 = new OrderInfo(json);
+		assertEquals(fillFees, orderInfo2.getFillFees());
+		assertEquals(filledSize, orderInfo2.getFilledSize());
+		assertEquals(executedValue, orderInfo2.getExecutedValue());
+		when(gdaxClient.getOrder(orderInfo.getOrderId()))
+			.thenReturn(CompletableFuture.supplyAsync(() -> orderInfo))
+			.thenReturn(CompletableFuture.supplyAsync(() -> orderInfo2));
 
 		executionEngine.setOrderWaitForTesting();
 		executionEngine.trade(Arrays.asList(new TradeInstruction(Product.BTC_USD, 10.0 / 10000.0, OrderSide.BUY)));
-		Thread.sleep(1000);
+
+		verify(gdaxClient, times(1)).placeMarketOrder(Product.BTC_USD, OrderSide.BUY, MarketOrderSizingType.FUNDS, 10.0);
 
 		ArgumentCaptor<Double> usdArg = ArgumentCaptor.forClass(Double.class);
 		ArgumentCaptor<Double> cryptoArg = ArgumentCaptor.forClass(Double.class);
