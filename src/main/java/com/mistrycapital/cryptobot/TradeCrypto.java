@@ -1,8 +1,12 @@
 package com.mistrycapital.cryptobot;
 
+import java.io.Reader;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Properties;
 
 import com.mistrycapital.cryptobot.accounting.Accountant;
 import com.mistrycapital.cryptobot.appender.*;
@@ -11,7 +15,6 @@ import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.execution.GdaxExecutionEngine;
 import com.mistrycapital.cryptobot.forecasts.Brighton;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
-import com.mistrycapital.cryptobot.gdax.GdaxClientFactory;
 import com.mistrycapital.cryptobot.gdax.GdaxPositionsProvider;
 import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
 import com.mistrycapital.cryptobot.risk.TradeRiskValidator;
@@ -46,9 +49,12 @@ public class TradeCrypto {
 		MCProperties properties = new MCProperties();
 		Path dataDir = Paths.get(properties.getProperty("dataDir"));
 		log.debug("Saving message and sample data to " + dataDir);
-		String apiFilename = properties.getProperty("gdax.client.apiFile");
-		Path gdaxApiFile = Paths.get(apiFilename);
-		log.debug("Reading gdax credentials from " + apiFilename);
+		Path credentialsFile = Paths.get(properties.getProperty("credentialsFile"));
+		log.debug("Reading credentials from " + credentialsFile);
+		Properties credentials = new Properties();
+		try(Reader reader = Files.newBufferedReader(credentialsFile, StandardCharsets.UTF_8)) {
+			credentials.load(reader);
+		}
 
 		TimeKeeper timeKeeper = new SystemTimeKeeper();
 		OrderBookManager orderBookManager = new OrderBookManager(timeKeeper);
@@ -56,7 +62,8 @@ public class TradeCrypto {
 			new GdaxMessageAppender(dataDir, BOOK_MESSAGE_FILE_NAME, ".json", timeKeeper, orderBookManager);
 		gdaxAppender.open();
 		GdaxWebSocket gdaxWebSocket = new GdaxWebSocket(timeKeeper, gdaxAppender);
-		GdaxClient gdaxClient = GdaxClientFactory.createClientFromFile(gdaxApiFile);
+		GdaxClient gdaxClient = new GdaxClient(new URI("https://api.gdax.com"), credentials.getProperty("gdaxApiKey"),
+			credentials.getProperty("gdaxApiSecret"), credentials.getProperty("gdaxPassPhrase"));
 		GdaxPositionsProvider gdaxPositionsProvider = new GdaxPositionsProvider(timeKeeper, gdaxClient);
 		Accountant accountant = new Accountant(gdaxPositionsProvider);
 		Intervalizer intervalizer = new Intervalizer(properties);
@@ -71,7 +78,8 @@ public class TradeCrypto {
 
 		Tactic tactic = new Tactic(properties, accountant);
 		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(properties, timeKeeper, accountant);
-		TwilioSender twilioSender = new TwilioSender();
+		TwilioSender twilioSender =
+			new TwilioSender(credentials.getProperty("TwilioAccountSid"), credentials.getProperty("TwilioAuthToken"));
 		ExecutionEngine executionEngine =
 			new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager, twilioSender, gdaxClient);
 		OrderBookPeriodicEvaluator periodicEvaluator =

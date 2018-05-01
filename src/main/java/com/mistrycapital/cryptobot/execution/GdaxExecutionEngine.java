@@ -56,10 +56,12 @@ public class GdaxExecutionEngine implements ExecutionEngine {
 				double dollars = bbo.askPrice * instruction.getAmount();
 				gdaxClient.placeMarketOrder(product, OrderSide.BUY, MarketOrderSizingType.FUNDS, dollars)
 					.thenAccept(this::verifyOrderComplete);
+				log.info("Placed order to buy $" + dollars + " of " + product);
 			} else {
 				gdaxClient
 					.placeMarketOrder(product, OrderSide.SELL, MarketOrderSizingType.SIZE, instruction.getAmount())
 					.thenAccept(this::verifyOrderComplete);
+				log.info("Placed order to sell " + instruction.getAmount() + " of " + product);
 			}
 		}
 	}
