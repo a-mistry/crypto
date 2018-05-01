@@ -14,6 +14,7 @@ import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.gdax.common.Reason;
 import com.mistrycapital.cryptobot.sim.SimTimeKeeper;
+import com.mistrycapital.cryptobot.twilio.TwilioSender;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -27,17 +28,16 @@ import static org.mockito.Mockito.*;
 
 class GdaxExecutionEngineTest {
 	@Test
-	void placeOrders()
-		throws Exception
-	{
+	void shouldPlaceMarketBuy() {
 		final SimTimeKeeper timeKeeper = new SimTimeKeeper();
-		timeKeeper.advanceTime(System.currentTimeMillis()*1000000L);
+		timeKeeper.advanceTime(System.currentTimeMillis() * 1000000L);
 		final OrderBookManager orderBookManager = mock(OrderBookManager.class);
 		final OrderBook btcBook = mock(OrderBook.class);
 		final Accountant accountant = mock(Accountant.class);
+		final TwilioSender twilioSender = mock(TwilioSender.class);
 		final GdaxClient gdaxClient = mock(GdaxClient.class);
 		GdaxExecutionEngine executionEngine =
-			new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager, gdaxClient);
+			new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager, twilioSender, gdaxClient);
 
 		when(orderBookManager.getBook(Product.BTC_USD)).thenReturn(btcBook);
 		doAnswer(invocationOnMock -> {
@@ -50,8 +50,8 @@ class GdaxExecutionEngineTest {
 		JsonObject json = new JsonObject();
 		json.addProperty("id", UUID.randomUUID().toString());
 		json.addProperty("product_id", Product.BTC_USD.toString());
-		json.addProperty("side","buy");
-		json.addProperty("type","market");
+		json.addProperty("side", "buy");
+		json.addProperty("type", "market");
 		json.addProperty("created_at", timeKeeper.iso8601());
 		json.addProperty("status", OrderStatus.PENDING.toString().toLowerCase());
 		json.addProperty("settled", false);
@@ -86,12 +86,19 @@ class GdaxExecutionEngineTest {
 		executionEngine.setOrderWaitForTesting();
 		executionEngine.trade(Arrays.asList(new TradeInstruction(Product.BTC_USD, 10.0 / 10000.0, OrderSide.BUY)));
 
-		verify(gdaxClient, times(1)).placeMarketOrder(Product.BTC_USD, OrderSide.BUY, MarketOrderSizingType.FUNDS, 10.0);
+		verify(gdaxClient, times(1))
+			.placeMarketOrder(Product.BTC_USD, OrderSide.BUY, MarketOrderSizingType.FUNDS, 10.0);
 
 		ArgumentCaptor<Double> usdArg = ArgumentCaptor.forClass(Double.class);
 		ArgumentCaptor<Double> cryptoArg = ArgumentCaptor.forClass(Double.class);
-		verify(accountant, times(1)).recordTrade(same(Currency.USD), usdArg.capture(), same(Currency.BTC), cryptoArg.capture());
-		assertEquals(-executedValue-fillFees, usdArg.getValue().doubleValue());
+		verify(accountant, times(1))
+			.recordTrade(same(Currency.USD), usdArg.capture(), same(Currency.BTC), cryptoArg.capture());
+		assertEquals(-executedValue - fillFees, usdArg.getValue().doubleValue());
 		assertEquals(filledSize, cryptoArg.getValue().doubleValue());
+	}
+
+	@Test
+	void shouldPlaceMarketSell() {
+		fail("not yet implemented");
 	}
 }

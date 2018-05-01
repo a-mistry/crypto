@@ -18,6 +18,7 @@ import com.mistrycapital.cryptobot.risk.TradeRiskValidator;
 import com.mistrycapital.cryptobot.tactic.OrderBookPeriodicEvaluator;
 import com.mistrycapital.cryptobot.tactic.Tactic;
 import com.mistrycapital.cryptobot.time.Intervalizer;
+import com.mistrycapital.cryptobot.twilio.TwilioSender;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.websocket.client.ClientUpgradeRequest;
 import org.eclipse.jetty.websocket.client.WebSocketClient;
@@ -70,7 +71,9 @@ public class TradeCrypto {
 
 		Tactic tactic = new Tactic(properties, accountant);
 		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(properties, timeKeeper, accountant);
-		ExecutionEngine executionEngine = new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager, gdaxClient);
+		TwilioSender twilioSender = new TwilioSender();
+		ExecutionEngine executionEngine =
+			new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager, twilioSender, gdaxClient);
 		OrderBookPeriodicEvaluator periodicEvaluator =
 			new OrderBookPeriodicEvaluator(timeKeeper, intervalizer, accountant, orderBookManager, dynamicTracker,
 				intervalAppender, forecastCalculator, tactic, tradeRiskValidator, executionEngine, decisionAppender,

@@ -12,6 +12,7 @@ import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.gdax.common.Reason;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
+import com.mistrycapital.cryptobot.twilio.TwilioSender;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import org.slf4j.Logger;
 
@@ -26,16 +27,18 @@ public class GdaxExecutionEngine implements ExecutionEngine {
 	private final TimeKeeper timeKeeper;
 	private final Accountant accountant;
 	private final OrderBookManager orderBookManager;
+	private final TwilioSender twilioSender;
 	private final GdaxClient gdaxClient;
 	private final ScheduledExecutorService executorService;
 	private int waitForOrderSeconds = 15;
 
 	public GdaxExecutionEngine(TimeKeeper timeKeeper, Accountant accountant, OrderBookManager orderBookManager,
-		GdaxClient gdaxClient)
+		TwilioSender twilioSender, GdaxClient gdaxClient)
 	{
 		this.timeKeeper = timeKeeper;
 		this.accountant = accountant;
 		this.orderBookManager = orderBookManager;
+		this.twilioSender = twilioSender;
 		this.gdaxClient = gdaxClient;
 		executorService = Executors.newScheduledThreadPool(1);
 	}
@@ -75,6 +78,9 @@ public class GdaxExecutionEngine implements ExecutionEngine {
 
 			log.error("Order was not done after 1 minute: " + orderInfo);
 			accountant.refreshPositions(); // make sure we have accurate positions
+			twilioSender.sendMessage(
+				"Order not complete after 1 min " + orderInfo.getOrderSide() + " " + orderInfo.getProduct()
+					+ " funds " + orderInfo.getFunds() + " size " + orderInfo.getSize());
 			return;
 		}
 
@@ -85,17 +91,26 @@ public class GdaxExecutionEngine implements ExecutionEngine {
 			executorService.schedule(getOrderInfo, waitForOrderSeconds, TimeUnit.SECONDS);
 		} else if(orderInfo.getDoneReason() == Reason.CANCELED) {
 			log.error("Order was canceled: " + orderInfo);
+			twilioSender.sendMessage(
+				"Order canceled " + orderInfo.getOrderSide() + " " + orderInfo.getProduct() + " funds " +
+					orderInfo.getFunds() + " size " + orderInfo.getSize());
 		} else if(orderInfo.getDoneReason() == Reason.FILLED) {
 			if(orderInfo.getOrderSide() == OrderSide.BUY) {
 				final double dollarsSpent = orderInfo.getExecutedValue() + orderInfo.getFillFees();
 				final double cryptoPurchased = orderInfo.getFilledSize();
 				accountant.recordTrade(Currency.USD, -dollarsSpent, orderInfo.getProduct().getCryptoCurrency(),
 					cryptoPurchased);
+				twilioSender.sendMessage(
+					"Bot " + cryptoPurchased + " " + orderInfo.getProduct().getCryptoCurrency() + " @ $" +
+						orderInfo.getExecutedValue() / orderInfo.getFilledSize());
 			} else {
 				final double dollarsReceived = orderInfo.getExecutedValue() - orderInfo.getFillFees();
 				final double cryptoSold = orderInfo.getFilledSize();
 				accountant.recordTrade(Currency.USD, dollarsReceived, orderInfo.getProduct().getCryptoCurrency(),
 					-cryptoSold);
+				twilioSender.sendMessage(
+					"Sold " + cryptoSold + " " + orderInfo.getProduct().getCryptoCurrency() + " @ $" +
+						orderInfo.getExecutedValue() / orderInfo.getFilledSize());
 			}
 		} else {
 			log.error("Order was neither canceled nor filled: " + orderInfo);
