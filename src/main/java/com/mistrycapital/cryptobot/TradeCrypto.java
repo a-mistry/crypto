@@ -37,12 +37,6 @@ import com.mistrycapital.cryptobot.util.MCProperties;
 public class TradeCrypto {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
-	private static final String BOOK_MESSAGE_FILE_NAME = "gdax-orders";
-	public static final String INTERVAL_FILE_NAME = "samples";
-	public static final String FORECAST_FILE_NAME = "forecasts";
-	public static final String DECISION_FILE_NAME = "decisions";
-	public static final String DAILY_FILE_NAME = "daily";
-
 	public static void main(String[] args)
 		throws Exception
 	{
@@ -55,6 +49,12 @@ public class TradeCrypto {
 		try(Reader reader = Files.newBufferedReader(credentialsFile, StandardCharsets.UTF_8)) {
 			credentials.load(reader);
 		}
+
+		final String BOOK_MESSAGE_FILE_NAME = properties.getProperty("output.filenameBase.bookMessages","gdax-orders");
+		final String INTERVAL_FILE_NAME = properties.getProperty("output.filenameBase.samples","samples");
+		final String FORECAST_FILE_NAME = properties.getProperty("output.filenameBase.forecasts","forecasts");
+		final String DECISION_FILE_NAME = properties.getProperty("output.filenameBase.decisions","decisions");
+		final String DAILY_FILE_NAME = properties.getProperty("output.filenameBase.daily","daily");
 
 		TimeKeeper timeKeeper = new SystemTimeKeeper();
 		OrderBookManager orderBookManager = new OrderBookManager(timeKeeper);

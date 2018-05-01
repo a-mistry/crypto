@@ -19,8 +19,6 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import static com.mistrycapital.cryptobot.TradeCrypto.INTERVAL_FILE_NAME;
-
 /**
  * Run sampler code to
  */
@@ -32,6 +30,7 @@ public class SampleData {
 		MCProperties properties = new MCProperties();
 		Path dataDir = Paths.get(properties.getProperty("dataDir"));
 		log.debug("Saving message and sample data to " + dataDir);
+		final String INTERVAL_FILE_NAME = properties.getProperty("output.filenameBase.samples","samples");
 
 		SimTimeKeeper timeKeeper = new SimTimeKeeper();
 		OrderBookManager orderBookManager = new OrderBookManager(timeKeeper);

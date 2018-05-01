@@ -1,16 +1,12 @@
 package com.mistrycapital.cryptobot;
 
 import com.mistrycapital.cryptobot.sim.SimRunner;
-import com.mistrycapital.cryptobot.sim.SimTimeKeeper;
-import com.mistrycapital.cryptobot.time.Intervalizer;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
 import org.slf4j.Logger;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-
-import static com.mistrycapital.cryptobot.TradeCrypto.FORECAST_FILE_NAME;
 
 public class Simulate {
 	private static final Logger log = MCLoggerFactory.getLogger();
