@@ -21,6 +21,8 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.*;
 
 class GdaxClientTest {
+	private static final double EPSILON = 0.00000001;
+
 	private static GdaxClient gdaxClient;
 
 	@BeforeAll
@@ -105,8 +107,8 @@ class GdaxClientTest {
 		double ethFilled = orderInfo.getFilledSize();
 
 		double dollarsAfterPurchase = listBalances();
-		assertEquals(dollarsAfterPurchase, dollars - orderInfo.getExecutedValue() - orderInfo.getFillFees());
-		assertEquals(0.0030, orderInfo.getFillFees() / orderInfo.getExecutedValue());
+		assertEquals(dollarsAfterPurchase, dollars - orderInfo.getExecutedValue() - orderInfo.getFillFees(), EPSILON);
+		assertEquals(0.0030, orderInfo.getFillFees() / orderInfo.getExecutedValue(), EPSILON);
 
 		// Now sell the ETH we just bought using amount (similar to actual execution)
 		orderInfo =
