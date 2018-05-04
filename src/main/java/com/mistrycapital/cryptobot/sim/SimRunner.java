@@ -63,7 +63,7 @@ public class SimRunner implements Runnable {
 			List<ConsolidatedSnapshot> consolidatedSnapshots = readMarketData();
 			MCProperties simProperties = new MCProperties();
 
-			boolean search = true;
+			boolean search = simProperties.getBooleanProperty("sim.searchParameters", false);
 			if(search) {
 				// ladder on in/out thresholds
 				simProperties.put("sim.logDecisions", "false");
@@ -95,6 +95,7 @@ public class SimRunner implements Runnable {
 			log.debug("Daily avg return:     \t" + result.dailyAvgReturn);
 			log.debug("Daily volatility:     \t" + result.dailyVolatility);
 			log.debug("Sharpe Ratio:         \t" + result.sharpeRatio);
+			log.debug("Win %                 \t" + result.winPct);
 
 		} catch(IOException e) {
 			throw new RuntimeException(e);
@@ -232,6 +233,7 @@ public class SimRunner implements Runnable {
 		final double dailyAvgReturn;
 		final double dailyVolatility;
 		final double sharpeRatio;
+		final double winPct;
 
 		SimResult(List<Double> dailyPositionValuesUsd) {
 			this.dailyPositionValuesUsd = dailyPositionValuesUsd;
@@ -254,14 +256,21 @@ public class SimRunner implements Runnable {
 			dailyVolatility = Math.sqrt(dailySum / dailyReturns.length);
 
 			sharpeRatio = dailyVolatility != 0.0 ? dailyAvgReturn / dailyVolatility : 0.0;
+
+			int winCount = 0;
+			for(final double val : dailyReturns)
+				if(val >= 0.0)
+					winCount++;
+			winPct = ((double) winCount) / dailyReturns.length;
 		}
 
 		/**
-		 * This is our objective function - currently optimizing for return
+		 * This is our objective function
 		 */
 		public int compareTo(SimResult b) {
 //			return Double.compare(holdingPeriodReturn, b.holdingPeriodReturn);
 			return Double.compare(sharpeRatio, b.sharpeRatio);
+//			return Double.compare(winPct, b.winPct);
 		}
 	}
 }
