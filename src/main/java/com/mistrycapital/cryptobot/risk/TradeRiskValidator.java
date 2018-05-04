@@ -36,10 +36,14 @@ public class TradeRiskValidator {
 		// NEED TO UNIT TEST THESE!
 		if(instructions == null) return null;
 
+		instructions = validateTradeCount(instructions);
+		instructions = validatePosition(instructions);
+
 		return instructions;
 	}
 
-	private List<TradeInstruction> validateDisabled(List<TradeInstruction> instructions) {
+	/** Validate that we are placing no more than the limit of trades in 24 hours */
+	List<TradeInstruction> validateTradeCount(List<TradeInstruction> instructions) {
 		log.debug("Checking risk on " + instructions.size() + " trades at " + timeKeeper.iso8601());
 
 		long oneDayAgoTimeInNanos = timeKeeper.epochNanos() - 24 * 60 * 60 * 1000000000L;
@@ -58,5 +62,11 @@ public class TradeRiskValidator {
 				instruction.getProduct() + " at" + timeKeeper.iso8601());
 		}
 		return validated;
+	}
+
+	/** Validate that we have the position we are trying to sell */
+	List<TradeInstruction> validatePosition(List<TradeInstruction> instructions) {
+		// TODO: implement this
+		return instructions;
 	}
 }
