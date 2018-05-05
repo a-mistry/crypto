@@ -90,12 +90,14 @@ public class SimRunner implements Runnable {
 			simProperties.put("sim.logDecisions", "true");
 			long startNanos = System.nanoTime();
 			SimResult result = simulate(consolidatedSnapshots, simProperties);
-			log.debug("Simulation treatment ended in " + ((System.nanoTime() - startNanos) / 1000000.0) + "ms");
-			log.debug("Holding period return:\t" + result.holdingPeriodReturn);
-			log.debug("Daily avg return:     \t" + result.dailyAvgReturn);
-			log.debug("Daily volatility:     \t" + result.dailyVolatility);
-			log.debug("Sharpe Ratio:         \t" + result.sharpeRatio);
-			log.debug("Win %                 \t" + result.winPct);
+			log.info("Simulation treatment ended in " + ((System.nanoTime() - startNanos) / 1000000.0) + "ms");
+			log.info("Tactic in=" + simProperties.getDoubleProperty("tactic.inThreshold.default")
+				+ " out=" + simProperties.getDoubleProperty("tactic.outThreshold.default"));
+			log.info("Holding period return:\t" + result.holdingPeriodReturn);
+			log.info("Daily avg return:     \t" + result.dailyAvgReturn);
+			log.info("Daily volatility:     \t" + result.dailyVolatility);
+			log.info("Sharpe Ratio:         \t" + result.sharpeRatio);
+			log.info("Win %                 \t" + result.winPct);
 
 		} catch(IOException e) {
 			throw new RuntimeException(e);

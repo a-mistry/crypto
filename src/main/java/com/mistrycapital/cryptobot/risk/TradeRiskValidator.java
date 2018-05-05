@@ -59,7 +59,7 @@ public class TradeRiskValidator {
 			validated.add(instruction);
 
 			log.debug("Validated trade " + instruction.getOrderSide() + " " + instruction.getAmount() + " " +
-				instruction.getProduct() + " at" + timeKeeper.iso8601());
+				instruction.getProduct() + " at " + timeKeeper.iso8601());
 		}
 		return validated;
 	}
