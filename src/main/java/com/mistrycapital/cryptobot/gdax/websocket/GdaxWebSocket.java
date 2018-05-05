@@ -185,11 +185,21 @@ public class GdaxWebSocket extends SubmissionPublisher<GdaxMessage> {
 		return message;
 	}
 
-	void startBuilding(final Product product) {
+	void startBuilding(final Product product) throws IOException {
 		// start getting the book info if we are not already doing so
 		if(building[product.getIndex()].compareAndSet(false, true)) {
 			try {
 				log.info("Building book for " + product);
+
+				// note this in our files, so we can buffer in replaying
+				JsonObject fakeMsg = new JsonObject();
+				fakeMsg.addProperty("product_id", product.toString());
+				fakeMsg.addProperty("time", timeKeeper.iso8601());
+				fakeMsg.addProperty("type","book_builder");
+				fakeMsg.addProperty("sequence", sequence[product.getIndex()].get());
+				fileAppender.append(fakeMsg.toString());
+
+				// send request to build
 				HttpRequest request = HttpRequest.newBuilder()
 					.uri(new URI("https://api.gdax.com/products/" + product + "/book?level=3"))
 					.GET()

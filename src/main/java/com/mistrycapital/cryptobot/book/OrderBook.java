@@ -31,6 +31,10 @@ public class OrderBook {
 	private final Queue<Order> orderPool;
 	private final BookProcessor bookProcessor;
 
+	private final Queue<UUID> recentlyDoneQueue;
+	private final Set<UUID> recentlyDoneSet;
+	private static final int recentlyDoneTracked = 10000;
+
 	private long sequence;
 
 	public OrderBook(final TimeKeeper timeKeeper, final Product product) {
@@ -44,6 +48,9 @@ public class OrderBook {
 			orderPool.add(new Order());
 		}
 		bookProcessor = new BookProcessor();
+
+		recentlyDoneQueue = new ArrayDeque<>(recentlyDoneTracked);
+		recentlyDoneSet = new HashSet<>(recentlyDoneTracked);
 	}
 
 	public GdaxMessageProcessor getBookProcessor() {
@@ -227,6 +234,9 @@ public class OrderBook {
 	private void insertNonSynchronized(final UUID orderId, final double price, final double size, final long timeMicros,
 		final OrderSide side)
 	{
+		// if we've seen this order (maybe because of rebuilding the book), skip it
+		if(recentlyDoneSet.contains(orderId)) return;
+
 		// get order object first
 		if(orderPool.isEmpty()) {
 			orderPool.add(new Order());
@@ -252,12 +262,14 @@ public class OrderBook {
 
 	/**
 	 * Remove any resting orders that cross with the given order (since they are invalid). This scenario
-	 * can happen with gaps in data
+	 * can happen with gaps in data because by the time we receive book data, it is stale compared to the websocket
+	 * feed
 	 */
 	private void removeLockedCrossed(final Order order) {
 		// This could be made more efficient by pointing back to orders from the line
 		// but hopefully this doesn't happen much or at all in live trading
-		log.debug("Removing locked/crossed orders on " + product + " at " + timeKeeper.iso8601());
+		log.debug("Removing locked/crossed orders on " + product + " at " + timeKeeper.iso8601() + " "
+			+ order.getSide() + " " + order.getPrice());
 		final double orderPrice = order.getPrice();
 		final boolean orderIsBid = order.getSide() == OrderSide.BUY;
 		final boolean orderIsAsk = !orderIsBid;
@@ -271,6 +283,7 @@ public class OrderBook {
 				toRemove.add(resting);
 		}
 		for(Order resting : toRemove) {
+			log.debug("Removed " + resting.getId() + " " + resting.getPrice());
 			activeOrders.remove(resting.getId());
 			resting.destroy();
 			orderPool.add(resting);
@@ -291,6 +304,14 @@ public class OrderBook {
 	 * Removes a given order from the book
 	 */
 	private synchronized void remove(final UUID orderId) {
+		// make sure we don't add this order anytime soon (for example if we rebuild the book from stale data)
+		while(recentlyDoneQueue.size() >= recentlyDoneTracked) {
+			UUID oldestId = recentlyDoneQueue.poll();
+			recentlyDoneSet.remove(oldestId);
+		}
+		recentlyDoneSet.add(orderId);
+		recentlyDoneQueue.offer(orderId);
+
 		final Order order = activeOrders.get(orderId);
 		if(order != null) {
 			activeOrders.remove(orderId);
