@@ -32,23 +32,77 @@ public class SimExecutionEngine implements ExecutionEngine {
 	public void trade(final List<TradeInstruction> instructions) {
 		ConsolidatedSnapshot snapshot = history.latest();
 
-		// TODO: Take line size into account, i.e. add market impact
 		for(TradeInstruction instruction : instructions) {
 			final Product product = instruction.getProduct();
 			final Currency cryptoCurrency = product.getCryptoCurrency();
+			final double price = getImpactedPrice(instruction.getOrderSide(), instruction.getAmount(),
+				snapshot.getProductSnapshot(product));
 
 			// make sure not to trade more than we have available, regardless of the instructions
 			if(instruction.getOrderSide() == OrderSide.BUY) {
-				final double price = snapshot.getProductSnapshot(product).askPrice;
 				final double dollars = Math.min(instruction.getAmount() * price, accountant.getAvailable(Currency.USD));
 				final double crypto = dollars * (1 - transactionCost) / price;
 				accountant.recordTrade(Currency.USD, -dollars, cryptoCurrency, crypto);
 			} else {
 				final double crypto = Math.min(instruction.getAmount(), accountant.getAvailable(cryptoCurrency));
-				final double price = snapshot.getProductSnapshot(product).bidPrice;
 				final double dollars = (1 - transactionCost) * crypto * price;
 				accountant.recordTrade(Currency.USD, dollars, cryptoCurrency, -crypto);
 			}
 		}
+	}
+
+	double getImpactedPrice(final OrderSide orderSide, final double amount, final ProductSnapshot productSnapshot) {
+		// TODO: unit test this
+		// if we're taking less than the line, just return; otherwise, approximate with level info we have
+		if(orderSide == OrderSide.BUY) {
+			if(amount < productSnapshot.askSize)
+				return productSnapshot.askPrice;
+			else
+				return getImpactedPrice(orderSide, amount, productSnapshot.askPrice, productSnapshot.askSize,
+					productSnapshot.askSize1Pct, productSnapshot.askSize5Pct);
+		} else {
+			if(amount < productSnapshot.bidSize)
+				return productSnapshot.bidPrice;
+			else
+				return getImpactedPrice(orderSide, amount, productSnapshot.bidPrice, productSnapshot.bidSize,
+					productSnapshot.bidSize1Pct, productSnapshot.bidSize5Pct);
+
+		}
+	}
+
+	private double getImpactedPrice(final OrderSide orderSide, final double amount, final double priceL0,
+		final double sizeL0, final double size1Pct, final double size5Pct)
+	{
+		double priceXSize = 0.0;
+		double remaining = amount;
+
+		final double fillAmountL0 = Math.min(remaining, sizeL0);
+		priceXSize += fillAmountL0 * priceL0;
+		remaining -= fillAmountL0;
+
+		if(remaining > 0) {
+			// assume fill price is proportionally away from top of book
+			final double fillAmount = Math.min(remaining, size1Pct - sizeL0);
+			final double fillPriceDist = ((fillAmount + sizeL0) / size1Pct) * 0.01 * priceL0;
+			final double fillPrice = orderSide == OrderSide.BUY ? priceL0 + fillPriceDist : priceL0 - fillPriceDist;
+			priceXSize += fillAmount * fillPrice;
+			remaining -= fillAmount;
+		}
+
+		if(remaining > 0) {
+			final double fillAmount = Math.min(remaining, size5Pct - size1Pct);
+			final double fillPriceDist = ((fillAmount + size1Pct) / size5Pct) * 0.05 * priceL0;
+			final double fillPrice = orderSide == OrderSide.BUY ? priceL0 + fillPriceDist : priceL0 - fillPriceDist;
+			priceXSize += fillAmount * fillPrice;
+			remaining -= fillAmount;
+		}
+
+		if(remaining > 0) {
+			// fill any remaining at 5% away
+			final double fillPrice = orderSide == OrderSide.BUY ? priceL0 * 1.05 : priceL0 * 0.95;
+			priceXSize += remaining * fillPrice;
+		}
+
+		return priceXSize / amount;
 	}
 }

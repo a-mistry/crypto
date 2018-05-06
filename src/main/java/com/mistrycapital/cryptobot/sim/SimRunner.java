@@ -161,6 +161,7 @@ public class SimRunner implements Runnable {
 	{
 		final boolean shouldLogDecisions = simProperties.getBooleanProperty("sim.logDecisions", false);
 		final boolean shouldLogForecastCalc = simProperties.getBooleanProperty("sim.logForecastCalc", false);
+		final boolean shouldSkipJan = simProperties.getBooleanProperty("sim.skipJan", true);
 		try {
 			if(shouldLogDecisions) {
 				Files.deleteIfExists(dataDir.resolve(decisionFile));
@@ -200,7 +201,7 @@ public class SimRunner implements Runnable {
 		long nextDay = intervalizer.calcNextDayMillis(0);
 		List<Double> dailyPositionValuesUsd = new ArrayList<>(365);
 		for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedSnapshots) {
-			if(consolidatedSnapshot.getTimeNanos() < 1517448021000000000L)
+			if(shouldSkipJan && consolidatedSnapshot.getTimeNanos() < 1517448021000000000L)
 				continue; // spotty data before 2/1, just skip
 
 			timeKeeper.advanceTime(consolidatedSnapshot.getTimeNanos());
