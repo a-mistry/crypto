@@ -8,5 +8,9 @@ module crypto {
 	requires commons.csv;
 	requires jsr305;
 	requires guava;
+	// these 3 are for mysql
+	requires mysql.connector.java;
+	requires java.sql;
+	requires java.naming;
 	exports com.mistrycapital.cryptobot.gdax.websocket;
 }

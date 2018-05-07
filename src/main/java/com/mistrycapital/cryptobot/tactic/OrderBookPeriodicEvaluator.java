@@ -7,6 +7,7 @@ import com.mistrycapital.cryptobot.appender.DailyAppender;
 import com.mistrycapital.cryptobot.appender.IntervalDataAppender;
 import com.mistrycapital.cryptobot.book.BBO;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
+import com.mistrycapital.cryptobot.database.DBRecorder;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
 import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
@@ -31,14 +32,17 @@ public class OrderBookPeriodicEvaluator implements Runnable {
 	private final IntervalDataAppender intervalDataAppender;
 	private final ConsolidatedHistory consolidatedHistory;
 	private final TradeEvaluator tradeEvaluator;
+	private final DBRecorder dbRecorder;
 
 	private long nextIntervalMillis;
 	private long nextHourMillis;
+	private long nextDayMillis;
 
 	public OrderBookPeriodicEvaluator(TimeKeeper timeKeeper, Intervalizer intervalizer, Accountant accountant,
 		OrderBookManager orderBookManager, DynamicTracker dynamicTracker, IntervalDataAppender intervalDataAppender,
 		ForecastCalculator forecastCalculator, Tactic tactic, TradeRiskValidator tradeRiskValidator,
-		ExecutionEngine executionEngine, DecisionAppender decisionAppender, DailyAppender dailyAppender)
+		ExecutionEngine executionEngine, DecisionAppender decisionAppender, DailyAppender dailyAppender,
+		DBRecorder dbRecorder)
 	{
 		this.timeKeeper = timeKeeper;
 		this.intervalizer = intervalizer;
@@ -46,6 +50,7 @@ public class OrderBookPeriodicEvaluator implements Runnable {
 		this.orderBookManager = orderBookManager;
 		this.dynamicTracker = dynamicTracker;
 		this.intervalDataAppender = intervalDataAppender;
+		this.dbRecorder = dbRecorder;
 		nextIntervalMillis = intervalizer.calcNextIntervalMillis(timeKeeper.epochMs());
 		nextHourMillis = intervalizer.calcNextHourMillis(timeKeeper.epochMs());
 		consolidatedHistory = new ConsolidatedHistory(intervalizer);
@@ -60,6 +65,11 @@ public class OrderBookPeriodicEvaluator implements Runnable {
 				if(timeKeeper.epochMs() >= nextHourMillis) {
 					accountant.refreshPositions();
 					nextHourMillis = intervalizer.calcNextHourMillis(timeKeeper.epochMs());
+				}
+				if(timeKeeper.epochMs() >= nextDayMillis) {
+					// new day - record positions to database
+					dbRecorder.recordPositions();
+					nextDayMillis = intervalizer.calcNextDayMillis(timeKeeper.epochMs());
 				}
 
 				long remainingMs = nextIntervalMillis - timeKeeper.epochMs();

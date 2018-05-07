@@ -3,6 +3,7 @@ package com.mistrycapital.cryptobot.execution;
 import com.mistrycapital.cryptobot.accounting.Accountant;
 import com.mistrycapital.cryptobot.book.BBO;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
+import com.mistrycapital.cryptobot.database.DBRecorder;
 import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
 import com.mistrycapital.cryptobot.gdax.client.MarketOrderSizingType;
 import com.mistrycapital.cryptobot.gdax.client.OrderInfo;
@@ -27,17 +28,19 @@ public class GdaxExecutionEngine implements ExecutionEngine {
 	private final TimeKeeper timeKeeper;
 	private final Accountant accountant;
 	private final OrderBookManager orderBookManager;
+	private final DBRecorder dbRecorder;
 	private final TwilioSender twilioSender;
 	private final GdaxClient gdaxClient;
 	private final ScheduledExecutorService executorService;
 	private int waitForOrderSeconds = 15;
 
 	public GdaxExecutionEngine(TimeKeeper timeKeeper, Accountant accountant, OrderBookManager orderBookManager,
-		TwilioSender twilioSender, GdaxClient gdaxClient)
+		DBRecorder dbRecorder, TwilioSender twilioSender, GdaxClient gdaxClient)
 	{
 		this.timeKeeper = timeKeeper;
 		this.accountant = accountant;
 		this.orderBookManager = orderBookManager;
+		this.dbRecorder = dbRecorder;
 		this.twilioSender = twilioSender;
 		this.gdaxClient = gdaxClient;
 		executorService = Executors.newScheduledThreadPool(1);
@@ -83,6 +86,7 @@ public class GdaxExecutionEngine implements ExecutionEngine {
 			twilioSender.sendMessage(
 				"Order not complete after 1 min " + orderInfo.getOrderSide() + " " + orderInfo.getProduct()
 					+ " funds " + orderInfo.getFunds() + " size " + orderInfo.getSize());
+			dbRecorder.recordTrade(orderInfo);
 			return;
 		}
 
@@ -96,12 +100,14 @@ public class GdaxExecutionEngine implements ExecutionEngine {
 			twilioSender.sendMessage(
 				"Order canceled " + orderInfo.getOrderSide() + " " + orderInfo.getProduct() + " funds " +
 					orderInfo.getFunds() + " size " + orderInfo.getSize());
+			dbRecorder.recordTrade(orderInfo);
 		} else if(orderInfo.getDoneReason() == Reason.FILLED) {
 			if(orderInfo.getOrderSide() == OrderSide.BUY) {
 				final double dollarsSpent = orderInfo.getExecutedValue() + orderInfo.getFillFees();
 				final double cryptoPurchased = orderInfo.getFilledSize();
 				accountant.recordTrade(Currency.USD, -dollarsSpent, orderInfo.getProduct().getCryptoCurrency(),
 					cryptoPurchased);
+				dbRecorder.recordTrade(orderInfo);
 				twilioSender.sendMessage(
 					"Bot " + cryptoPurchased + " " + orderInfo.getProduct().getCryptoCurrency() + " @ $" +
 						orderInfo.getExecutedValue() / orderInfo.getFilledSize());
@@ -110,6 +116,7 @@ public class GdaxExecutionEngine implements ExecutionEngine {
 				final double cryptoSold = orderInfo.getFilledSize();
 				accountant.recordTrade(Currency.USD, dollarsReceived, orderInfo.getProduct().getCryptoCurrency(),
 					-cryptoSold);
+				dbRecorder.recordTrade(orderInfo);
 				twilioSender.sendMessage(
 					"Sold " + cryptoSold + " " + orderInfo.getProduct().getCryptoCurrency() + " @ $" +
 						orderInfo.getExecutedValue() / orderInfo.getFilledSize());

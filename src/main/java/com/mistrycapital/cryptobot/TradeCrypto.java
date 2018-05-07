@@ -10,6 +10,7 @@ import java.util.Properties;
 
 import com.mistrycapital.cryptobot.accounting.Accountant;
 import com.mistrycapital.cryptobot.appender.*;
+import com.mistrycapital.cryptobot.database.DBRecorder;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
 import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.execution.GdaxExecutionEngine;
@@ -50,11 +51,11 @@ public class TradeCrypto {
 			credentials.load(reader);
 		}
 
-		final String BOOK_MESSAGE_FILE_NAME = properties.getProperty("output.filenameBase.bookMessages","gdax-orders");
-		final String INTERVAL_FILE_NAME = properties.getProperty("output.filenameBase.samples","samples");
-		final String FORECAST_FILE_NAME = properties.getProperty("output.filenameBase.forecasts","forecasts");
-		final String DECISION_FILE_NAME = properties.getProperty("output.filenameBase.decisions","decisions");
-		final String DAILY_FILE_NAME = properties.getProperty("output.filenameBase.daily","daily");
+		final String BOOK_MESSAGE_FILE_NAME = properties.getProperty("output.filenameBase.bookMessages", "gdax-orders");
+		final String INTERVAL_FILE_NAME = properties.getProperty("output.filenameBase.samples", "samples");
+		final String FORECAST_FILE_NAME = properties.getProperty("output.filenameBase.forecasts", "forecasts");
+		final String DECISION_FILE_NAME = properties.getProperty("output.filenameBase.decisions", "decisions");
+		final String DAILY_FILE_NAME = properties.getProperty("output.filenameBase.daily", "daily");
 
 		TimeKeeper timeKeeper = new SystemTimeKeeper();
 		OrderBookManager orderBookManager = new OrderBookManager(timeKeeper);
@@ -80,12 +81,14 @@ public class TradeCrypto {
 		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(properties, timeKeeper, accountant);
 		TwilioSender twilioSender =
 			new TwilioSender(credentials.getProperty("TwilioAccountSid"), credentials.getProperty("TwilioAuthToken"));
+		DBRecorder dbRecorder = new DBRecorder(accountant, orderBookManager, credentials.getProperty("MysqlUser"),
+			credentials.getProperty("MysqlPassword"));
 		ExecutionEngine executionEngine =
-			new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager, twilioSender, gdaxClient);
+			new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager, dbRecorder, twilioSender, gdaxClient);
 		OrderBookPeriodicEvaluator periodicEvaluator =
 			new OrderBookPeriodicEvaluator(timeKeeper, intervalizer, accountant, orderBookManager, dynamicTracker,
 				intervalAppender, forecastCalculator, tactic, tradeRiskValidator, executionEngine, decisionAppender,
-				dailyAppender);
+				dailyAppender, dbRecorder);
 
 		gdaxWebSocket.subscribe(orderBookManager);
 		gdaxWebSocket.subscribe(dynamicTracker);

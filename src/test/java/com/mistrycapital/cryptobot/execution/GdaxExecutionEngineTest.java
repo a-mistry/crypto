@@ -5,6 +5,7 @@ import com.mistrycapital.cryptobot.accounting.Accountant;
 import com.mistrycapital.cryptobot.book.BBO;
 import com.mistrycapital.cryptobot.book.OrderBook;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
+import com.mistrycapital.cryptobot.database.DBRecorder;
 import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
 import com.mistrycapital.cryptobot.gdax.client.MarketOrderSizingType;
 import com.mistrycapital.cryptobot.gdax.client.OrderInfo;
@@ -38,8 +39,9 @@ class GdaxExecutionEngineTest {
 		final Accountant accountant = mock(Accountant.class);
 		final TwilioSender twilioSender = mock(TwilioSender.class);
 		final GdaxClient gdaxClient = mock(GdaxClient.class);
+		final DBRecorder dbRecorder = mock(DBRecorder.class);
 		GdaxExecutionEngine executionEngine =
-			new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager, twilioSender, gdaxClient);
+			new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager, dbRecorder, twilioSender, gdaxClient);
 
 		when(orderBookManager.getBook(Product.BTC_USD)).thenReturn(btcBook);
 		doAnswer(invocationOnMock -> {
@@ -100,6 +102,7 @@ class GdaxExecutionEngineTest {
 		assertEquals(filledSize, cryptoArg.getValue().doubleValue());
 
 		verify(twilioSender, times(1)).sendMessage("Bot 9.97E-4 BTC @ $10000.0");
+		verify(dbRecorder, times(1)).recordTrade(orderInfo2);
 	}
 
 	@Test
@@ -113,8 +116,9 @@ class GdaxExecutionEngineTest {
 		final Accountant accountant = mock(Accountant.class);
 		final TwilioSender twilioSender = mock(TwilioSender.class);
 		final GdaxClient gdaxClient = mock(GdaxClient.class);
+		final DBRecorder dbRecorder = mock(DBRecorder.class);
 		GdaxExecutionEngine executionEngine =
-			new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager, twilioSender, gdaxClient);
+			new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager, dbRecorder, twilioSender, gdaxClient);
 
 		// first time order is pending
 		JsonObject json = new JsonObject();
@@ -165,5 +169,6 @@ class GdaxExecutionEngineTest {
 		assertEquals(-filledSize, cryptoArg.getValue().doubleValue());
 
 		verify(twilioSender, times(1)).sendMessage("Sold 1.0 BTC @ $9000.0");
+		verify(dbRecorder, times(1)).recordTrade(orderInfo2);
 	}
 }
