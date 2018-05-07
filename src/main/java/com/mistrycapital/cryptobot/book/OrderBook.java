@@ -266,29 +266,33 @@ public class OrderBook {
 	 * feed
 	 */
 	private void removeLockedCrossed(final Order order) {
-		// This could be made more efficient by pointing back to orders from the line
-		// but hopefully this doesn't happen much or at all in live trading
 		log.debug("Removing locked/crossed orders on " + product + " at " + timeKeeper.iso8601() + " " + order.getId()
 			+ " " + order.getSide() + " " + order.getPrice()
 			+ " bidSize=" + bids.getFirstSize() + " askSize=" + asks.getFirstSize());
-		final double orderPrice = order.getPrice();
-		final boolean orderIsBid = order.getSide() == OrderSide.BUY;
-		final boolean orderIsAsk = !orderIsBid;
-		List<Order> toRemove = new LinkedList<>();
-		for(Order resting : activeOrders.values()) {
-			final boolean bidCrossed =
-				orderIsBid && resting.getSide() == OrderSide.SELL && resting.getPrice() <= orderPrice;
-			final boolean askCrossed =
-				orderIsAsk && resting.getSide() == OrderSide.BUY && resting.getPrice() >= orderPrice;
-			if(bidCrossed || askCrossed)
-				toRemove.add(resting);
-		}
-		for(Order resting : toRemove) {
-			log.debug("Removed " + resting.getId() + " " + resting.getPrice());
-			activeOrders.remove(resting.getId());
-			resting.destroy();
-			orderPool.add(resting);
-		}
+
+		int levelsCleared = 0;
+		boolean bidCrossed;
+		boolean askCrossed;
+		do {
+			final List<Order> toRemove = order.getSide() == OrderSide.BUY
+				? asks.getFirstOrders() : bids.getFirstOrders();
+
+			for(Order resting : toRemove) {
+				log.debug("Removed " + resting.getId() + " " + resting.getPrice());
+				activeOrders.remove(resting.getId());
+				resting.destroy();
+				orderPool.add(resting);
+			}
+
+			levelsCleared++;
+			if(levelsCleared > 100) {
+				log.error("Found 100+ levels in locked/crossed order removal");
+				break; // in case of bug, don't loop forever
+			}
+
+			bidCrossed = order.getSide() == OrderSide.BUY && order.getPrice() >= asks.getFirstPrice();
+			askCrossed = order.getSide() == OrderSide.SELL && order.getPrice() <= bids.getFirstPrice();
+		} while(bidCrossed || askCrossed);
 	}
 
 	/**

@@ -1,5 +1,8 @@
 package com.mistrycapital.cryptobot.book;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Stores info on a given price level in the order book and includes references to maintain a doubly linked list
  */
@@ -9,13 +12,13 @@ class OrderLine {
 	
 	private final double price;
 	private double size;
-	private int count;
+	private List<Order> orderList;
 	
 	OrderLine(double price) {
 		this.price = price;
 		prev = next = null;
 		size = 0.0;
-		count = 0;
+		orderList = new ArrayList<>(10);
 	}
 	
 	public double getSize() {
@@ -27,24 +30,37 @@ class OrderLine {
 	}
 	
 	public double getCount() {
-		return count;
+		return orderList.size();
+	}
+
+	public List<Order> getOrders() {
+		return orderList;
+	}
+
+	/** Calculates size from orders. This should be called after modifying orders at this level */
+	private void sumSize() {
+		double newSize = 0.0;
+		for(int i=0; i<orderList.size(); i++)
+			newSize += orderList.get(i).getSize();
+		size = newSize;
 	}
 	
-	public void addOrder(final double orderSize) {
-		size += orderSize;
-		count++;
+	public void addOrder(final Order order) {
+		orderList.add(order);
+		sumSize();
 	}
 	
-	public void removeOrder(final double orderSize) {
-		size -= orderSize;
-		count--;
-		if(count <= 0) {
+	public void removeOrder(final Order order) {
+		orderList.remove(order);
+		sumSize();
+		if(orderList.isEmpty()) {
 			remove();
 		}
 	}
-	
-	public void modifyOrder(final double oldSize, final double newSize) {
-		size += newSize - oldSize;
+
+	/** Notes that an orders has been modified; used to recalculate level size */
+	public void modifiedOrder() {
+		sumSize();
 	}
 	
 	/**
@@ -64,6 +80,7 @@ class OrderLine {
 	 * Removes this line from the list
 	 */
 	public void remove() {
+		orderList.clear(); // in case there were any orders
 		prev.next = this.next;
 		if(this.next != null) {
 			this.next.prev = prev;

@@ -7,5 +7,6 @@ module crypto {
 	requires jetty.util;
 	requires commons.csv;
 	requires jsr305;
+	requires guava;
 	exports com.mistrycapital.cryptobot.gdax.websocket;
 }

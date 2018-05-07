@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 
+import java.util.UUID;
+
 class OrderLineTest {
 	private static double EPSILON = 0.00000001;
 
@@ -19,9 +21,13 @@ class OrderLineTest {
 		assertEquals(0.0, line.getSize(), EPSILON);
 		assertNull(line.getNext());
 		assertEquals(line, list.getNext());
-		
-		line.addOrder(2.14);
-		line.addOrder(1.0);
+
+		Order order1 = new Order();
+		order1.reset(UUID.randomUUID(), 1.0, 2.14, 0, OrderSide.SELL);
+		line.addOrder(order1);
+		Order order2 = new Order();
+		order2.reset(UUID.randomUUID(), 1.0, 1.0, 0, OrderSide.SELL);
+		line.addOrder(order2);
 		assertEquals(2, line.getCount());
 		assertEquals(3.14, line.getSize(), EPSILON);
 		assertEquals(2, list.getCountBeforePrice(Double.MAX_VALUE));
@@ -32,9 +38,13 @@ class OrderLineTest {
 		assertEquals(0, list.getSizeBeforePrice(0.5));
 		
 		line = list.findOrCreate(2.0);
-		line.addOrder(5.5);
+		Order order3 = new Order();
+		order3.reset(UUID.randomUUID(), 2.0, 5.5, 0, OrderSide.SELL);
+		line.addOrder(order3);
 		line = list.findOrCreate(2.00000000000001);
-		line.addOrder(1.0);
+		Order order4 = new Order();
+		order4.reset(UUID.randomUUID(), 2.00000000000001, 1.0, 0, OrderSide.SELL);
+		line.addOrder(order4);
 		line = list.getNext();
 		assertEquals(1.0, line.getPrice(), EPSILON);
 		line = line.getNext();
@@ -45,9 +55,11 @@ class OrderLineTest {
 		assertEquals(4, list.getCountBeforePrice(Double.MAX_VALUE));
 		assertEquals(9.64, list.getSizeBeforePrice(Double.MAX_VALUE), EPSILON);
 		assertEquals(2, list.getCountBeforePrice(1.5));
-		
+
+		Order order5 = new Order();
+		order5.reset(UUID.randomUUID(), 1.5, 1.0, 0, OrderSide.SELL);
 		line = list.findOrCreate(1.5);
-		line.addOrder(1.0);
+		line.addOrder(order5);
 		assertEquals(3, list.getCountBeforePrice(1.75));
 		
 		// verify entire line list
@@ -77,10 +89,10 @@ class OrderLineTest {
 		
 		// modify line
 		line = list.getNext();
-		line.removeOrder(1.14);
+		line.removeOrder(order1);
 		assertEquals(1, line.getCount());
-		assertEquals(2.0, line.getSize(), EPSILON);
-		line.removeOrder(2.0);
+		assertEquals(1.0, line.getSize(), EPSILON);
+		line.removeOrder(order2);
 		assertEquals(0, line.getCount());
 		assertNull(list.getNext()); // empty list
 		assertTrue(Double.isNaN(list.getFirstPrice()));

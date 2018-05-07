@@ -23,19 +23,19 @@ public class Order {
 	
 	void setLine(final OrderLine orderLine) {
 		this.orderLine = orderLine;
-		orderLine.addOrder(size);
+		orderLine.addOrder(this);
 	}
 	
 	void changeSize(final double newSize) {
-		if(orderLine != null) {
-			orderLine.modifyOrder(size, newSize);
-		}
 		this.size = newSize;
+		if(orderLine != null) {
+			orderLine.modifiedOrder();
+		}
 	}
 	
 	void destroy() {
 		if(orderLine != null) {
-			orderLine.removeOrder(size);
+			orderLine.removeOrder(this);
 		}
 		id = null;
 		orderLine = null;
