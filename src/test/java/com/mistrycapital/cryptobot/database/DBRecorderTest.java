@@ -136,7 +136,6 @@ class DBRecorderTest {
 			"    \"created_at\": \"" + timeKeeper.iso8601() + "\",\n" +
 			"    \"done_at\": \"2016-12-08T20:09:05.527Z\",\n" +
 			"    \"done_reason\": \"filled\",\n" +
-			"    \"price\":\"101.5\",\n" +
 			"    \"fill_fees\": \"1.0\",\n" +
 			"    \"filled_size\": \"2.0\",\n" +
 			"    \"executed_value\": \"202.0\",\n" +
@@ -158,7 +157,7 @@ class DBRecorderTest {
 		assertEquals("ETH-USD", results.getString("product"));
 		assertEquals("SELL", results.getString("side"));
 		assertEquals(2.0, results.getDouble("amount"), EPSILON);
-		assertEquals(101.5, results.getDouble("price"), EPSILON);
+		assertEquals(101.0, results.getDouble("price"), EPSILON);
 		assertEquals(202.0, results.getDouble("executed_value"), EPSILON);
 		assertEquals(1.0, results.getDouble("fees_usd"), EPSILON);
 		assertFalse(results.next());

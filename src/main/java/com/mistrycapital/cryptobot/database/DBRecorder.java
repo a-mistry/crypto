@@ -83,7 +83,7 @@ public class DBRecorder {
 			statement.setString(2, orderInfo.getProduct().toString());
 			statement.setString(3, orderInfo.getOrderSide().toString());
 			statement.setDouble(4, orderInfo.getFilledSize());
-			statement.setDouble(5, orderInfo.getPrice());
+			statement.setDouble(5, orderInfo.getExecutedValue() / orderInfo.getFilledSize());
 			statement.setDouble(6, orderInfo.getExecutedValue());
 			statement.setDouble(7, orderInfo.getFillFees());
 			statement.executeUpdate();
