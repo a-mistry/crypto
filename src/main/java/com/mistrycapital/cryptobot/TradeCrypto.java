@@ -81,8 +81,8 @@ public class TradeCrypto {
 		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(properties, timeKeeper, accountant);
 		TwilioSender twilioSender =
 			new TwilioSender(credentials.getProperty("TwilioAccountSid"), credentials.getProperty("TwilioAuthToken"));
-		DBRecorder dbRecorder = new DBRecorder(accountant, orderBookManager, credentials.getProperty("MysqlUser"),
-			credentials.getProperty("MysqlPassword"));
+		DBRecorder dbRecorder = new DBRecorder(timeKeeper, accountant, orderBookManager, "mistrycapital",
+			credentials.getProperty("MysqlUser"), credentials.getProperty("MysqlPassword"));
 		ExecutionEngine executionEngine =
 			new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager, dbRecorder, twilioSender, gdaxClient);
 		OrderBookPeriodicEvaluator periodicEvaluator =
