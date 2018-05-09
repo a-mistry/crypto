@@ -119,7 +119,7 @@ class GdaxClientTest {
 		System.out.println(orderInfo);
 
 		double dollarsAfterSale = listBalances();
-		assertEquals(dollarsAfterSale, dollarsAfterPurchase + orderInfo.getExecutedValue() - orderInfo.getFillFees());
-		assertEquals(0.0030, orderInfo.getFillFees() / orderInfo.getExecutedValue());
+		assertEquals(dollarsAfterSale, dollarsAfterPurchase + orderInfo.getExecutedValue() - orderInfo.getFillFees(), EPSILON);
+		assertEquals(0.0030, orderInfo.getFillFees() / orderInfo.getExecutedValue(), EPSILON);
 	}
 }

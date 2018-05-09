@@ -53,12 +53,16 @@ public class DBRecorder {
 			for(Currency currency : Currency.FAST_VALUES) {
 				statement.setString(2, currency.toString());
 				statement.setDouble(3, accountant.getBalance(currency));
+				double price = Double.NaN;
 				if(currency.isCrypto()) {
 					Product product = currency.getUsdProduct();
-					final double price = orderBookManager.getBook(product).getBBO().midPrice();
-					statement.setDouble(4, price);
-				} else {
+					price = orderBookManager.getBook(product).getBBO().midPrice();
+				}
+				if(Double.isNaN(price)) {
+					// either not a crypto or building book and hence don't have data
 					statement.setNull(4, Types.DOUBLE);
+				} else {
+					statement.setDouble(4, price);
 				}
 				statement.executeUpdate();
 			}
