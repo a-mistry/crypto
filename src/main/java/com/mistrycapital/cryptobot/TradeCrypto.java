@@ -1,14 +1,23 @@
 package com.mistrycapital.cryptobot;
 
+import java.io.IOException;
 import java.io.Reader;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 
 import com.mistrycapital.cryptobot.accounting.Accountant;
+import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
+import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
+import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
 import com.mistrycapital.cryptobot.appender.*;
 import com.mistrycapital.cryptobot.database.DBRecorder;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
@@ -18,11 +27,17 @@ import com.mistrycapital.cryptobot.forecasts.Brighton;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.gdax.GdaxPositionsProvider;
 import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
+import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.risk.TradeRiskValidator;
+import com.mistrycapital.cryptobot.sim.SimTimeKeeper;
+import com.mistrycapital.cryptobot.sim.SnapshotReader;
 import com.mistrycapital.cryptobot.tactic.OrderBookPeriodicEvaluator;
 import com.mistrycapital.cryptobot.tactic.Tactic;
 import com.mistrycapital.cryptobot.time.Intervalizer;
 import com.mistrycapital.cryptobot.twilio.TwilioSender;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVRecord;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.websocket.client.ClientUpgradeRequest;
 import org.eclipse.jetty.websocket.client.WebSocketClient;
@@ -53,7 +68,6 @@ public class TradeCrypto {
 
 		final String BOOK_MESSAGE_FILE_NAME = properties.getProperty("output.filenameBase.bookMessages", "gdax-orders");
 		final String INTERVAL_FILE_NAME = properties.getProperty("output.filenameBase.samples", "samples");
-		final String FORECAST_FILE_NAME = properties.getProperty("output.filenameBase.forecasts", "forecasts");
 		final String DECISION_FILE_NAME = properties.getProperty("output.filenameBase.decisions", "decisions");
 		final String DAILY_FILE_NAME = properties.getProperty("output.filenameBase.daily", "daily");
 
@@ -85,10 +99,13 @@ public class TradeCrypto {
 			credentials.getProperty("MysqlUser"), credentials.getProperty("MysqlPassword"));
 		ExecutionEngine executionEngine =
 			new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager, dbRecorder, twilioSender, gdaxClient);
+
+		ConsolidatedHistory consolidatedHistory = restoreHistory(dataDir, INTERVAL_FILE_NAME, timeKeeper, intervalizer);
+
 		OrderBookPeriodicEvaluator periodicEvaluator =
-			new OrderBookPeriodicEvaluator(timeKeeper, intervalizer, accountant, orderBookManager, dynamicTracker,
-				intervalAppender, forecastCalculator, tactic, tradeRiskValidator, executionEngine, decisionAppender,
-				dailyAppender, dbRecorder);
+			new OrderBookPeriodicEvaluator(timeKeeper, intervalizer, consolidatedHistory, accountant, orderBookManager,
+				dynamicTracker, intervalAppender, forecastCalculator, tactic, tradeRiskValidator, executionEngine,
+				decisionAppender, dailyAppender, dbRecorder);
 
 		gdaxWebSocket.subscribe(orderBookManager);
 		gdaxWebSocket.subscribe(dynamicTracker);
@@ -126,4 +143,33 @@ public class TradeCrypto {
 		}
 	}
 
+	/** Creates and populates consolidated history for the past day (reads yesterday's and today's file) */
+	private static ConsolidatedHistory restoreHistory(Path dataDir, String baseFilename, TimeKeeper timeKeeper,
+		Intervalizer intervalizer)
+		throws IOException
+	{
+		ConsolidatedHistory consolidatedHistory = new ConsolidatedHistory(intervalizer);
+
+		ZonedDateTime today = ZonedDateTime.ofInstant(timeKeeper.now(), ZoneOffset.UTC);
+		Path todayFile = getSnapshotFileIfExists(dataDir, baseFilename, today);
+		Path yesterdayFile = getSnapshotFileIfExists(dataDir, baseFilename, today.minusDays(1));
+
+		List<Path> files = new ArrayList<>(2);
+		if(yesterdayFile != null) files.add(yesterdayFile);
+		if(todayFile != null) files.add(todayFile);
+
+		for(ConsolidatedSnapshot snapshot : SnapshotReader.readSnapshots(files))
+			consolidatedHistory.add(snapshot);
+
+		return consolidatedHistory;
+	}
+
+	private static DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+	/** @return Snapshot file path for the given base and day if the file exists, null otherwise */
+	private static Path getSnapshotFileIfExists(Path dataDir, String baseFilename, ZonedDateTime dateTime) {
+		String filename = baseFilename + '-' + DATE_FORMATTER.format(dateTime) + ".csv";
+		Path path = dataDir.resolve(filename);
+		return Files.exists(path) ? path : null;
+	}
 }

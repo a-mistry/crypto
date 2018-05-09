@@ -60,7 +60,7 @@ public class SimRunner implements Runnable {
 	public void run() {
 		try {
 
-			List<ConsolidatedSnapshot> consolidatedSnapshots = readMarketData();
+			List<ConsolidatedSnapshot> consolidatedSnapshots = SnapshotReader.readSnapshots(getSampleFiles());
 			MCProperties simProperties = new MCProperties();
 
 			boolean search = simProperties.getBooleanProperty("sim.searchParameters", false);
@@ -104,37 +104,6 @@ public class SimRunner implements Runnable {
 		}
 	}
 
-	private List<ConsolidatedSnapshot> readMarketData()
-		throws IOException
-	{
-		SimTimeKeeper timeKeeper = new SimTimeKeeper();
-		List<ConsolidatedSnapshot> consolidatedSnapshots = new ArrayList<>(365 * 24 * 12); // 1 year
-		ProductSnapshot[] productSnapshots = new ProductSnapshot[Product.count];
-
-		for(Path sampleFile : getSampleFiles()) {
-			try(
-				Reader in = Files.newBufferedReader(sampleFile);
-				CSVParser parser = CSVFormat.EXCEL.withFirstRecordAsHeader().parse(in);
-			) {
-				for(CSVRecord record : parser) {
-					long timeNanos = Long.parseLong(record.get("unixTimestamp")) * 1000000000L;
-					timeKeeper.advanceTime(timeNanos);
-					ProductSnapshot productSnapshot = new ProductSnapshot(record);
-					productSnapshots[productSnapshot.product.getIndex()] = productSnapshot;
-
-					if(isFull(productSnapshots)) {
-						ConsolidatedSnapshot consolidatedSnapshot =
-							new ConsolidatedSnapshot(productSnapshots, timeNanos);
-						consolidatedSnapshots.add(consolidatedSnapshot);
-						productSnapshots = new ProductSnapshot[Product.count];
-					}
-				}
-			}
-		}
-
-		return consolidatedSnapshots;
-	}
-
 	private List<Path> getSampleFiles()
 		throws IOException
 	{
@@ -143,17 +112,6 @@ public class SimRunner implements Runnable {
 				(path, attr) -> path.getFileName().toString().matches("samples-\\d{4}-\\d{2}-\\d{2}.csv"))
 			.sorted()
 			.collect(Collectors.toList());
-	}
-
-	/**
-	 * @return true if array is filled with values, false if one is null
-	 */
-	private boolean isFull(ProductSnapshot[] snapshots) {
-		for(ProductSnapshot snapshot : snapshots)
-			if(snapshot == null)
-				return false;
-
-		return true;
 	}
 
 	private SimResult simulate(List<ConsolidatedSnapshot> consolidatedSnapshots, MCProperties simProperties)

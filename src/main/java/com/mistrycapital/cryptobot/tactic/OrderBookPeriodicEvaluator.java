@@ -38,14 +38,15 @@ public class OrderBookPeriodicEvaluator implements Runnable {
 	private long nextHourMillis;
 	private long nextDayMillis;
 
-	public OrderBookPeriodicEvaluator(TimeKeeper timeKeeper, Intervalizer intervalizer, Accountant accountant,
-		OrderBookManager orderBookManager, DynamicTracker dynamicTracker, IntervalDataAppender intervalDataAppender,
-		ForecastCalculator forecastCalculator, Tactic tactic, TradeRiskValidator tradeRiskValidator,
-		ExecutionEngine executionEngine, DecisionAppender decisionAppender, DailyAppender dailyAppender,
-		DBRecorder dbRecorder)
+	public OrderBookPeriodicEvaluator(TimeKeeper timeKeeper, Intervalizer intervalizer,
+		ConsolidatedHistory consolidatedHistory, Accountant accountant, OrderBookManager orderBookManager,
+		DynamicTracker dynamicTracker, IntervalDataAppender intervalDataAppender, ForecastCalculator forecastCalculator,
+		Tactic tactic, TradeRiskValidator tradeRiskValidator, ExecutionEngine executionEngine,
+		DecisionAppender decisionAppender, DailyAppender dailyAppender, DBRecorder dbRecorder)
 	{
 		this.timeKeeper = timeKeeper;
 		this.intervalizer = intervalizer;
+		this.consolidatedHistory = consolidatedHistory;
 		this.accountant = accountant;
 		this.orderBookManager = orderBookManager;
 		this.dynamicTracker = dynamicTracker;
@@ -53,7 +54,6 @@ public class OrderBookPeriodicEvaluator implements Runnable {
 		this.dbRecorder = dbRecorder;
 		nextIntervalMillis = intervalizer.calcNextIntervalMillis(timeKeeper.epochMs());
 		nextHourMillis = intervalizer.calcNextHourMillis(timeKeeper.epochMs());
-		consolidatedHistory = new ConsolidatedHistory(intervalizer);
 		tradeEvaluator = new TradeEvaluator(consolidatedHistory, forecastCalculator, tactic, tradeRiskValidator,
 			executionEngine, decisionAppender, dailyAppender);
 	}
