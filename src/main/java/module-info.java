@@ -12,5 +12,6 @@ module crypto {
 	requires mysql.connector.java;
 	requires java.sql;
 	requires java.naming;
+	requires logback.classic;
 	exports com.mistrycapital.cryptobot.gdax.websocket;
 }

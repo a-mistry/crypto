@@ -12,6 +12,7 @@ public class Simulate {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
 	public static void main(String[] args) {
+		MCLoggerFactory.setSimLogLevel();
 		MCProperties properties = new MCProperties();
 
 		Path dataDir = Paths.get(properties.getProperty("dataDir"));
