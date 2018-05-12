@@ -60,7 +60,8 @@ public class SimRunner implements Runnable {
 	public void run() {
 		try {
 
-			List<ConsolidatedSnapshot> consolidatedSnapshots = SnapshotReader.readSnapshots(getSampleFiles());
+			List<ConsolidatedSnapshot> consolidatedSnapshots =
+				SnapshotReader.readSnapshots(SnapshotReader.getSampleFiles(dataDir));
 			MCProperties simProperties = new MCProperties();
 
 			boolean search = simProperties.getBooleanProperty("sim.searchParameters", false);
@@ -104,16 +105,6 @@ public class SimRunner implements Runnable {
 		}
 	}
 
-	private List<Path> getSampleFiles()
-		throws IOException
-	{
-		return Files
-			.find(dataDir, 1,
-				(path, attr) -> path.getFileName().toString().matches("samples-\\d{4}-\\d{2}-\\d{2}.csv"))
-			.sorted()
-			.collect(Collectors.toList());
-	}
-
 	private SimResult simulate(List<ConsolidatedSnapshot> consolidatedSnapshots, MCProperties simProperties)
 		throws IOException
 	{
@@ -136,11 +127,6 @@ public class SimRunner implements Runnable {
 		SimTimeKeeper timeKeeper = new SimTimeKeeper();
 		PositionsProvider positionsProvider = new EmptyPositionsProvider(startingUsd);
 		Accountant accountant = new Accountant(positionsProvider);
-		ForecastCalculationLogger calculationLogger = null;
-		if(shouldLogForecastCalc) {
-			calculationLogger = new ForecastCalculationLogger(timeKeeper, forecastCalcFile);
-			calculationLogger.open();
-		}
 		ForecastCalculator forecastCalculator = new Brighton(simProperties);
 		Tactic tactic = new Tactic(simProperties, accountant);
 		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(simProperties, timeKeeper, accountant);
@@ -179,11 +165,10 @@ public class SimRunner implements Runnable {
 			+ " BCH " + accountant.getAvailable(Currency.BCH)
 			+ " ETH " + accountant.getAvailable(Currency.ETH)
 			+ " LTC " + accountant.getAvailable(Currency.LTC));
-		log.debug("Total ending position " + accountant.getPositionValueUsd(lastSnapshot));
+		log.info("Total ending position " + accountant.getPositionValueUsd(lastSnapshot));
 
 		if(decisionAppender != null) decisionAppender.close();
 		if(dailyAppender != null) dailyAppender.close();
-		if(calculationLogger != null) calculationLogger.close();
 
 		return new SimResult(dailyPositionValuesUsd);
 	}

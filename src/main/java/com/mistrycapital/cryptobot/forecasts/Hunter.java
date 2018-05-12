@@ -10,6 +10,12 @@ import com.mistrycapital.cryptobot.gdax.common.Product;
 public class Hunter implements ForecastCalculator {
 	@Override
 	public double calculate(final ConsolidatedHistory consolidatedHistory, final Product product) {
+		final double[] inputVariables = getInputVariables(consolidatedHistory, product);
+		return -0.15 * inputVariables[0];
+	}
+
+	@Override
+	public double[] getInputVariables(final ConsolidatedHistory consolidatedHistory, final Product product) {
 		double lagRet = 0.0;
 		int count = 0;
 		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values()) {
@@ -17,6 +23,11 @@ public class Hunter implements ForecastCalculator {
 			count++;
 			if(count >= 36) break;
 		}
-		return -0.15 * lagRet;
+		return new double[] { lagRet };
+	}
+
+	@Override
+	public String[] getInputVariableNames() {
+		return new String[] { "lagRet" };
 	}
 }

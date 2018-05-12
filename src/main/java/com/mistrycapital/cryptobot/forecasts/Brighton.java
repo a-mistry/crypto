@@ -41,6 +41,17 @@ public class Brighton implements ForecastCalculator {
 
 	@Override
 	public double calculate(final ConsolidatedHistory consolidatedHistory, final Product product) {
+		final double[] variables = getInputVariables(consolidatedHistory, product);
+		final double[] productCoeffs = coeffs[product.getIndex()];
+
+		double forecast = productCoeffs[0];
+		for(int i=0; i<variables.length; i++)
+			forecast += productCoeffs[i+1] * variables[i];
+		return forecast;
+	}
+
+	@Override
+	public double[] getInputVariables(final ConsolidatedHistory consolidatedHistory, final Product product) {
 		ProductSnapshot latest = consolidatedHistory.latest().getProductSnapshot(product);
 
 		// calc static metrics
@@ -73,8 +84,11 @@ public class Brighton implements ForecastCalculator {
 		final double cancelRatio = (bidCancelCount - askCancelCount) / ((double) book5PctCount);
 		final double newRatio = (newBidCount - newAskCount) / ((double) book5PctCount);
 
-		final double[] productCoeffs = coeffs[product.getIndex()];
-		return productCoeffs[0] + productCoeffs[1] * lagRet + productCoeffs[2] * bookRatio * lagRet
-			+ productCoeffs[3] * cancelRatio * lagRet + productCoeffs[4] * newRatio * lagRet;
+		return new double[] { lagRet, bookRatio*lagRet, cancelRatio*lagRet, newRatio*lagRet };
+	}
+
+	@Override
+	public String[] getInputVariableNames() {
+		return new String[] { "lagRet", "bookRatioxRet", "cancelRatioxRet", "newRatioxRet" };
 	}
 }

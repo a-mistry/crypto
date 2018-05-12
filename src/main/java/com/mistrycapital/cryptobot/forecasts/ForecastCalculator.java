@@ -9,4 +9,15 @@ public interface ForecastCalculator {
 	 * @return Latest forecast value
 	 */
 	double calculate(ConsolidatedHistory consolidatedHistory, Product product);
+
+	/**
+	 * Used to generate datasets for estimation
+	 * @return All inputs used to calculate this forecast with the current history
+	 */
+	double[] getInputVariables(ConsolidatedHistory consolidatedHistory, Product product);
+
+	/**
+	 * @return Column names of the input variables
+	 */
+	String[] getInputVariableNames();
 }

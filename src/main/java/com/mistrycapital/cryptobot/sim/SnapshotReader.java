@@ -16,12 +16,26 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Utility to read historical snapshots from files
  */
 public class SnapshotReader {
 	private static final Logger log = MCLoggerFactory.getLogger();
+
+	/**
+	 * @return List of all sampled interval files in the data dir
+	 */
+	public static List<Path> getSampleFiles(Path dataDir)
+		throws IOException
+	{
+		return Files
+			.find(dataDir, 1,
+				(path, attr) -> path.getFileName().toString().matches("samples-\\d{4}-\\d{2}-\\d{2}.csv"))
+			.sorted()
+			.collect(Collectors.toList());
+	}
 
 	/**
 	 * Reads given sample files in order and creates a list of snapshots
