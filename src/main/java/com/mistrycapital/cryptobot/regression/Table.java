@@ -1,5 +1,9 @@
 package com.mistrycapital.cryptobot.regression;
 
+import org.apache.commons.math3.stat.regression.MillerUpdatingRegression;
+import org.apache.commons.math3.stat.regression.RegressionResults;
+import org.apache.commons.math3.stat.regression.UpdatingMultipleLinearRegression;
+
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -35,6 +39,36 @@ public class Table<K extends Comparable<K>> implements Iterable<Row<K>> {
 		for(var name : other.columnOrder)
 			newTable.add(name, other.namesToColumns.get(name));
 		return newTable;
+	}
+
+	public RegressionResults regress(String yCol, String[] xCols)
+		throws ColumnNotFoundException
+	{
+		final UpdatingMultipleLinearRegression regression = new MillerUpdatingRegression(xCols.length, true);
+		final int yColNo = columnOrder.indexOf(yCol);
+		if(yColNo < 0) throw new ColumnNotFoundException("No column named " + yCol);
+		final int[] xColNos = new int[xCols.length];
+		for(int i = 0; i < xCols.length; i++) {
+			xColNos[i] = columnOrder.indexOf(xCols[i]);
+			if(xColNos[i] < 0) throw new ColumnNotFoundException("No column named " + xCols[i]);
+		}
+		for(final Row<K> row : this) {
+			final double[] values = row.getColumnValues();
+			final double y = values[yColNo];
+			final double[] x = new double[xCols.length];
+			boolean hasNaN = Double.isNaN(y);
+			if(!hasNaN)
+				for(int i = 0; i < xCols.length; i++) {
+					x[i] = values[xColNos[i]];
+					if(Double.isNaN(x[i])) {
+						hasNaN = true;
+						break;
+					}
+				}
+			if(!hasNaN)
+				regression.addObservation(x, y);
+		}
+		return regression.regress();
 	}
 
 	@Override

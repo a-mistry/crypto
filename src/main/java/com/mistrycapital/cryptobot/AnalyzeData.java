@@ -33,22 +33,35 @@ public class AnalyzeData {
 		DatasetGenerator datasetGenerator = new DatasetGenerator(properties, dataDir, forecastCalculator);
 		Table<TimeProduct> forecastInputs = datasetGenerator.getForecastDataset();
 		Table<TimeProduct> futureReturns = datasetGenerator.getReturnDataset();
+		var joined = forecastInputs.join(futureReturns);
 
-		try(
-			BufferedWriter out = Files.newBufferedWriter(dataDir.resolve("temp.csv"), StandardCharsets.UTF_8);
-		) {
-			boolean first = true;
-			for(Row<TimeProduct> row : forecastInputs.join(futureReturns)) {
-				if(first) {
-					out.append("unixTimestamp,product," +
-						Arrays.stream(row.getColumnNames()).collect(Collectors.joining(",")) + "\n");
-					first = false;
+		boolean writeOut = false;
+		if(writeOut) {
+			try(
+				BufferedWriter out = Files.newBufferedWriter(dataDir.resolve("temp.csv"), StandardCharsets.UTF_8);
+			) {
+				boolean first = true;
+				for(Row<TimeProduct> row : joined) {
+					if(first) {
+						out.append("unixTimestamp,product," +
+							Arrays.stream(row.getColumnNames()).collect(Collectors.joining(",")) + "\n");
+						first = false;
+					}
+
+					out.append(row.getKey().timeInNanos + "," + row.getKey().product + "," +
+						Arrays.stream(row.getColumnValues()).mapToObj(Double::toString)
+							.collect(Collectors.joining(",")) +
+						"\n");
 				}
-
-				out.append(row.getKey().timeInNanos + "," + row.getKey().product + "," +
-					Arrays.stream(row.getColumnValues()).mapToObj(Double::toString).collect(Collectors.joining(",")) +
-					"\n");
 			}
 		}
+
+		var results =
+			joined.regress("fut_ret_2h", new String[] {"lagRet", "bookRatioxRet", "cancelRatioxRet", "newRatioxRet"});
+		System.out.println("N = " + results.getN());
+		System.out.println("R^2 = " + results.getRSquared());
+		System.out.println("Coeffs");
+		Arrays.stream(results.getParameterEstimates())
+			.forEach(System.out::println);
 	}
 }

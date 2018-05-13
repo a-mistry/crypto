@@ -6,6 +6,7 @@ module crypto {
 	requires websocket.client;
 	requires jetty.util;
 	requires commons.csv;
+	requires commons.math3;
 	requires jsr305;
 	requires guava;
 	// these 3 are for mysql
