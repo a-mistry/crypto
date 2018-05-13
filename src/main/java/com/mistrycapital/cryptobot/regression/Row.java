@@ -2,12 +2,24 @@ package com.mistrycapital.cryptobot.regression;
 
 public class Row<K extends Comparable<K>> {
 	private K key;
-	private double[] columnValues;
 	private String[] columnNames;
+	private double[] columnValues;
 
 	Row(K key, String[] columnNames, double[] columnValues) {
 		this.key = key;
 		this.columnNames = columnNames;
 		this.columnValues = columnValues;
+	}
+
+	public final K getKey() {
+		return key;
+	}
+
+	public final String[] getColumnNames() {
+		return columnNames;
+	}
+
+	public final double[] getColumnValues() {
+		return columnValues;
 	}
 }

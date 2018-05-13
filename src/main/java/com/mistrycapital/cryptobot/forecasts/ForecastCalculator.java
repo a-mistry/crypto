@@ -3,6 +3,8 @@ package com.mistrycapital.cryptobot.forecasts;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 
+import java.util.Map;
+
 public interface ForecastCalculator {
 	/**
 	 * Calculates the latest value of this forecast for the given product
@@ -12,12 +14,7 @@ public interface ForecastCalculator {
 
 	/**
 	 * Used to generate datasets for estimation
-	 * @return All inputs used to calculate this forecast with the current history
+	 * @return All inputs used to calculate this forecast with the current history, as a map from name to value
 	 */
-	double[] getInputVariables(ConsolidatedHistory consolidatedHistory, Product product);
-
-	/**
-	 * @return Column names of the input variables
-	 */
-	String[] getInputVariableNames();
+	Map<String,Double> getInputVariables(ConsolidatedHistory consolidatedHistory, Product product);
 }

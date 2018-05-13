@@ -5,11 +5,11 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class Table<K extends Comparable<K>> implements Iterable<Row<K>> {
-	private Map<String,Column> namesToColumns;
+	private Map<String,Column<K>> namesToColumns;
 	private List<String> columnOrder;
 
 	public Table() {
-		namesToColumns = new HashMap<>();
+		namesToColumns = new TreeMap<>();
 		columnOrder = new ArrayList<>();
 	}
 
@@ -20,6 +20,21 @@ public class Table<K extends Comparable<K>> implements Iterable<Row<K>> {
 			throw new DuplicateColumnException(name + " already defined");
 		namesToColumns.put(name, column);
 		columnOrder.add(name);
+	}
+
+	public Column<K> column(String name) {
+		return namesToColumns.get(name);
+	}
+
+	public Table<K> join(Table<K> other)
+		throws DuplicateColumnException
+	{
+		Table<K> newTable = new Table<>();
+		for(var name : columnOrder)
+			newTable.add(name, namesToColumns.get(name));
+		for(var name : other.columnOrder)
+			newTable.add(name, other.namesToColumns.get(name));
+		return newTable;
 	}
 
 	@Override
@@ -39,20 +54,20 @@ public class Table<K extends Comparable<K>> implements Iterable<Row<K>> {
 				.map((Function<Column,Iterator<Cell<K>>>) col -> col.iterator())
 				.collect(Collectors.toList());
 			headValues = new ArrayList<>(columnIterators.size());
-			for(int i = 0; i < headValues.size(); i++)
+			for(int i = 0; i < columnIterators.size(); i++)
 				headValues.add(null);
 			advanceHeadValues();
 		}
 
 		private void advanceHeadValues() {
 			for(int i = 0; i < headValues.size(); i++)
-				if(headValues.get(i) == null)
+				if(headValues.get(i) == null && columnIterators.get(i).hasNext())
 					headValues.set(i, columnIterators.get(i).next());
 		}
 
 		@Override
 		public boolean hasNext() {
-			return headValues.stream().anyMatch(value -> value != null);
+			return headValues.stream().anyMatch(Objects::nonNull);
 		}
 
 		@Override
@@ -70,7 +85,7 @@ public class Table<K extends Comparable<K>> implements Iterable<Row<K>> {
 			double[] values = new double[headValues.size()];
 			for(int i = 0; i < values.length; i++) {
 				Cell<K> cell = headValues.get(i);
-				if(cell.key.compareTo(minKey) == 0) {
+				if(cell != null && cell.key.compareTo(minKey) == 0) {
 					values[i] = cell.value;
 					headValues.set(i, null);
 				} else {

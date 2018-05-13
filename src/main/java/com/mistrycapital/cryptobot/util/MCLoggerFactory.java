@@ -16,10 +16,10 @@ public class MCLoggerFactory {
 	}
 
 	/**
-	 * Turn off debug logging in sim
+	 * Reset log level. Can be used for example to turn off debug logging in sim
 	 */
-	public static void setSimLogLevel() {
+	public static void resetLogLevel(Level level) {
 		LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
-		context.getLogger("com.mistrycapital").setLevel(Level.INFO);
+		context.getLogger("com.mistrycapital").setLevel(level);
 	}
 }

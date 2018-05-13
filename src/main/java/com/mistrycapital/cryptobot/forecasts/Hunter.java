@@ -4,18 +4,25 @@ import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Extremely simple reversion strategy
  */
 public class Hunter implements ForecastCalculator {
 	@Override
 	public double calculate(final ConsolidatedHistory consolidatedHistory, final Product product) {
-		final double[] inputVariables = getInputVariables(consolidatedHistory, product);
-		return -0.15 * inputVariables[0];
+		final double lagRet = getLagRet(consolidatedHistory, product);
+		return -0.15 * lagRet;
 	}
 
 	@Override
-	public double[] getInputVariables(final ConsolidatedHistory consolidatedHistory, final Product product) {
+	public Map<String,Double> getInputVariables(final ConsolidatedHistory consolidatedHistory, final Product product) {
+		return Map.of("lagRet", getLagRet(consolidatedHistory, product));
+	}
+
+	private double getLagRet(final ConsolidatedHistory consolidatedHistory, final Product product) {
 		double lagRet = 0.0;
 		int count = 0;
 		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values()) {
@@ -23,11 +30,6 @@ public class Hunter implements ForecastCalculator {
 			count++;
 			if(count >= 36) break;
 		}
-		return new double[] { lagRet };
-	}
-
-	@Override
-	public String[] getInputVariableNames() {
-		return new String[] { "lagRet" };
+		return lagRet;
 	}
 }

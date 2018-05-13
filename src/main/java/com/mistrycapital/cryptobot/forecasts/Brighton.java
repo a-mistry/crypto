@@ -8,6 +8,8 @@ import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
 import org.slf4j.Logger;
 
+import java.util.Map;
+
 /**
  * Reversion with modifications forecast
  */
@@ -41,17 +43,27 @@ public class Brighton implements ForecastCalculator {
 
 	@Override
 	public double calculate(final ConsolidatedHistory consolidatedHistory, final Product product) {
-		final double[] variables = getInputVariables(consolidatedHistory, product);
+		final double[] variables = getInputVariablesArray(consolidatedHistory, product);
 		final double[] productCoeffs = coeffs[product.getIndex()];
 
 		double forecast = productCoeffs[0];
-		for(int i=0; i<variables.length; i++)
-			forecast += productCoeffs[i+1] * variables[i];
+		for(int i = 0; i < variables.length; i++)
+			forecast += productCoeffs[i + 1] * variables[i];
 		return forecast;
 	}
 
 	@Override
-	public double[] getInputVariables(final ConsolidatedHistory consolidatedHistory, final Product product) {
+	public Map<String,Double> getInputVariables(final ConsolidatedHistory consolidatedHistory, final Product product) {
+		final double[] variables = getInputVariablesArray(consolidatedHistory, product);
+		return Map.of(
+			"lagRet", variables[0],
+			"bookRatioxRet", variables[1],
+			"cancelRatioxRet", variables[2],
+			"newRatioxRet", variables[3]
+		);
+	}
+
+	double[] getInputVariablesArray(final ConsolidatedHistory consolidatedHistory, final Product product) {
 		ProductSnapshot latest = consolidatedHistory.latest().getProductSnapshot(product);
 
 		// calc static metrics
@@ -84,11 +96,7 @@ public class Brighton implements ForecastCalculator {
 		final double cancelRatio = (bidCancelCount - askCancelCount) / ((double) book5PctCount);
 		final double newRatio = (newBidCount - newAskCount) / ((double) book5PctCount);
 
-		return new double[] { lagRet, bookRatio*lagRet, cancelRatio*lagRet, newRatio*lagRet };
+		return new double[] {lagRet, bookRatio * lagRet, cancelRatio * lagRet, newRatio * lagRet};
 	}
 
-	@Override
-	public String[] getInputVariableNames() {
-		return new String[] { "lagRet", "bookRatioxRet", "cancelRatioxRet", "newRatioxRet" };
-	}
 }

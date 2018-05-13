@@ -1,5 +1,6 @@
 package com.mistrycapital.cryptobot;
 
+import ch.qos.logback.classic.Level;
 import com.mistrycapital.cryptobot.sim.SimRunner;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
@@ -12,7 +13,7 @@ public class Simulate {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
 	public static void main(String[] args) {
-		MCLoggerFactory.setSimLogLevel();
+		MCLoggerFactory.resetLogLevel(Level.INFO);
 		MCProperties properties = new MCProperties();
 
 		Path dataDir = Paths.get(properties.getProperty("dataDir"));
