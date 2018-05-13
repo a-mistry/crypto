@@ -3,9 +3,11 @@ package com.mistrycapital.cryptobot;
 import ch.qos.logback.classic.Level;
 import com.mistrycapital.cryptobot.forecasts.Brighton;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
+import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.regression.*;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
+import org.apache.commons.math3.stat.regression.RegressionResults;
 import org.slf4j.Logger;
 
 import java.io.BufferedWriter;
@@ -26,19 +28,21 @@ public class AnalyzeData {
 		Path dataDir = Paths.get(properties.getProperty("dataDir"));
 		log.debug("Read data from " + dataDir);
 
-		ForecastCalculator forecastCalculator = new Brighton(properties);
+		ForecastCalculator forecastCalculator = new Snowbird(properties);
 		log.debug("Forecast calculator is " + forecastCalculator.getClass().getName());
 
 		MCLoggerFactory.resetLogLevel(Level.INFO);
 		DatasetGenerator datasetGenerator = new DatasetGenerator(properties, dataDir, forecastCalculator);
 		long startNanos = System.nanoTime();
 		Table<TimeProduct> forecastInputs = datasetGenerator.getForecastDataset();
+		log.info("Loading data/calculating forecasts took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
+		startNanos = System.nanoTime();
 		Table<TimeProduct> futureReturns = datasetGenerator.getReturnDataset();
-		log.info("Loading data took " + (System.nanoTime()-startNanos)/1000000.0 + "ms");
+		log.info("Loading returns took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
 		startNanos = System.nanoTime();
 		var joined = forecastInputs.join(futureReturns)
 			.filter(key -> key.timeInNanos > 1517448021000000000L); // discard Jan since it is spotty
-		log.info("Joining data took " + (System.nanoTime()-startNanos)/1000000.0 + "ms");
+		log.info("Joining data took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
 		startNanos = System.nanoTime();
 
 		boolean writeOut = false;
@@ -61,17 +65,32 @@ public class AnalyzeData {
 				}
 			}
 		}
-		log.info("Writing data took " + (System.nanoTime()-startNanos)/1000000.0 + "ms");
-		startNanos = System.nanoTime();
+		log.info("Writing data took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
 
-		var results =
-			joined.regress("fut_ret_2h", new String[] {"lagRet", "bookRatioxRet", "cancelRatioxRet", "newRatioxRet"});
-		log.info("Regression took " + (System.nanoTime()-startNanos)/1000000.0 + "ms");
-		startNanos = System.nanoTime();
-		System.out.println("N = " + results.getN());
-		System.out.println("R^2 = " + results.getRSquared());
-		System.out.println("Coeffs");
-		Arrays.stream(results.getParameterEstimates())
-			.forEach(System.out::println);
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet", "bookRatioxRet", "cancelRatioxRet", "newRatioxRet"});
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet", "bookRatioxRet", "cancelRatioxRet", "newRatioxRet", "upRatioxRet"});
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet", "bookRatioxRet", "cancelRatioxRet", "newRatioxRet", "sumVolxRet"});
+	}
+
+	static RegressionResults runRegressionPrintResults(Table<?> table, String yCol, String[] xCols) throws ColumnNotFoundException {
+		final var results = table.regress(yCol, xCols);
+		System.out.println("-----------------------------------------");
+		System.out.println("Dependent var:\t" + yCol);
+		System.out.println("N:            \t" + results.getN());
+		System.out.println("R^2:          \t" + String.format("%6.4f", results.getRSquared()));
+		System.out.println("       Variable     Coefficient       Std Error     T-stat");
+		System.out.println("---------------  --------------  --------------  ---------");
+		final var coeffs = results.getParameterEstimates();
+		final var stdErrs = results.getStdErrorOfEstimates();
+		for(int i = 0; i < coeffs.length; i++) {
+			final var variableName = i == 0 ? "Constant" : xCols[i - 1];
+			System.out.println(String.format("%15s %15.8f %15.8f %10.4f",
+				variableName.substring(0, Math.min(variableName.length(), 15)),
+				coeffs[i], stdErrs[i], coeffs[i] / stdErrs[i]));
+		}
+		return results;
 	}
 }

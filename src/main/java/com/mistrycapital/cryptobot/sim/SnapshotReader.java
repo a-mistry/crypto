@@ -9,6 +9,7 @@ import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.slf4j.Logger;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.file.Files;
@@ -48,6 +49,7 @@ public class SnapshotReader {
 		ProductSnapshot[] productSnapshots = new ProductSnapshot[Product.count];
 		SimTimeKeeper timeKeeper = new SimTimeKeeper();
 
+		// TODO: Improve performance by using a faster CSV reader
 		for(Path sampleFile : sampleFiles) {
 			try(
 				Reader in = Files.newBufferedReader(sampleFile);

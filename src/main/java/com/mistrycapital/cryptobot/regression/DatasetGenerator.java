@@ -6,10 +6,12 @@ import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.sim.SnapshotReader;
 import com.mistrycapital.cryptobot.time.Intervalizer;
+import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
+import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -24,6 +26,8 @@ import java.util.stream.Collectors;
  * Creates datasets for regression analysis
  */
 public class DatasetGenerator {
+	private static final Logger log = MCLoggerFactory.getLogger();
+
 	private final MCProperties properties;
 	private final Path dataDir;
 	private final ForecastCalculator forecastCalculator;
@@ -87,6 +91,7 @@ public class DatasetGenerator {
 			throw new RuntimeException(e);
 		}
 
+		// TODO: Convert to a generic CSV to Table reader
 		for(Path returnFile : getReturnFiles()) {
 
 			try(
