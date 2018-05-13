@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 public class Column<K extends Comparable<K>> implements Iterable<Cell<K>> {
 	private List<Cell<K>> cells;
@@ -23,6 +25,18 @@ public class Column<K extends Comparable<K>> implements Iterable<Cell<K>> {
 			isSorted = false;
 		}
 		cells.add(newCell);
+	}
+
+	public Column<K> filter(Predicate<K> filterPredicate) {
+		if(!isSorted)
+			cells.sort(Comparator.comparing(c -> c.key));
+
+		Column<K> newColumn = new Column<>();
+		newColumn.cells = cells.stream()
+			.filter(cell -> filterPredicate.test(cell.key))
+			.collect(Collectors.toList());
+
+		return newColumn;
 	}
 
 	@Override

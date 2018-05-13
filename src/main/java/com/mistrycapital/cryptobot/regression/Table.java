@@ -6,6 +6,7 @@ import org.apache.commons.math3.stat.regression.UpdatingMultipleLinearRegression
 
 import java.util.*;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public class Table<K extends Comparable<K>> implements Iterable<Row<K>> {
@@ -69,6 +70,17 @@ public class Table<K extends Comparable<K>> implements Iterable<Row<K>> {
 				regression.addObservation(x, y);
 		}
 		return regression.regress();
+	}
+
+	public Table<K> filter(Predicate<K> filterPredicate) {
+		try {
+			Table<K> newTable = new Table<>();
+			for(var name : columnOrder)
+				newTable.add(name, namesToColumns.get(name).filter(filterPredicate));
+			return newTable;
+		} catch(DuplicateColumnException e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	@Override

@@ -31,9 +31,15 @@ public class AnalyzeData {
 
 		MCLoggerFactory.resetLogLevel(Level.INFO);
 		DatasetGenerator datasetGenerator = new DatasetGenerator(properties, dataDir, forecastCalculator);
+		long startNanos = System.nanoTime();
 		Table<TimeProduct> forecastInputs = datasetGenerator.getForecastDataset();
 		Table<TimeProduct> futureReturns = datasetGenerator.getReturnDataset();
-		var joined = forecastInputs.join(futureReturns);
+		log.info("Loading data took " + (System.nanoTime()-startNanos)/1000000.0 + "ms");
+		startNanos = System.nanoTime();
+		var joined = forecastInputs.join(futureReturns)
+			.filter(key -> key.timeInNanos > 1517448021000000000L); // discard Jan since it is spotty
+		log.info("Joining data took " + (System.nanoTime()-startNanos)/1000000.0 + "ms");
+		startNanos = System.nanoTime();
 
 		boolean writeOut = false;
 		if(writeOut) {
@@ -55,9 +61,13 @@ public class AnalyzeData {
 				}
 			}
 		}
+		log.info("Writing data took " + (System.nanoTime()-startNanos)/1000000.0 + "ms");
+		startNanos = System.nanoTime();
 
 		var results =
 			joined.regress("fut_ret_2h", new String[] {"lagRet", "bookRatioxRet", "cancelRatioxRet", "newRatioxRet"});
+		log.info("Regression took " + (System.nanoTime()-startNanos)/1000000.0 + "ms");
+		startNanos = System.nanoTime();
 		System.out.println("N = " + results.getN());
 		System.out.println("R^2 = " + results.getRSquared());
 		System.out.println("Coeffs");
