@@ -4,6 +4,7 @@ import ch.qos.logback.classic.Level;
 import com.mistrycapital.cryptobot.forecasts.Brighton;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.forecasts.Snowbird;
+import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.regression.*;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
@@ -72,10 +73,37 @@ public class AnalyzeData {
 		runRegressionPrintResults(joined, "fut_ret_2h",
 			new String[] {"lagRet", "bookRatioxRet", "cancelRatioxRet", "newRatioxRet", "upRatioxRet"});
 		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet", "bookRatioxRet", "cancelRatioxRet", "newRatioxRet", "sumVolxRet"});
+			new String[] {"lagRet", "bookRatioxRet", "cancelRatioxRet", "newRatioxRet", "diffVolxRet"});
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "diffVolxRet"});
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet"});
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet", "bookRatioxRet", "tradeRatioxRet", "upRatioxRet", "normVolxRet"});
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "timeToMaxMin"});
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "lagRet6"});
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "illiqUp", "illiqDown"});
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "illiqDown", "illiqDownxRet"});
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "illiqDown"});
+
+		boolean productAnalysis = false;
+		if(productAnalysis)
+			for(Product product : Product.FAST_VALUES) {
+				var prodData = joined.filter(key -> key.product == product);
+				System.out.println("Product " + product + " only");
+				runRegressionPrintResults(prodData, "fut_ret_2h",
+					new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "lagRet6"});
+			}
 	}
 
-	static RegressionResults runRegressionPrintResults(Table<?> table, String yCol, String[] xCols) throws ColumnNotFoundException {
+	static RegressionResults runRegressionPrintResults(Table<?> table, String yCol, String[] xCols)
+		throws ColumnNotFoundException
+	{
 		final var results = table.regress(yCol, xCols);
 		System.out.println("-----------------------------------------");
 		System.out.println("Dependent var:\t" + yCol);
