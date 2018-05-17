@@ -14,7 +14,9 @@ import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.risk.TradeRiskValidator;
 import com.mistrycapital.cryptobot.tactic.Tactic;
+import com.mistrycapital.cryptobot.tactic.ThresholdTactic;
 import com.mistrycapital.cryptobot.tactic.TradeEvaluator;
+import com.mistrycapital.cryptobot.tactic.TwoHourTactic;
 import com.mistrycapital.cryptobot.time.Intervalizer;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
@@ -65,14 +67,36 @@ public class SimRunner implements Runnable {
 			MCProperties simProperties = new MCProperties();
 
 			boolean search = simProperties.getBooleanProperty("sim.searchParameters", false);
+//			// old tactic search
+//			if(search) {
+//				// ladder on in/out thresholds
+//				simProperties.put("sim.logDecisions", "false");
+//				simProperties.put("sim.logForecastCalc", "false");
+//				SimResult result = parameterOptimizer.optimize(simProperties,
+//					Arrays.asList(
+//						new ParameterSearchSpace("tactic.inThreshold.default", 0.0, 0.06),
+//						new ParameterSearchSpace("tactic.outThreshold.default", -0.06, 0.0)
+//					),
+//					properties -> {
+//						try {
+//							return simulate(consolidatedSnapshots, properties);
+//						} catch(IOException e) {
+//							log.error("IO error running simulation", e);
+//							throw new RuntimeException(e);
+//						}
+//					}
+//				);
+//				log.info("Max return of " + result.holdingPeriodReturn + " sharpe of " + result.sharpeRatio
+//					+ " achieved at"
+//					+ " in=" + simProperties.getDoubleProperty("tactic.inThreshold.default")
+//					+ " out=" + simProperties.getDoubleProperty("tactic.outThreshold.default"));
+//			}
 			if(search) {
-				// ladder on in/out thresholds
 				simProperties.put("sim.logDecisions", "false");
 				simProperties.put("sim.logForecastCalc", "false");
 				SimResult result = parameterOptimizer.optimize(simProperties,
 					Arrays.asList(
-						new ParameterSearchSpace("tactic.inThreshold.default", 0.0, 0.06),
-						new ParameterSearchSpace("tactic.outThreshold.default", -0.06, 0.0)
+						new ParameterSearchSpace("tactic.buyThreshold", 0.0, 0.015)
 					),
 					properties -> {
 						try {
@@ -85,8 +109,7 @@ public class SimRunner implements Runnable {
 				);
 				log.info("Max return of " + result.holdingPeriodReturn + " sharpe of " + result.sharpeRatio
 					+ " achieved at"
-					+ " in=" + simProperties.getDoubleProperty("tactic.inThreshold.default")
-					+ " out=" + simProperties.getDoubleProperty("tactic.outThreshold.default"));
+					+ " buyThreshold=" + simProperties.getDoubleProperty("tactic.buyThreshold"));
 			}
 			simProperties.put("sim.logDecisions", "true");
 			long startNanos = System.nanoTime();
@@ -94,6 +117,8 @@ public class SimRunner implements Runnable {
 			log.info("Simulation treatment ended in " + ((System.nanoTime() - startNanos) / 1000000.0) + "ms");
 			log.info("Tactic in=" + simProperties.getDoubleProperty("tactic.inThreshold.default")
 				+ " out=" + simProperties.getDoubleProperty("tactic.outThreshold.default"));
+			log.info("2 Hr Tactic buyThreshold=" + simProperties.getDoubleProperty("tactic.buyThreshold")
+				+ " tradeUsdThreshold=" + simProperties.getDoubleProperty("tactic.tradeUsdThreshold"));
 			log.info("Holding period return:\t" + result.holdingPeriodReturn);
 			log.info("Daily avg return:     \t" + result.dailyAvgReturn);
 			log.info("Daily volatility:     \t" + result.dailyVolatility);
@@ -128,7 +153,7 @@ public class SimRunner implements Runnable {
 		PositionsProvider positionsProvider = new EmptyPositionsProvider(startingUsd);
 		Accountant accountant = new Accountant(positionsProvider);
 		ForecastCalculator forecastCalculator = new Snowbird(simProperties);
-		Tactic tactic = new Tactic(simProperties, accountant);
+		Tactic tactic = new TwoHourTactic(simProperties, timeKeeper, accountant);
 		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(simProperties, timeKeeper, accountant);
 		ExecutionEngine executionEngine = new SimExecutionEngine(simProperties, accountant, history);
 		DecisionAppender decisionAppender = null;

@@ -33,6 +33,7 @@ import com.mistrycapital.cryptobot.sim.SimTimeKeeper;
 import com.mistrycapital.cryptobot.sim.SnapshotReader;
 import com.mistrycapital.cryptobot.tactic.OrderBookPeriodicEvaluator;
 import com.mistrycapital.cryptobot.tactic.Tactic;
+import com.mistrycapital.cryptobot.tactic.ThresholdTactic;
 import com.mistrycapital.cryptobot.time.Intervalizer;
 import com.mistrycapital.cryptobot.twilio.TwilioSender;
 import org.apache.commons.csv.CSVFormat;
@@ -91,7 +92,7 @@ public class TradeCrypto {
 		DynamicTracker dynamicTracker = new DynamicTracker();
 		ForecastCalculator forecastCalculator = new Brighton(properties);
 
-		Tactic tactic = new Tactic(properties, accountant);
+		Tactic tactic = new ThresholdTactic(properties, accountant);
 		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(properties, timeKeeper, accountant);
 		TwilioSender twilioSender =
 			new TwilioSender(credentials.getProperty("TwilioAccountSid"), credentials.getProperty("TwilioAuthToken"));
