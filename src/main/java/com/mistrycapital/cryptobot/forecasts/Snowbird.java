@@ -23,13 +23,16 @@ public class Snowbird implements ForecastCalculator {
 	private final int twelveHourDatapoints;
 	private final double[][] coeffs;
 
+	private static final String[] signalsToUse =
+		new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "illiqDown", "RSIRatioxRet"};
+
 	public Snowbird(MCProperties properties) {
 		final int intervalSeconds = properties.getIntProperty("history.intervalSeconds");
 		twoHourDatapoints = 2 * 60 * 60 / intervalSeconds;
 		sixHourDatapoints = twoHourDatapoints * 3;
 		twelveHourDatapoints = sixHourDatapoints * 2;
 
-		coeffs = new double[Product.count][5];
+		coeffs = new double[Product.count][signalsToUse.length + 1];
 		for(Product product : Product.FAST_VALUES) {
 			int productIndex = product.getIndex();
 			final String coeffsString = properties.getProperty("forecast.snowbird.coeffs." + product);
@@ -47,12 +50,14 @@ public class Snowbird implements ForecastCalculator {
 
 	@Override
 	public double calculate(final ConsolidatedHistory consolidatedHistory, final Product product) {
-		final Map<String,Double> variables = getInputVariables(consolidatedHistory, product);
+		final Map<String,Double> signals = getInputVariables(consolidatedHistory, product);
 		final double[] productCoeffs = coeffs[product.getIndex()];
 
-		return productCoeffs[0] + productCoeffs[1] * variables.get("lagRet") +
-			productCoeffs[2] * variables.get("bookRatioxRet") + productCoeffs[3] * variables.get("cancelRatioxRet") +
-			productCoeffs[4] * variables.get("newRatioxRet");
+		double fcVal = productCoeffs[0];
+		for(int i = 0; i < signalsToUse.length; i++) {
+			fcVal += productCoeffs[i + 1] * signals.get(signalsToUse[i]);
+		}
+		return fcVal;
 	}
 
 	@Override
@@ -85,6 +90,8 @@ public class Snowbird implements ForecastCalculator {
 		double lagRet6 = 0.0;
 		double illiqUp = 0.0;
 		double illiqDown = 0.0;
+		double sumUpChange = 0.0;
+		double sumDownChange = 0.0;
 		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values()) {
 			ProductSnapshot data = snapshot.getProductSnapshot(product);
 			if(dataPoints < twelveHourDatapoints) {
@@ -92,7 +99,7 @@ public class Snowbird implements ForecastCalculator {
 					sumVolxRet12 += data.ret * data.volume;
 			}
 
-			final double periodRet = Math.log(1+data.ret);
+			final double periodRet = data.ret;//Math.log(1 + data.ret);
 
 			if(dataPoints < sixHourDatapoints) {
 				bidTradeCount += data.bidTradeCount;
@@ -102,17 +109,21 @@ public class Snowbird implements ForecastCalculator {
 				newBidCount += data.newBidCount;
 				newAskCount += data.newAskCount;
 				if(!Double.isNaN(data.ret)) {
+					final double prevPrice = data.lastPrice / (1 + data.ret);
+
 					if(data.ret >= 0) {
 						upIntervals++;
 						upVolume += data.volume;
+						sumUpChange += data.lastPrice - prevPrice;
 					} else {
 						downIntervals++;
 						downVolume += data.volume;
+						sumDownChange += prevPrice - data.lastPrice;
 					}
 					sumVolxRet += data.ret * data.volume;
 					lagRet6 += periodRet;
-					illiqUp += periodRet>0 ? periodRet/data.volume : 0.0;
-					illiqDown += periodRet<0 ? -periodRet/data.volume : 0.0;
+					illiqUp += periodRet > 0 ? periodRet / data.volume : 0.0;
+					illiqDown += periodRet < 0 ? -periodRet / data.volume : 0.0;
 				}
 
 				if(data.vwap < minPrice) {
@@ -159,8 +170,10 @@ public class Snowbird implements ForecastCalculator {
 			entry("timeToMaxMin", (double) intervalsToMax - intervalsToMin),
 			entry("illiqUp", illiqUp),
 			entry("illiqDown", illiqDown),
-			entry("illiqRatio", illiqUp/illiqDown),
-			entry("illiqDownxRet", illiqDown*lagRet)
+			entry("illiqRatio", illiqUp / illiqDown),
+			entry("illiqDownxRet", illiqDown * lagRet),
+			entry("RSIRatio", sumUpChange / sumDownChange),
+			entry("RSIRatioxRet", sumUpChange / sumDownChange * lagRet)
 		);
 	}
 

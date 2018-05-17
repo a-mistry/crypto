@@ -87,6 +87,7 @@ public class DatasetGenerator {
 		var table = new Table<TimeProduct>();
 		try {
 			table.add("fut_ret_2h", new Column<TimeProduct>());
+			table.add("fut_ret_6h", new Column<TimeProduct>());
 		} catch(DuplicateColumnException e) {
 			throw new RuntimeException(e);
 		}
@@ -104,7 +105,8 @@ public class DatasetGenerator {
 					var product = Product.parse(record.get("product"));
 					var key = new TimeProduct(timeNanos, product);
 					for(String columnName : Arrays.asList(
-						"fut_ret_2h"
+						"fut_ret_2h",
+						"fut_ret_6h"
 					)) {
 						String value = record.get(columnName);
 						if(value != null && !value.isEmpty())

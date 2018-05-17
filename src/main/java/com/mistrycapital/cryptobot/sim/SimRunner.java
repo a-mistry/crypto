@@ -127,7 +127,7 @@ public class SimRunner implements Runnable {
 		SimTimeKeeper timeKeeper = new SimTimeKeeper();
 		PositionsProvider positionsProvider = new EmptyPositionsProvider(startingUsd);
 		Accountant accountant = new Accountant(positionsProvider);
-		ForecastCalculator forecastCalculator = new Brighton(simProperties);
+		ForecastCalculator forecastCalculator = new Snowbird(simProperties);
 		Tactic tactic = new Tactic(simProperties, accountant);
 		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(simProperties, timeKeeper, accountant);
 		ExecutionEngine executionEngine = new SimExecutionEngine(simProperties, accountant, history);

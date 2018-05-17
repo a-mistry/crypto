@@ -22,4 +22,11 @@ public class Row<K extends Comparable<K>> {
 	public final double[] getColumnValues() {
 		return columnValues;
 	}
+
+	public double getColumn(String name) {
+		for(int i=0; i<columnNames.length; i++)
+			if(columnNames[i].equals(name))
+				return columnValues[i];
+		return Double.NaN;
+	}
 }
