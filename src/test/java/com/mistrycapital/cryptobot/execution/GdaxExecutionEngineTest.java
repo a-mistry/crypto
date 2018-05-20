@@ -88,7 +88,8 @@ class GdaxExecutionEngineTest {
 			.thenReturn(CompletableFuture.supplyAsync(() -> orderInfo2));
 
 		executionEngine.setOrderWaitForTesting();
-		executionEngine.trade(Arrays.asList(new TradeInstruction(Product.BTC_USD, 10.0 / 10000.0, OrderSide.BUY)));
+		executionEngine.trade(
+			Arrays.asList(new TradeInstruction(Product.BTC_USD, 10.0 / 10000.0, OrderSide.BUY, Aggression.TAKE)));
 		Thread.sleep(100);
 
 		verify(gdaxClient, times(1))
@@ -155,7 +156,8 @@ class GdaxExecutionEngineTest {
 			.thenReturn(CompletableFuture.supplyAsync(() -> orderInfo2));
 
 		executionEngine.setOrderWaitForTesting();
-		executionEngine.trade(Arrays.asList(new TradeInstruction(Product.BTC_USD, 1.0, OrderSide.SELL)));
+		executionEngine
+			.trade(Arrays.asList(new TradeInstruction(Product.BTC_USD, 1.0, OrderSide.SELL, Aggression.TAKE)));
 		Thread.sleep(100);
 
 		verify(gdaxClient, times(1))

@@ -2,6 +2,7 @@ package com.mistrycapital.cryptobot.tactic;
 
 import com.mistrycapital.cryptobot.accounting.Accountant;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
+import com.mistrycapital.cryptobot.execution.Aggression;
 import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
@@ -68,12 +69,12 @@ public class ThresholdTactic implements Tactic {
 			} else if(in && shouldBeOut) {
 				if(trades == null) trades = new ArrayList<>(Product.count);
 				final double amount = accountant.getAvailable(product.getCryptoCurrency());
-				trades.add(new TradeInstruction(product, amount, OrderSide.SELL));
+				trades.add(new TradeInstruction(product, amount, OrderSide.SELL, Aggression.TAKE));
 			}
 			if(!in && shouldBeIn) {
 				if(trades == null) trades = new ArrayList<>(Product.count);
 				final double amount = calcBuyAmount(snapshot, product);
-				trades.add(new TradeInstruction(product, amount, OrderSide.BUY));
+				trades.add(new TradeInstruction(product, amount, OrderSide.BUY, Aggression.TAKE));
 			}
 		}
 		return trades;

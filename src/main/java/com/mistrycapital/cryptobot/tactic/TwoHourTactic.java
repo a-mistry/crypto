@@ -2,6 +2,7 @@ package com.mistrycapital.cryptobot.tactic;
 
 import com.mistrycapital.cryptobot.accounting.Accountant;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
+import com.mistrycapital.cryptobot.execution.Aggression;
 import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.Product;
@@ -73,9 +74,9 @@ public class TwoHourTactic implements Tactic {
 					trades = new ArrayList<>(Product.count);
 				final TradeInstruction instruction;
 				if(deltaPosition > 0)
-					instruction = new TradeInstruction(product, deltaPosition, OrderSide.BUY);
+					instruction = new TradeInstruction(product, deltaPosition, OrderSide.BUY, Aggression.POST_ONLY);
 				else
-					instruction = new TradeInstruction(product, -deltaPosition, OrderSide.SELL);
+					instruction = new TradeInstruction(product, -deltaPosition, OrderSide.SELL, Aggression.POST_ONLY);
 				trades.add(instruction);
 			}
 		}

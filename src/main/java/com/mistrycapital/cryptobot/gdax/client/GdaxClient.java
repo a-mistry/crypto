@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.mistrycapital.cryptobot.book.BBO;
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
@@ -26,8 +27,10 @@ import java.nio.file.Paths;
 import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.NoSuchAlgorithmException;
+import java.text.DecimalFormat;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -42,6 +45,8 @@ public class GdaxClient {
 	private final Mac savedMac;
 	private final HttpClient httpClient;
 	private final JsonParser jsonParser;
+
+	private final DecimalFormat decimalFormat = new DecimalFormat("#.########");
 
 	/**
 	 * Create a new client
@@ -101,7 +106,7 @@ public class GdaxClient {
 	 * @param side       BUY if we should buy the first item in the pair
 	 * @param sizingType SIZE if size is given, FUNDS if funds is given
 	 * @param amount     The amount - either size or funds (based on sizingType)
-	 * @return Execution returned by gdax
+	 * @return OrderInfo returned by gdax
 	 */
 	public CompletableFuture<OrderInfo> placeMarketOrder(Product product, OrderSide side,
 		MarketOrderSizingType sizingType,
@@ -111,10 +116,94 @@ public class GdaxClient {
 		body.addProperty("type", "market");
 		body.addProperty("side", side == OrderSide.BUY ? "buy" : "sell");
 		body.addProperty("product_id", product.toString());
-		body.addProperty(sizingType == MarketOrderSizingType.SIZE ? "size" : "funds", Double.toString(amount));
+		body.addProperty(sizingType == MarketOrderSizingType.SIZE ? "size" : "funds", decimalFormat.format(amount));
 		return submit("/orders", "POST", body)
 			.thenApply(JsonElement::getAsJsonObject)
 			.thenApply(OrderInfo::new);
+	}
+
+	/**
+	 * Places a post-only limit order on the book for the given number of minutes max
+	 *
+	 * @param product     Product to trade (e.g. BTC-USD)
+	 * @param side        BUY if we should buy the first item in the pair
+	 * @param amount      The amount - either size or funds (based on sizingType)
+	 * @param limitPrice  Limit price
+	 * @param cancelAfter Place the order as a GTT and cancel it automatically after this unit. Must be DAYS, HOURS, or
+	 *                    MINUTES, or null to place a GTC
+	 * @return OrderInfo returned by gdax
+	 */
+	public CompletableFuture<OrderInfo> placePostOnlyLimitOrder(Product product, OrderSide side, double amount,
+		double limitPrice, TimeUnit cancelAfter)
+	{
+		JsonObject body = new JsonObject();
+		body.addProperty("type", "limit");
+		body.addProperty("side", side == OrderSide.BUY ? "buy" : "sell");
+		body.addProperty("product_id", product.toString());
+		body.addProperty("price", decimalFormat.format(limitPrice));
+		body.addProperty("size", decimalFormat.format(amount));
+		body.addProperty("post_only", true);
+		if(cancelAfter != null) {
+			body.addProperty("time_in_force", "GTT");
+			switch(cancelAfter) {
+				case MINUTES:
+					body.addProperty("cancel_after", "min");
+					break;
+				case HOURS:
+					body.addProperty("cancel_after", "hour");
+					break;
+				case DAYS:
+					body.addProperty("cancel_after", "day");
+					break;
+				default:
+					throw new RuntimeException("Invalid cancelAfter TimeUnit found " + cancelAfter);
+			}
+		}
+		return submit("/orders", "POST", body)
+			.thenApply(JsonElement::getAsJsonObject)
+			.thenApply(OrderInfo::new);
+	}
+
+	/**
+	 * Cancel the order
+	 *
+	 * @param orderId Order id of order to cancel
+	 * @return Json response from server. On success, this will be an array with the order id as the sole element.
+	 * On error server will throw a 404, with the json result giving the error in the message field
+	 */
+	public CompletableFuture<JsonElement> cancelOrder(UUID orderId) {
+		return submit("/orders/" + orderId, "DELETE", null);
+	}
+
+	/**
+	 * Get top of book for the given product
+	 *
+	 * @param product Product to trade (e.g. BTC-USD)
+	 * @return Best bid and ask prices and sizes
+	 */
+	public CompletableFuture<BBO> getBBO(Product product) {
+		return submit("/products/" + product + "/book", "GET", null)
+			.thenApply(jsonElement -> {
+				BBO bbo = new BBO();
+				JsonObject jsonObject = jsonElement.getAsJsonObject();
+				JsonArray bids = jsonObject.getAsJsonArray("bids");
+				if(bids.size() == 0) {
+					bbo.bidPrice = bbo.bidSize = Double.NaN;
+				} else {
+					JsonArray bid = bids.get(0).getAsJsonArray();
+					bbo.bidPrice = Double.parseDouble(bid.get(0).getAsString());
+					bbo.bidSize = Double.parseDouble(bid.get(1).getAsString());
+				}
+				JsonArray asks = jsonObject.getAsJsonArray("asks");
+				if(asks.size() == 0) {
+					bbo.askPrice = bbo.askSize = Double.NaN;
+				} else {
+					JsonArray ask = asks.get(0).getAsJsonArray();
+					bbo.askPrice = Double.parseDouble(ask.get(0).getAsString());
+					bbo.askSize = Double.parseDouble(ask.get(1).getAsString());
+				}
+				return bbo;
+			});
 	}
 
 	/**

@@ -7,7 +7,8 @@ public enum OrderStatus {
 	PENDING,
 	ACTIVE,
 	SETTLED,
-	DONE;
+	DONE,
+	REJECTED;
 
 	public static OrderStatus parse(String statusString) {
 		return valueOf(statusString.toUpperCase(Locale.US));

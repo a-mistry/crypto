@@ -10,11 +10,14 @@ public class TradeInstruction {
 	private final double amount;
 	/** Order side from our perspective - BUY means we are buying */
 	private final OrderSide orderSide;
+	/** Aggression - should we take or post passively */
+	private final Aggression aggression;
 
-	public TradeInstruction(final Product product, final double amount, final OrderSide orderSide) {
+	public TradeInstruction(final Product product, final double amount, final OrderSide orderSide, final Aggression aggression) {
 		this.product = product;
 		this.amount = amount;
 		this.orderSide = orderSide;
+		this.aggression = aggression;
 	}
 
 	/** @return Product to buy/sell */
@@ -30,5 +33,10 @@ public class TradeInstruction {
 	/** @return Order side from our perspective - BUY means we are buying */
 	public final OrderSide getOrderSide() {
 		return orderSide;
+	}
+
+	/** @return Aggression - should we take or post passively */
+	public final Aggression getAggression() {
+		return aggression;
 	}
 }

@@ -1,5 +1,8 @@
 package com.mistrycapital.cryptobot.gdax.client;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.mistrycapital.cryptobot.gdax.client.GdaxClient.GdaxException;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.OrderType;
@@ -16,6 +19,7 @@ import java.sql.Time;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -119,7 +123,59 @@ class GdaxClientTest {
 		System.out.println(orderInfo);
 
 		double dollarsAfterSale = listBalances();
-		assertEquals(dollarsAfterSale, dollarsAfterPurchase + orderInfo.getExecutedValue() - orderInfo.getFillFees(), EPSILON);
+		assertEquals(dollarsAfterSale, dollarsAfterPurchase + orderInfo.getExecutedValue() - orderInfo.getFillFees(),
+			EPSILON);
 		assertEquals(0.0030, orderInfo.getFillFees() / orderInfo.getExecutedValue(), EPSILON);
+	}
+
+	@Test
+	void shouldPlacePostOnly()
+		throws Exception
+	{
+		// get dollar balance
+		System.out.println("Starting balances");
+		double dollars = listBalances();
+
+		// nothing to test if balance too low
+		if(dollars < 10) {
+			System.err.println("Not testing market orders - sandbox balance is too low");
+			return;
+		}
+
+		// get current market on ETH
+		var bbo = gdaxClient.getBBO(Product.ETH_USD).get();
+		System.out
+			.println("Market is " + bbo.bidPrice + "-" + bbo.askPrice + " (" + bbo.bidSize + " x " + bbo.askSize + ")");
+
+		// post $10 of ETH specifying funds
+		var price = Double.isNaN(bbo.bidPrice) ? 10.0 : bbo.bidPrice;
+		var orderFuture =
+			gdaxClient.placePostOnlyLimitOrder(Product.ETH_USD, OrderSide.BUY, 10.0 / price, price, TimeUnit.MINUTES);
+		var orderInfo = orderFuture.get();
+		UUID orderId = orderInfo.getOrderId();
+
+		assertEquals(OrderType.LIMIT, orderInfo.getType());
+		assertTrue(orderInfo.isPostOnly());
+		assertEquals(TimeInForce.GTT, orderInfo.getTimeInForce());
+		assertEquals(10.0 / price, orderInfo.getSize(), EPSILON);
+		assertEquals(price, orderInfo.getPrice(), EPSILON);
+
+		System.out.println("Initial order info");
+		System.out.println(orderInfo);
+
+		var response = gdaxClient.cancelOrder(orderId).get();
+		System.err.println("Cancel response = " + response);
+
+		try {
+			gdaxClient.cancelOrder(UUID.randomUUID()).get();
+			fail("Did not fail canceling invalid order");
+		} catch(ExecutionException e2) {
+			if(e2.getCause().getClass().isAssignableFrom(GdaxException.class)) {
+				GdaxException e = (GdaxException) e2.getCause();
+				assertEquals(404, e.getErrorCode());
+				JsonObject jsonObject = new JsonParser().parse(e.getBody()).getAsJsonObject();
+				assertEquals("order not found", jsonObject.get("message").getAsString());
+			}
+		}
 	}
 }
