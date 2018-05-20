@@ -24,6 +24,7 @@ public class TwoHourTactic implements Tactic {
 	private final double[] pctAllocation;
 	private final double forecastThreshold;
 	private final double tradeUsdThreshold;
+	private final double tradeScaleFactor;
 
 	private int purchasedIndex;
 
@@ -38,6 +39,7 @@ public class TwoHourTactic implements Tactic {
 		final double defaultPctAllocation = properties.getDoubleProperty("tactic.pctAllocation.default");
 		forecastThreshold = properties.getDoubleProperty("tactic.buyThreshold");
 		tradeUsdThreshold = properties.getDoubleProperty("tactic.tradeUsdThreshold");
+		tradeScaleFactor = properties.getDoubleProperty("tactic.tradeScaleFactor");
 		for(Product product : Product.FAST_VALUES) {
 			int productIndex = product.getIndex();
 			pctAllocation[productIndex] =
@@ -89,6 +91,6 @@ public class TwoHourTactic implements Tactic {
 		for(boolean isPurchase : purchaseEvaluations)
 			if(isPurchase)
 				count++;
-		return Math.min(1.0, 5 * ((double) count) / purchaseEvaluations.length);
+		return Math.min(1.0, tradeScaleFactor * ((double) count) / purchaseEvaluations.length);
 	}
 }

@@ -96,7 +96,8 @@ public class SimRunner implements Runnable {
 				simProperties.put("sim.logForecastCalc", "false");
 				SimResult result = parameterOptimizer.optimize(simProperties,
 					Arrays.asList(
-						new ParameterSearchSpace("tactic.buyThreshold", 0.0, 0.015)
+						new ParameterSearchSpace("tactic.buyThreshold", 0.0, 0.015),
+						new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 10.0)
 					),
 					properties -> {
 						try {
@@ -109,7 +110,8 @@ public class SimRunner implements Runnable {
 				);
 				log.info("Max return of " + result.holdingPeriodReturn + " sharpe of " + result.sharpeRatio
 					+ " achieved at"
-					+ " buyThreshold=" + simProperties.getDoubleProperty("tactic.buyThreshold"));
+					+ " buyThreshold=" + simProperties.getDoubleProperty("tactic.buyThreshold")
+					+ " tradeScaleFactor=" + simProperties.getDoubleProperty("tactic.tradeScaleFactor"));
 			}
 			simProperties.put("sim.logDecisions", "true");
 			long startNanos = System.nanoTime();
@@ -118,12 +120,15 @@ public class SimRunner implements Runnable {
 			log.info("Tactic in=" + simProperties.getDoubleProperty("tactic.inThreshold.default")
 				+ " out=" + simProperties.getDoubleProperty("tactic.outThreshold.default"));
 			log.info("2 Hr Tactic buyThreshold=" + simProperties.getDoubleProperty("tactic.buyThreshold")
-				+ " tradeUsdThreshold=" + simProperties.getDoubleProperty("tactic.tradeUsdThreshold"));
+				+ " tradeUsdThreshold=" + simProperties.getDoubleProperty("tactic.tradeUsdThreshold")
+				+ " tradeScaleFactor=" + simProperties.getDoubleProperty("tactic.tradeScaleFactor"));
 			log.info("Holding period return:\t" + result.holdingPeriodReturn);
 			log.info("Daily avg return:     \t" + result.dailyAvgReturn);
 			log.info("Daily volatility:     \t" + result.dailyVolatility);
 			log.info("Sharpe Ratio:         \t" + result.sharpeRatio);
 			log.info("Win %                 \t" + result.winPct);
+			log.info("Loss %                \t" + result.lossPct);
+			log.info("Win-Loss              \t" + result.winPct/result.lossPct);
 
 		} catch(IOException e) {
 			throw new RuntimeException(e);
@@ -205,6 +210,7 @@ public class SimRunner implements Runnable {
 		final double dailyVolatility;
 		final double sharpeRatio;
 		final double winPct;
+		final double lossPct;
 
 		SimResult(List<Double> dailyPositionValuesUsd) {
 			this.dailyPositionValuesUsd = dailyPositionValuesUsd;
@@ -229,18 +235,21 @@ public class SimRunner implements Runnable {
 			sharpeRatio = dailyVolatility != 0.0 ? dailyAvgReturn / dailyVolatility : 0.0;
 
 			int winCount = 0;
-			for(final double val : dailyReturns)
-				if(val >= 0.0)
-					winCount++;
+			int lossCount = 0;
+			for(final double val : dailyReturns) {
+				if(val > 0.0) winCount++;
+				if(val < 0.0) lossCount++;
+			}
 			winPct = ((double) winCount) / dailyReturns.length;
+			lossPct = ((double) lossCount) / dailyReturns.length;
 		}
 
 		/**
 		 * This is our objective function
 		 */
 		public int compareTo(SimResult b) {
-//			return Double.compare(holdingPeriodReturn, b.holdingPeriodReturn);
-			return Double.compare(sharpeRatio, b.sharpeRatio);
+			return Double.compare(holdingPeriodReturn, b.holdingPeriodReturn);
+//			return Double.compare(sharpeRatio, b.sharpeRatio);
 //			return Double.compare(winPct, b.winPct);
 		}
 	}
