@@ -30,7 +30,7 @@ public class SimExecutionEngine implements ExecutionEngine {
 		this.accountant = accountant;
 		this.tactic = tactic;
 		this.history = history;
-		takeTransactionCost = properties.getDoubleProperty("sim.transactionCostOnes", 0.0030);
+		takeTransactionCost = properties.getDoubleProperty("sim.takeTransactionCostOnes", 0.0030);
 		postFillRate = properties.getDoubleProperty("sim.postFillRate", 1.0);
 	}
 
