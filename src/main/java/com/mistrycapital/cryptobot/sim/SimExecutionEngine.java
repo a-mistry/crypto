@@ -4,6 +4,7 @@ import com.mistrycapital.cryptobot.accounting.Accountant;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
+import com.mistrycapital.cryptobot.execution.Aggression;
 import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
@@ -21,14 +22,16 @@ public class SimExecutionEngine implements ExecutionEngine {
 
 	private final Accountant accountant;
 	private final Tactic tactic;
-	private final double transactionCost;
+	private final double takeTransactionCost;
+	private final double postFillRate;
 	private final ConsolidatedHistory history;
 
 	SimExecutionEngine(MCProperties properties, Accountant accountant, Tactic tactic, ConsolidatedHistory history) {
 		this.accountant = accountant;
 		this.tactic = tactic;
 		this.history = history;
-		transactionCost = properties.getDoubleProperty("sim.transactionCostOnes", 0.0030);
+		takeTransactionCost = properties.getDoubleProperty("sim.transactionCostOnes", 0.0030);
+		postFillRate = properties.getDoubleProperty("sim.postFillRate", 1.0);
 	}
 
 	@Override
@@ -46,12 +49,14 @@ public class SimExecutionEngine implements ExecutionEngine {
 			// make sure not to trade more than we have available, regardless of the instructions
 			final double dollars;
 			final double crypto;
+			final double transactionCost = instruction.getAggression() == Aggression.TAKE ? takeTransactionCost : 0.0;
+			final double fillRate = instruction.getAggression() == Aggression.TAKE ? 1.0 : postFillRate;
 			if(instruction.getOrderSide() == OrderSide.BUY) {
-				dollars = Math.min(instruction.getAmount() * price, accountant.getAvailable(Currency.USD));
+				dollars = fillRate * Math.min(instruction.getAmount() * price, accountant.getAvailable(Currency.USD));
 				crypto = dollars * (1 - transactionCost) / price;
 				accountant.recordTrade(Currency.USD, -dollars, cryptoCurrency, crypto);
 			} else {
-				crypto = Math.min(instruction.getAmount(), accountant.getAvailable(cryptoCurrency));
+				crypto = fillRate * Math.min(instruction.getAmount(), accountant.getAvailable(cryptoCurrency));
 				dollars = (1 - transactionCost) * crypto * price;
 				accountant.recordTrade(Currency.USD, dollars, cryptoCurrency, -crypto);
 			}

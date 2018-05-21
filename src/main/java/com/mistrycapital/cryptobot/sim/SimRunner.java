@@ -5,7 +5,6 @@ import com.mistrycapital.cryptobot.accounting.EmptyPositionsProvider;
 import com.mistrycapital.cryptobot.accounting.PositionsProvider;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
-import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
 import com.mistrycapital.cryptobot.appender.DailyAppender;
 import com.mistrycapital.cryptobot.appender.DecisionAppender;
 import com.mistrycapital.cryptobot.execution.ExecutionEngine;
@@ -14,25 +13,19 @@ import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.risk.TradeRiskValidator;
 import com.mistrycapital.cryptobot.tactic.Tactic;
-import com.mistrycapital.cryptobot.tactic.ThresholdTactic;
 import com.mistrycapital.cryptobot.tactic.TradeEvaluator;
 import com.mistrycapital.cryptobot.tactic.TwoHourTactic;
 import com.mistrycapital.cryptobot.time.Intervalizer;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
-import org.apache.commons.csv.CSVFormat;
-import org.apache.commons.csv.CSVParser;
-import org.apache.commons.csv.CSVRecord;
 import org.slf4j.Logger;
 
 import java.io.IOException;
-import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class SimRunner implements Runnable {
 	private static final Logger log = MCLoggerFactory.getLogger();
@@ -45,6 +38,7 @@ public class SimRunner implements Runnable {
 	private final Path forecastCalcFile;
 	private final int startingUsd;
 	private final ParameterOptimizer parameterOptimizer;
+	private final String searchObjective;
 
 	public SimRunner(MCProperties properties, Path dataDir)
 	{
@@ -56,6 +50,7 @@ public class SimRunner implements Runnable {
 		forecastCalcFile = dataDir.resolve(properties.getProperty("sim.forecastCalcFile", "forecast-calcs.csv"));
 		startingUsd = properties.getIntProperty("sim.startUsd", 10000);
 		parameterOptimizer = new ParameterOptimizer(properties.getIntProperty("sim.ladderPoints", 10));
+		searchObjective = properties.getProperty("sim.searchObjective", "return");
 	}
 
 	@Override
@@ -93,9 +88,7 @@ public class SimRunner implements Runnable {
 			long startNanos = System.nanoTime();
 			SimResult result = simulate(consolidatedSnapshots, simProperties);
 			log.info("Simulation treatment ended in " + ((System.nanoTime() - startNanos) / 1000000.0) + "ms");
-			log.info("Tactic in=" + simProperties.getDoubleProperty("tactic.inThreshold.default")
-				+ " out=" + simProperties.getDoubleProperty("tactic.outThreshold.default"));
-			log.info("2 Hr Tactic buyThreshold=" + simProperties.getDoubleProperty("tactic.buyThreshold")
+			log.info("Tactic buyThreshold=" + simProperties.getDoubleProperty("tactic.buyThreshold")
 				+ " tradeUsdThreshold=" + simProperties.getDoubleProperty("tactic.tradeUsdThreshold")
 				+ " tradeScaleFactor=" + simProperties.getDoubleProperty("tactic.tradeScaleFactor"));
 			log.info("Holding period return:\t" + result.holdingPeriodReturn);
@@ -104,7 +97,7 @@ public class SimRunner implements Runnable {
 			log.info("Sharpe Ratio:         \t" + result.sharpeRatio);
 			log.info("Win %                 \t" + result.winPct);
 			log.info("Loss %                \t" + result.lossPct);
-			log.info("Win-Loss              \t" + result.winPct/result.lossPct);
+			log.info("Win-Loss              \t" + result.winPct / result.lossPct);
 
 		} catch(IOException e) {
 			throw new RuntimeException(e);
@@ -151,7 +144,7 @@ public class SimRunner implements Runnable {
 		long nextDay = intervalizer.calcNextDayMillis(0);
 		List<Double> dailyPositionValuesUsd = new ArrayList<>(365);
 		for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedSnapshots) {
-			if(shouldSkipJan && consolidatedSnapshot.getTimeNanos() < 1518048000*1000000000L)
+			if(shouldSkipJan && consolidatedSnapshot.getTimeNanos() < 1518048000 * 1000000000L)
 				continue; // spotty/strange data before 2/8, just skip
 
 			timeKeeper.advanceTime(consolidatedSnapshot.getTimeNanos());
@@ -221,12 +214,23 @@ public class SimRunner implements Runnable {
 		}
 
 		/**
-		 * This is our objective function
+		 * This is our searchObjective function
 		 */
 		public int compareTo(SimResult b) {
-//			return Double.compare(holdingPeriodReturn, b.holdingPeriodReturn);
-			return Double.compare(sharpeRatio, b.sharpeRatio);
-//			return Double.compare(winPct, b.winPct);
+			switch(searchObjective) {
+				case "return":
+					return Double.compare(holdingPeriodReturn, b.holdingPeriodReturn);
+				case "sharpe":
+					return Double.compare(sharpeRatio, b.sharpeRatio);
+				case "win":
+					return Double.compare(winPct, b.winPct);
+				case "winloss":
+					final var winloss = lossPct == 0 ? 0 : winPct / lossPct;
+					final var bWinloss = b.lossPct == 0 ? 0 : b.winPct / b.lossPct;
+					return Double.compare(winloss, bWinloss);
+				default:
+					throw new RuntimeException("Invalid search objective " + searchObjective);
+			}
 		}
 	}
 }
