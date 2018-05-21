@@ -148,6 +148,11 @@ public class GdaxWebSocket extends SubmissionPublisher<GdaxMessage> {
 		String type = json.get("type").getAsString();
 		GdaxMessage message = null;
 		switch(type) {
+			case "received":
+				// can optimize this by only handling orders that are ours, but maybe we want the info
+				// on other people's orders
+				message = new Received(json);
+				break;
 			case "open":
 				// new order on book
 				message = new Open(json);
@@ -172,9 +177,6 @@ public class GdaxWebSocket extends SubmissionPublisher<GdaxMessage> {
 				// new stop order
 				message = new Activate(json);
 				break;
-			case "received":
-				// received a new order - we don't really do anything with these but we need the sequence number
-				// fall through to unknown type
 			default:
 				// this could be a new message type or received
 				if(json.has("sequence") && json.has("product_id") && json.has("time")) {

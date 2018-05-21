@@ -1,11 +1,14 @@
 package com.mistrycapital.cryptobot.gdax.websocket;
 
 import com.google.gson.JsonObject;
+import com.mistrycapital.cryptobot.gdax.common.OrderType;
 import com.mistrycapital.cryptobot.gdax.common.Reason;
 
 public class Done extends OrderGdaxMessage {
 	/** True if limit order, false if market */
-	private boolean isLimitOrder;
+	private final boolean isLimitOrder;
+	/** Order type (market, limit) */
+	private final OrderType orderType;
 	/** Price */
 	private final double price;
 	/** Remaining size (for limit orders) */
@@ -19,9 +22,11 @@ public class Done extends OrderGdaxMessage {
 		if(isLimitOrder) {
 			price = Double.parseDouble(json.get("price").getAsString());
 			remainingSize = Double.parseDouble(json.get("remaining_size").getAsString());
+			orderType = OrderType.LIMIT;
 		} else {
 			price = 0.0;
 			remainingSize = 0.0;
+			orderType = OrderType.MARKET;
 		}
 		reason = Reason.valueOf(json.get("reason").getAsString().toUpperCase());
 	}
@@ -38,6 +43,10 @@ public class Done extends OrderGdaxMessage {
 	
 	public final boolean isLimitOrder() {
 		return isLimitOrder;
+	}
+
+	public final OrderType getOrderType() {
+		return orderType;
 	}
 
 	public final double getPrice() {

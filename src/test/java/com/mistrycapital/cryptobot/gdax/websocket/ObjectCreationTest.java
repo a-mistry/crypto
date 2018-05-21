@@ -9,6 +9,7 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
+import com.mistrycapital.cryptobot.gdax.common.OrderType;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.gdax.common.Reason;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,6 +52,33 @@ class ObjectCreationTest {
 
 	@Test
 	void shouldCreateMessages() {
+		verifyCorrectObject("{\n" +
+				"    \"type\": \"received\",\n" +
+				"    \"time\": \"2014-11-07T08:19:27.028459Z\",\n" +
+				"    \"product_id\": \"BTC-USD\",\n" +
+				"    \"sequence\": 10,\n" +
+				"    \"order_id\": \"d50ec984-77a8-460a-b958-66f114b0de9b\",\n" +
+				"    \"client_oid\": \"c76c8d6e-0087-4a84-9b38-20f019ba0e14\",\n" +
+				"    \"size\": \"1.34\",\n" +
+				"    \"price\": \"502.1\",\n" +
+				"    \"side\": \"buy\",\n" +
+				"    \"order_type\": \"limit\"\n" +
+				"}",
+			Received.class,
+			received -> {
+				assertEquals(Type.RECEIVED, received.getType());
+				assertEquals(1415348367028459L, received.getTimeMicros());
+				assertEquals(Product.BTC_USD, received.getProduct());
+				assertEquals(10L, received.getSequence());
+				assertEquals(UUID.fromString("d50ec984-77a8-460a-b958-66f114b0de9b"), received.getOrderId());
+				assertEquals(OrderSide.BUY, received.getOrderSide());
+				assertEquals(502.1, received.getPrice(), EPSILON);
+				assertEquals(1.34, received.getSize(), EPSILON);
+				assertTrue(Double.isNaN(received.getFunds()));
+				assertEquals(OrderType.LIMIT, received.getOrderType());
+				assertEquals(UUID.fromString("c76c8d6e-0087-4a84-9b38-20f019ba0e14"), received.getClientOid());
+			});
+
 		verifyCorrectObject("{\n" +
 				"    \"type\": \"open\",\n" +
 				"    \"time\": \"2014-11-07T08:19:27.028459Z\",\n" +
@@ -95,6 +123,8 @@ class ObjectCreationTest {
 				assertEquals(Reason.FILLED, done.getReason());
 				assertEquals(OrderSide.SELL, done.getOrderSide());
 				assertEquals(0, done.getRemainingSize(), EPSILON);
+				assertEquals(OrderType.LIMIT, done.getOrderType());
+				assertTrue(done.isLimitOrder());
 			});
 
 		verifyCorrectObject("{\n" +
@@ -202,7 +232,7 @@ class ObjectCreationTest {
 			});
 
 		verifyCorrectObject("{\n" +
-				"    \"type\": \"received\",\n" +
+				"    \"type\": \"new_type_that_we_dont_know\",\n" +
 				"    \"time\": \"2014-11-07T08:19:27.028459Z\",\n" +
 				"    \"product_id\": \"BTC-USD\",\n" +
 				"    \"sequence\": 10,\n" +

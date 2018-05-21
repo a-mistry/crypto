@@ -20,7 +20,6 @@ import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.appender.*;
 import com.mistrycapital.cryptobot.database.DBRecorder;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
-import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.execution.GdaxExecutionEngine;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.forecasts.Snowbird;
@@ -92,8 +91,8 @@ public class TradeCrypto {
 			new TwilioSender(credentials.getProperty("TwilioAccountSid"), credentials.getProperty("TwilioAuthToken"));
 		DBRecorder dbRecorder = new DBRecorder(timeKeeper, accountant, orderBookManager, "mistrycapital",
 			credentials.getProperty("MysqlUser"), credentials.getProperty("MysqlPassword"));
-		ExecutionEngine executionEngine = new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager, dbRecorder,
-			twilioSender, tactic, gdaxClient);
+		GdaxExecutionEngine executionEngine = new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager,
+			dbRecorder, twilioSender, tactic, gdaxClient);
 
 		ConsolidatedHistory consolidatedHistory = restoreHistory(dataDir, INTERVAL_FILE_NAME, timeKeeper, intervalizer);
 
@@ -104,6 +103,7 @@ public class TradeCrypto {
 
 		gdaxWebSocket.subscribe(orderBookManager);
 		gdaxWebSocket.subscribe(dynamicTracker);
+		gdaxWebSocket.subscribe(executionEngine);
 
 		URI gdaxWebSocketURI = new URI("wss://ws-feed.gdax.com");
 		WebSocketClient socketClient = new WebSocketClient(new SslContextFactory());

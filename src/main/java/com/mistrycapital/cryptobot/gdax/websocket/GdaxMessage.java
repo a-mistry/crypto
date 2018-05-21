@@ -16,6 +16,7 @@ public interface GdaxMessage {
 	
 	enum Type {
 		BOOK,
+		RECEIVED,
 		OPEN,
 		DONE,
 		MATCH,
