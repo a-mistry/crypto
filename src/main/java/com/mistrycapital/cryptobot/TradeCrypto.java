@@ -23,8 +23,8 @@ import com.mistrycapital.cryptobot.database.DBRecorder;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
 import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.execution.GdaxExecutionEngine;
-import com.mistrycapital.cryptobot.forecasts.Brighton;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
+import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.GdaxPositionsProvider;
 import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
 import com.mistrycapital.cryptobot.gdax.common.Product;
@@ -34,6 +34,7 @@ import com.mistrycapital.cryptobot.sim.SnapshotReader;
 import com.mistrycapital.cryptobot.tactic.OrderBookPeriodicEvaluator;
 import com.mistrycapital.cryptobot.tactic.Tactic;
 import com.mistrycapital.cryptobot.tactic.ThresholdTactic;
+import com.mistrycapital.cryptobot.tactic.TwoHourTactic;
 import com.mistrycapital.cryptobot.time.Intervalizer;
 import com.mistrycapital.cryptobot.twilio.TwilioSender;
 import org.apache.commons.csv.CSVFormat;
@@ -90,16 +91,16 @@ public class TradeCrypto {
 		DailyAppender dailyAppender = new DailyAppender(accountant, timeKeeper, intervalizer, dataDir, DAILY_FILE_NAME);
 		dailyAppender.open();
 		DynamicTracker dynamicTracker = new DynamicTracker();
-		ForecastCalculator forecastCalculator = new Brighton(properties);
+		ForecastCalculator forecastCalculator = new Snowbird(properties);
 
-		Tactic tactic = new ThresholdTactic(properties, accountant);
+		Tactic tactic = new TwoHourTactic(properties, timeKeeper, accountant);
 		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(properties, timeKeeper, accountant);
 		TwilioSender twilioSender =
 			new TwilioSender(credentials.getProperty("TwilioAccountSid"), credentials.getProperty("TwilioAuthToken"));
 		DBRecorder dbRecorder = new DBRecorder(timeKeeper, accountant, orderBookManager, "mistrycapital",
 			credentials.getProperty("MysqlUser"), credentials.getProperty("MysqlPassword"));
-		ExecutionEngine executionEngine =
-			new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager, dbRecorder, twilioSender, gdaxClient);
+		ExecutionEngine executionEngine = new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager, dbRecorder,
+			twilioSender, tactic, gdaxClient);
 
 		ConsolidatedHistory consolidatedHistory = restoreHistory(dataDir, INTERVAL_FILE_NAME, timeKeeper, intervalizer);
 

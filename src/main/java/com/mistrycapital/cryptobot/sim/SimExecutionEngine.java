@@ -9,6 +9,7 @@ import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.Product;
+import com.mistrycapital.cryptobot.tactic.Tactic;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
 import org.slf4j.Logger;
@@ -19,11 +20,13 @@ public class SimExecutionEngine implements ExecutionEngine {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
 	private final Accountant accountant;
+	private final Tactic tactic;
 	private final double transactionCost;
 	private final ConsolidatedHistory history;
 
-	SimExecutionEngine(MCProperties properties, Accountant accountant, ConsolidatedHistory history) {
+	SimExecutionEngine(MCProperties properties, Accountant accountant, Tactic tactic, ConsolidatedHistory history) {
 		this.accountant = accountant;
+		this.tactic = tactic;
 		this.history = history;
 		transactionCost = properties.getDoubleProperty("sim.transactionCostOnes", 0.0030);
 	}
@@ -37,17 +40,22 @@ public class SimExecutionEngine implements ExecutionEngine {
 			final Currency cryptoCurrency = product.getCryptoCurrency();
 			final double price = getImpactedPrice(instruction.getOrderSide(), instruction.getAmount(),
 				snapshot.getProductSnapshot(product));
+			if(Double.isNaN(price))
+				continue; // no legitimate price; assume no fill
 
 			// make sure not to trade more than we have available, regardless of the instructions
+			final double dollars;
+			final double crypto;
 			if(instruction.getOrderSide() == OrderSide.BUY) {
-				final double dollars = Math.min(instruction.getAmount() * price, accountant.getAvailable(Currency.USD));
-				final double crypto = dollars * (1 - transactionCost) / price;
+				dollars = Math.min(instruction.getAmount() * price, accountant.getAvailable(Currency.USD));
+				crypto = dollars * (1 - transactionCost) / price;
 				accountant.recordTrade(Currency.USD, -dollars, cryptoCurrency, crypto);
 			} else {
-				final double crypto = Math.min(instruction.getAmount(), accountant.getAvailable(cryptoCurrency));
-				final double dollars = (1 - transactionCost) * crypto * price;
+				crypto = Math.min(instruction.getAmount(), accountant.getAvailable(cryptoCurrency));
+				dollars = (1 - transactionCost) * crypto * price;
 				accountant.recordTrade(Currency.USD, dollars, cryptoCurrency, -crypto);
 			}
+			tactic.notifyFill(instruction, product, instruction.getOrderSide(), crypto, price);
 		}
 	}
 

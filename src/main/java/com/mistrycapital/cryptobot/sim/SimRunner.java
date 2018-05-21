@@ -67,37 +67,13 @@ public class SimRunner implements Runnable {
 			MCProperties simProperties = new MCProperties();
 
 			boolean search = simProperties.getBooleanProperty("sim.searchParameters", false);
-//			// old tactic search
-//			if(search) {
-//				// ladder on in/out thresholds
-//				simProperties.put("sim.logDecisions", "false");
-//				simProperties.put("sim.logForecastCalc", "false");
-//				SimResult result = parameterOptimizer.optimize(simProperties,
-//					Arrays.asList(
-//						new ParameterSearchSpace("tactic.inThreshold.default", 0.0, 0.06),
-//						new ParameterSearchSpace("tactic.outThreshold.default", -0.06, 0.0)
-//					),
-//					properties -> {
-//						try {
-//							return simulate(consolidatedSnapshots, properties);
-//						} catch(IOException e) {
-//							log.error("IO error running simulation", e);
-//							throw new RuntimeException(e);
-//						}
-//					}
-//				);
-//				log.info("Max return of " + result.holdingPeriodReturn + " sharpe of " + result.sharpeRatio
-//					+ " achieved at"
-//					+ " in=" + simProperties.getDoubleProperty("tactic.inThreshold.default")
-//					+ " out=" + simProperties.getDoubleProperty("tactic.outThreshold.default"));
-//			}
 			if(search) {
 				simProperties.put("sim.logDecisions", "false");
 				simProperties.put("sim.logForecastCalc", "false");
 				SimResult result = parameterOptimizer.optimize(simProperties,
 					Arrays.asList(
-						new ParameterSearchSpace("tactic.buyThreshold", 0.0, 0.015),
-						new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 10.0)
+						new ParameterSearchSpace("tactic.buyThreshold", 0.0, 0.0075),
+						new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 8.0)
 					),
 					properties -> {
 						try {
@@ -160,7 +136,7 @@ public class SimRunner implements Runnable {
 		ForecastCalculator forecastCalculator = new Snowbird(simProperties);
 		Tactic tactic = new TwoHourTactic(simProperties, timeKeeper, accountant);
 		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(simProperties, timeKeeper, accountant);
-		ExecutionEngine executionEngine = new SimExecutionEngine(simProperties, accountant, history);
+		ExecutionEngine executionEngine = new SimExecutionEngine(simProperties, accountant, tactic, history);
 		DecisionAppender decisionAppender = null;
 		DailyAppender dailyAppender = null;
 		if(shouldLogDecisions) {
@@ -175,8 +151,8 @@ public class SimRunner implements Runnable {
 		long nextDay = intervalizer.calcNextDayMillis(0);
 		List<Double> dailyPositionValuesUsd = new ArrayList<>(365);
 		for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedSnapshots) {
-			if(shouldSkipJan && consolidatedSnapshot.getTimeNanos() < 1517448021000000000L)
-				continue; // spotty data before 2/1, just skip
+			if(shouldSkipJan && consolidatedSnapshot.getTimeNanos() < 1518048000*1000000000L)
+				continue; // spotty/strange data before 2/8, just skip
 
 			timeKeeper.advanceTime(consolidatedSnapshot.getTimeNanos());
 			if(timeKeeper.epochMs() >= nextDay) {
@@ -248,8 +224,8 @@ public class SimRunner implements Runnable {
 		 * This is our objective function
 		 */
 		public int compareTo(SimResult b) {
-			return Double.compare(holdingPeriodReturn, b.holdingPeriodReturn);
-//			return Double.compare(sharpeRatio, b.sharpeRatio);
+//			return Double.compare(holdingPeriodReturn, b.holdingPeriodReturn);
+			return Double.compare(sharpeRatio, b.sharpeRatio);
 //			return Double.compare(winPct, b.winPct);
 		}
 	}

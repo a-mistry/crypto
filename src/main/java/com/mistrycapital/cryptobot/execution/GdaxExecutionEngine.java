@@ -12,17 +12,21 @@ import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.gdax.common.Reason;
+import com.mistrycapital.cryptobot.gdax.websocket.*;
+import com.mistrycapital.cryptobot.tactic.Tactic;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 import com.mistrycapital.cryptobot.twilio.TwilioSender;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import org.slf4j.Logger;
 
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-public class GdaxExecutionEngine implements ExecutionEngine {
+public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcessor {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
 	private final TimeKeeper timeKeeper;
@@ -30,18 +34,22 @@ public class GdaxExecutionEngine implements ExecutionEngine {
 	private final OrderBookManager orderBookManager;
 	private final DBRecorder dbRecorder;
 	private final TwilioSender twilioSender;
+	private final Tactic tactic;
 	private final GdaxClient gdaxClient;
+	/** Executor used to check market order status */
 	private final ScheduledExecutorService executorService;
+	/** Check after this many seconds */
 	private int waitForOrderSeconds = 15;
 
 	public GdaxExecutionEngine(TimeKeeper timeKeeper, Accountant accountant, OrderBookManager orderBookManager,
-		DBRecorder dbRecorder, TwilioSender twilioSender, GdaxClient gdaxClient)
+		DBRecorder dbRecorder, TwilioSender twilioSender, Tactic tactic, GdaxClient gdaxClient)
 	{
 		this.timeKeeper = timeKeeper;
 		this.accountant = accountant;
 		this.orderBookManager = orderBookManager;
 		this.dbRecorder = dbRecorder;
 		this.twilioSender = twilioSender;
+		this.tactic = tactic;
 		this.gdaxClient = gdaxClient;
 		executorService = Executors.newScheduledThreadPool(1);
 	}
@@ -49,23 +57,36 @@ public class GdaxExecutionEngine implements ExecutionEngine {
 	public void trade(List<TradeInstruction> instructions) {
 		if(instructions == null) return;
 
-		BBO bbo = new BBO();
-
 		for(TradeInstruction instruction : instructions) {
-			Product product = instruction.getProduct();
-			if(instruction.getOrderSide() == OrderSide.BUY) {
-				// for buy orders, use funds so we know we have enough after transaction costs
-				orderBookManager.getBook(product).recordBBO(bbo);
-				double dollars = bbo.askPrice * instruction.getAmount();
-				gdaxClient.placeMarketOrder(product, OrderSide.BUY, MarketOrderSizingType.FUNDS, dollars)
-					.thenAccept(this::verifyOrderComplete);
-				log.info("Placed order to buy $" + dollars + " of " + product);
-			} else {
-				gdaxClient
-					.placeMarketOrder(product, OrderSide.SELL, MarketOrderSizingType.SIZE, instruction.getAmount())
-					.thenAccept(this::verifyOrderComplete);
-				log.info("Placed order to sell " + instruction.getAmount() + " of " + product);
+			switch(instruction.getAggression()) {
+				case TAKE:
+					take(instruction);
+					break;
+				case POST_ONLY:
+					post(instruction);
+					break;
 			}
+		}
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////
+	// METHODS FOR TAKING STRATEGIES
+
+	/** Execution strategy that uses market orders to take the amount at the current price */
+	private void take(TradeInstruction instruction) {
+		Product product = instruction.getProduct();
+		if(instruction.getOrderSide() == OrderSide.BUY) {
+			// for buy orders, use funds so we know we have enough after transaction costs
+			BBO bbo = orderBookManager.getBook(product).getBBO();
+			double dollars = bbo.askPrice * instruction.getAmount();
+			gdaxClient.placeMarketOrder(product, OrderSide.BUY, MarketOrderSizingType.FUNDS, dollars)
+				.thenAccept(this::verifyOrderComplete);
+			log.info("Placed order to buy $" + dollars + " of " + product);
+		} else {
+			gdaxClient
+				.placeMarketOrder(product, OrderSide.SELL, MarketOrderSizingType.SIZE, instruction.getAmount())
+				.thenAccept(this::verifyOrderComplete);
+			log.info("Placed order to sell " + instruction.getAmount() + " of " + product);
 		}
 	}
 
@@ -124,5 +145,83 @@ public class GdaxExecutionEngine implements ExecutionEngine {
 		} else {
 			log.error("Order was neither canceled nor filled: " + orderInfo);
 		}
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////
+	// METHODS FOR POSTING STRATEGIES
+
+	private Map<UUID,TradeInstruction> activePosts;
+
+	/**
+	 * Execution strategy that posts at the current bid/ask and cancels any outstanding amount if not completed within
+	 * 80% of the current interval time
+	 */
+	private void post(TradeInstruction instruction) {
+		Product product = instruction.getProduct();
+		BBO bbo = orderBookManager.getBook(product).getBBO();
+		if(instruction.getOrderSide() == OrderSide.BUY) {
+			gdaxClient
+				.placePostOnlyLimitOrder(product, OrderSide.BUY, instruction.getAmount(), bbo.bidPrice, TimeUnit.HOURS)
+				.thenAccept(orderInfo -> orderPosted(orderInfo, instruction));
+			log.info("Placed post-only order to buy " + instruction.getAmount() + " of " + product + " at bid " +
+				bbo.bidPrice + " with 1 hour GTT");
+		} else {
+			gdaxClient
+				.placePostOnlyLimitOrder(product, OrderSide.SELL, instruction.getAmount(), bbo.askPrice, TimeUnit.HOURS)
+				.thenAccept(orderInfo -> orderPosted(orderInfo, instruction));
+			log.info("Placed post-only order to sell " + instruction.getAmount() + " of " + product + " at ask " +
+				bbo.askPrice + " with 1 hour GTT");
+		}
+	}
+
+	private void orderPosted(OrderInfo orderInfo, final TradeInstruction instruction) {
+		synchronized(activePosts) {
+			activePosts.put(orderInfo.getOrderId(), instruction);
+		}
+		log.debug("Posted order " + orderInfo);
+
+		final double filledSize = orderInfo.getFilledSize();
+		if(!Double.isNaN(filledSize) && filledSize > 0.0) {
+			tactic.notifyFill(instruction, orderInfo.getProduct(),
+				orderInfo.getOrderSide(), filledSize, orderInfo.getExecutedValue() / filledSize);
+		}
+	}
+
+	@Override
+	public void process(final Book msg) {
+	}
+
+	@Override
+	public void process(final Open msg) {
+	}
+
+	@Override
+	public void process(final Done msg) {
+		synchronized(activePosts) {
+			if(activePosts.containsKey(msg.getOrderId())) {
+				activePosts.remove(msg.getOrderId());
+			}
+		}
+	}
+
+	@Override
+	public void process(final Match msg) {
+		synchronized(activePosts) {
+			if(activePosts.containsKey(msg.getMakerOrderId())) {
+				tactic.notifyFill(activePosts.get(msg.getMakerOrderId()), msg.getProduct(), msg.getOrderSide(), msg.getSize(), msg.getPrice());
+			}
+		}
+	}
+
+	@Override
+	public void process(final ChangeSize msg) {
+	}
+
+	@Override
+	public void process(final ChangeFunds msg) {
+	}
+
+	@Override
+	public void process(final Activate msg) {
 	}
 }

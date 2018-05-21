@@ -15,6 +15,7 @@ import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.gdax.common.Reason;
 import com.mistrycapital.cryptobot.sim.SimTimeKeeper;
+import com.mistrycapital.cryptobot.tactic.Tactic;
 import com.mistrycapital.cryptobot.twilio.TwilioSender;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -40,8 +41,9 @@ class GdaxExecutionEngineTest {
 		final TwilioSender twilioSender = mock(TwilioSender.class);
 		final GdaxClient gdaxClient = mock(GdaxClient.class);
 		final DBRecorder dbRecorder = mock(DBRecorder.class);
-		GdaxExecutionEngine executionEngine =
-			new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager, dbRecorder, twilioSender, gdaxClient);
+		final Tactic tactic = mock(Tactic.class);
+		GdaxExecutionEngine executionEngine = new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager,
+			dbRecorder, twilioSender, tactic, gdaxClient);
 
 		when(orderBookManager.getBook(Product.BTC_USD)).thenReturn(btcBook);
 		doAnswer(invocationOnMock -> {
@@ -118,8 +120,9 @@ class GdaxExecutionEngineTest {
 		final TwilioSender twilioSender = mock(TwilioSender.class);
 		final GdaxClient gdaxClient = mock(GdaxClient.class);
 		final DBRecorder dbRecorder = mock(DBRecorder.class);
-		GdaxExecutionEngine executionEngine =
-			new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager, dbRecorder, twilioSender, gdaxClient);
+		final Tactic tactic = mock(Tactic.class);
+		GdaxExecutionEngine executionEngine = new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager,
+			dbRecorder, twilioSender, tactic, gdaxClient);
 
 		// first time order is pending
 		JsonObject json = new JsonObject();

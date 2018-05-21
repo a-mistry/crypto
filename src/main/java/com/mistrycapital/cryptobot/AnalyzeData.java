@@ -1,7 +1,6 @@
 package com.mistrycapital.cryptobot;
 
 import ch.qos.logback.classic.Level;
-import com.mistrycapital.cryptobot.forecasts.Brighton;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.common.Product;

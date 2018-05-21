@@ -1,22 +1,27 @@
 package com.mistrycapital.cryptobot.tactic;
 
-import com.mistrycapital.cryptobot.accounting.Accountant;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
-import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
 import com.mistrycapital.cryptobot.execution.TradeInstruction;
-import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.Product;
-import com.mistrycapital.cryptobot.util.MCLoggerFactory;
-import com.mistrycapital.cryptobot.util.MCProperties;
-import org.slf4j.Logger;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Determines trades based on our view of the world. Note that implementations are NOT thread safe.
  */
 public interface Tactic {
+	/**
+	 * Given market data and tactic state, decides what trades if any to make.
+	 *
+	 * @return List of trades to execute (potentially in parallel), or null if nothing to do
+	 */
 	List<TradeInstruction> decideTrades(ConsolidatedSnapshot snapshot, double[] forecasts);
+
+	/**
+	 * Callback from the execution algo to notify the tactic of a fill. Note that instruction is
+	 * the original instruction object, which can be used to identify the order.
+	 */
+	void notifyFill(final TradeInstruction instruction, Product product, OrderSide orderSide, double amount,
+		double price);
 }

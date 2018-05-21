@@ -80,6 +80,13 @@ public class ThresholdTactic implements Tactic {
 		return trades;
 	}
 
+	@Override
+	public void notifyFill(final TradeInstruction instruction, final Product product, final OrderSide orderSide,
+		final double amount, final double price)
+	{
+		// do nothing
+	}
+
 	/**
 	 * Calculates how much to buy, given that we don't want the position in any product to be more than the
 	 * given allocation percentage
