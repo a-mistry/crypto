@@ -24,7 +24,8 @@ public class Snowbird implements ForecastCalculator {
 	private final double[][] coeffs;
 
 	private static final String[] signalsToUse =
-		new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "illiqDown", "RSIRatioxRet"};
+		new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
+			"newRatio", "cancelRatio", "timeToMaxMin"};
 
 	public Snowbird(MCProperties properties) {
 		final int intervalSeconds = properties.getIntProperty("history.intervalSeconds");
@@ -94,6 +95,8 @@ public class Snowbird implements ForecastCalculator {
 		double sumDownChange = 0.0;
 		int clientOidBuyCount = 0;
 		int clientOidSellCount = 0;
+		int newCount2h = 0;
+		int clientOidCount2h = 0;
 		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values()) {
 			ProductSnapshot data = snapshot.getProductSnapshot(product);
 			if(dataPoints < twelveHourDatapoints) {
@@ -142,6 +145,8 @@ public class Snowbird implements ForecastCalculator {
 
 			if(dataPoints < twoHourDatapoints) {
 				lagRet += periodRet;
+				newCount2h += data.newBidCount + data.newAskCount;
+				clientOidCount2h += data.clientOidBuyCount + data.clientOidSellCount;
 			}
 
 			dataPoints++;
@@ -154,6 +159,7 @@ public class Snowbird implements ForecastCalculator {
 		final double upVolumeRatio = upVolume / (upVolume + downVolume);
 		final double informedDirection = ((double) clientOidBuyCount) / (clientOidBuyCount + clientOidSellCount);
 		final double informedPct = ((double) clientOidBuyCount + clientOidSellCount) / (newBidCount + newAskCount);
+		final double informedPct2h = ((double) clientOidCount2h) / newCount2h;
 
 		return Map.ofEntries(
 			entry("lagRet", lagRet),
@@ -172,7 +178,7 @@ public class Snowbird implements ForecastCalculator {
 			entry("upVolumexRet", upVolumeRatio * lagRet),
 			entry("sumVolxRet", sumVolxRet),
 			entry("diffVolxRet", sumVolxRet12 - sumVolxRet),
-			entry("normVolxRet", (sumVolxRet12 - sumVolxRet) / (upVolume + downVolume)),
+			entry("normVolxRet", (sumVolxRet12 - sumVolxRet) / (upVolume + downVolume)), // modified OBV indicator
 			entry("timeToMaxMin", (double) intervalsToMax - intervalsToMin),
 			entry("illiqUp", illiqUp),
 			entry("illiqDown", illiqDown),
@@ -181,7 +187,12 @@ public class Snowbird implements ForecastCalculator {
 			entry("RSIRatio", sumUpChange / sumDownChange),
 			entry("RSIRatioxRet", sumUpChange / sumDownChange * lagRet),
 			entry("informedDirxRet", informedDirection * lagRet),
-			entry("informedPct", informedPct)
+			entry("informedPct", informedPct),
+			entry("informedPctxRet", informedPct * lagRet),
+			entry("informedPctxIlliq", informedPct * illiqDown),
+			entry("informedPctxRSI", informedPct * sumUpChange / sumDownChange * lagRet),
+			entry("diffInformed", informedPct - informedPct2h),
+			entry("diffInformedxRet", (informedPct - informedPct2h) * lagRet)
 		);
 	}
 

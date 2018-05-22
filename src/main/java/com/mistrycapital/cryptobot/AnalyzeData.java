@@ -93,43 +93,21 @@ public class AnalyzeData {
 			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "illiqDown", "RSIRatio"});
 		runRegressionPrintResults(joined, "fut_ret_2h",
 			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "illiqDown", "RSIRatioxRet"});
-
-		boolean productAnalysis = false;
-		if(productAnalysis)
-			for(Product product : Product.FAST_VALUES) {
-				var prodData = joined.filter(key -> key.product == product);
-				System.out.println("Product " + product + " only");
-				runRegressionPrintResults(prodData, "fut_ret_2h",
-					new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "illiqDown",
-						"RSIRatioxRet"});
-			}
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "illiqDown", "RSIRatioxRet",
+				"informedDirxRet"});
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			forecastInputs.iterator().next().getColumnNames()); // kitchen sink rsq 0.183
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "illiqDown", "RSIRatioxRet",
+				"tradeRatio", "newRatio", "cancelRatio", "timeToMaxMin"});
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
+				"newRatio", "cancelRatio", "timeToMaxMin"});
 
 		String[] finalXs =
-			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "illiqDown", "RSIRatioxRet"};
-		RegressionResults finalResults = joined.regress("fut_ret_2h", finalXs);
-		final double betSize = 10000.0 / 24;
-		double maxProfit = 0.0;
-		double maxThreshold = 0.0;
-		int maxBets = 0;
-		for(int i = 0; i < 50; i++) {
-			var threshold = i / 1000.0;
-			Object[] res = getProfit(finalResults.getParameterEstimates(), joined, finalXs, betSize, threshold);
-			var profit = (double) res[0];
-			var numBets = (int) res[1];
-			// adjust TC
-			profit -= 0.0060 * betSize * numBets;
-//			System.out.println("Threshold " + threshold);
-//			System.out.println("Profit = " + profit + " on " + numBets + " bets");
-//			System.out
-//				.println("Profit per bet = " + (profit / numBets) + " or " + (100 * profit / numBets / betSize) + "%");
-			if(!Double.isNaN(profit) && profit > maxProfit) {
-				maxProfit = profit;
-				maxThreshold = threshold;
-				maxBets = numBets;
-			}
-		}
-		System.out.println("Max profit achieved at threshold " + maxThreshold);
-		System.out.println("Profit = " + maxProfit + " on " + maxBets + " bets");
+			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
+				"newRatio", "cancelRatio", "timeToMaxMin"};
 
 		printProductCoeffs(joined, "fut_ret_2h", finalXs);
 	}
