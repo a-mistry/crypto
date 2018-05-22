@@ -92,6 +92,8 @@ public class Snowbird implements ForecastCalculator {
 		double illiqDown = 0.0;
 		double sumUpChange = 0.0;
 		double sumDownChange = 0.0;
+		int clientOidBuyCount = 0;
+		int clientOidSellCount = 0;
 		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values()) {
 			ProductSnapshot data = snapshot.getProductSnapshot(product);
 			if(dataPoints < twelveHourDatapoints) {
@@ -108,6 +110,8 @@ public class Snowbird implements ForecastCalculator {
 				askCancelCount += data.askCancelCount;
 				newBidCount += data.newBidCount;
 				newAskCount += data.newAskCount;
+				clientOidBuyCount += data.clientOidBuyCount;
+				clientOidSellCount += data.clientOidSellCount;
 				if(!Double.isNaN(data.ret)) {
 					final double prevPrice = data.lastPrice / (1 + data.ret);
 
@@ -148,6 +152,8 @@ public class Snowbird implements ForecastCalculator {
 		final double newRatio = (newBidCount - newAskCount) / ((double) book5PctCount);
 		final double upRatio = ((double) upIntervals) / (upIntervals + downIntervals);
 		final double upVolumeRatio = upVolume / (upVolume + downVolume);
+		final double informedDirection = ((double) clientOidBuyCount) / (clientOidBuyCount + clientOidSellCount);
+		final double informedPct = ((double) clientOidBuyCount + clientOidSellCount) / (newBidCount + newAskCount);
 
 		return Map.ofEntries(
 			entry("lagRet", lagRet),
@@ -173,7 +179,9 @@ public class Snowbird implements ForecastCalculator {
 			entry("illiqRatio", illiqUp / illiqDown),
 			entry("illiqDownxRet", illiqDown * lagRet),
 			entry("RSIRatio", sumUpChange / sumDownChange),
-			entry("RSIRatioxRet", sumUpChange / sumDownChange * lagRet)
+			entry("RSIRatioxRet", sumUpChange / sumDownChange * lagRet),
+			entry("informedDirxRet", informedDirection * lagRet),
+			entry("informedPct", informedPct)
 		);
 	}
 

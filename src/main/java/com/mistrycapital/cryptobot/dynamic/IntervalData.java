@@ -36,6 +36,10 @@ public class IntervalData {
 	public double bidCancelSize;
 	/** Size of asks canceled */
 	public double askCancelSize;
+	/** Number of received buy orders with a client order id */
+	public long clientOidBuyCount;
+	/** Number of received sell orders with a client order id */
+	public long clientOidSellCount;
 
 	public IntervalData() {
 		lastPrice = Double.NaN;

@@ -19,6 +19,7 @@ import com.mistrycapital.cryptobot.twilio.TwilioSender;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import org.slf4j.Logger;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -150,7 +151,8 @@ public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcesso
 	///////////////////////////////////////////////////////////////////////////////////////
 	// METHODS FOR POSTING STRATEGIES
 
-	private Map<UUID,TradeInstruction> activePosts;
+	private Map<UUID,TradeInstruction> clientOids = new HashMap<>();
+	private Map<UUID,TradeInstruction> gdaxIds = new HashMap<>();
 
 	/**
 	 * Execution strategy that posts at the current bid/ask and cancels any outstanding amount if not completed within
@@ -159,31 +161,17 @@ public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcesso
 	private void post(TradeInstruction instruction) {
 		Product product = instruction.getProduct();
 		BBO bbo = orderBookManager.getBook(product).getBBO();
+		UUID clientOid = UUID.randomUUID();
 		if(instruction.getOrderSide() == OrderSide.BUY) {
-			gdaxClient
-				.placePostOnlyLimitOrder(product, OrderSide.BUY, instruction.getAmount(), bbo.bidPrice, TimeUnit.HOURS)
-				.thenAccept(orderInfo -> orderPosted(orderInfo, instruction));
+			gdaxClient.placePostOnlyLimitOrder(product, OrderSide.BUY, instruction.getAmount(), bbo.bidPrice,
+				clientOid, TimeUnit.HOURS);
 			log.info("Placed post-only order to buy " + instruction.getAmount() + " of " + product + " at bid " +
 				bbo.bidPrice + " with 1 hour GTT");
 		} else {
-			gdaxClient
-				.placePostOnlyLimitOrder(product, OrderSide.SELL, instruction.getAmount(), bbo.askPrice, TimeUnit.HOURS)
-				.thenAccept(orderInfo -> orderPosted(orderInfo, instruction));
+			gdaxClient.placePostOnlyLimitOrder(product, OrderSide.SELL, instruction.getAmount(), bbo.askPrice,
+				clientOid, TimeUnit.HOURS);
 			log.info("Placed post-only order to sell " + instruction.getAmount() + " of " + product + " at ask " +
 				bbo.askPrice + " with 1 hour GTT");
-		}
-	}
-
-	private void orderPosted(OrderInfo orderInfo, final TradeInstruction instruction) {
-		synchronized(activePosts) {
-			activePosts.put(orderInfo.getOrderId(), instruction);
-		}
-		log.debug("Posted order " + orderInfo);
-
-		final double filledSize = orderInfo.getFilledSize();
-		if(!Double.isNaN(filledSize) && filledSize > 0.0) {
-			tactic.notifyFill(instruction, orderInfo.getProduct(),
-				orderInfo.getOrderSide(), filledSize, orderInfo.getExecutedValue() / filledSize);
 		}
 	}
 
@@ -192,23 +180,35 @@ public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcesso
 	}
 
 	@Override
+	public void process(final Received msg) {
+		synchronized(gdaxIds) {
+			UUID clientOid = msg.getClientOid();
+			if(clientOid != null && clientOids.containsKey(clientOid)) {
+				gdaxIds.put(msg.getOrderId(), clientOids.get(clientOid));
+				clientOids.remove(clientOid);
+			}
+		}
+	}
+
+	@Override
 	public void process(final Open msg) {
 	}
 
 	@Override
 	public void process(final Done msg) {
-		synchronized(activePosts) {
-			if(activePosts.containsKey(msg.getOrderId())) {
-				activePosts.remove(msg.getOrderId());
+		synchronized(gdaxIds) {
+			if(gdaxIds.containsKey(msg.getOrderId())) {
+				gdaxIds.remove(msg.getOrderId());
 			}
 		}
 	}
 
 	@Override
 	public void process(final Match msg) {
-		synchronized(activePosts) {
-			if(activePosts.containsKey(msg.getMakerOrderId())) {
-				tactic.notifyFill(activePosts.get(msg.getMakerOrderId()), msg.getProduct(), msg.getOrderSide(), msg.getSize(), msg.getPrice());
+		synchronized(gdaxIds) {
+			if(gdaxIds.containsKey(msg.getMakerOrderId())) {
+				tactic.notifyFill(gdaxIds.get(msg.getMakerOrderId()), msg.getProduct(), msg.getOrderSide(),
+					msg.getSize(), msg.getPrice());
 			}
 		}
 	}

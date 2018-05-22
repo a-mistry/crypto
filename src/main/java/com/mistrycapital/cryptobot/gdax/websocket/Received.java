@@ -33,7 +33,7 @@ public class Received extends OrderGdaxMessage {
 
 	@Override
 	public void process(final GdaxMessageProcessor processor) {
-		//processor.process(this);
+		processor.process(this);
 	}
 
 	/** Price */

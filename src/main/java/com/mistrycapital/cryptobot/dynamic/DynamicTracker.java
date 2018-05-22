@@ -27,6 +27,11 @@ public class DynamicTracker implements GdaxMessageProcessor {
 	}
 
 	@Override
+	public void process(final Received msg) {
+		productTrackers[msg.getProduct().getIndex()].process(msg);
+	}
+
+	@Override
 	public void process(final Open msg) {
 		productTrackers[msg.getProduct().getIndex()].process(msg);
 	}

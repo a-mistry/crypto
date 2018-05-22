@@ -2,16 +2,9 @@ package com.mistrycapital.cryptobot.book;
 
 import java.util.*;
 
+import com.mistrycapital.cryptobot.gdax.websocket.*;
 import org.slf4j.Logger;
 
-import com.mistrycapital.cryptobot.gdax.websocket.Activate;
-import com.mistrycapital.cryptobot.gdax.websocket.Book;
-import com.mistrycapital.cryptobot.gdax.websocket.ChangeFunds;
-import com.mistrycapital.cryptobot.gdax.websocket.ChangeSize;
-import com.mistrycapital.cryptobot.gdax.websocket.Done;
-import com.mistrycapital.cryptobot.gdax.websocket.GdaxMessageProcessor;
-import com.mistrycapital.cryptobot.gdax.websocket.Match;
-import com.mistrycapital.cryptobot.gdax.websocket.Open;
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
@@ -364,6 +357,12 @@ public class OrderBook {
 			sequence = msg.getSequence();
 			rebuild(msg);
 			log.info("Built book for " + product);
+		}
+
+		@Override
+		public void process(Received msg) {
+			// nothing to do
+			sequence = msg.getSequence();
 		}
 
 		@Override

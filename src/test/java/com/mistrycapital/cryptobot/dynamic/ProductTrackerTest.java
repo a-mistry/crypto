@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import com.mistrycapital.cryptobot.gdax.websocket.Done;
 import com.mistrycapital.cryptobot.gdax.websocket.Match;
 import com.mistrycapital.cryptobot.gdax.websocket.Open;
+import com.mistrycapital.cryptobot.gdax.websocket.Received;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -22,6 +23,9 @@ class ProductTrackerTest {
 	private Match matchBid;
 	private Match matchAsk1;
 	private Match matchAsk2;
+	private Received receivedOid1;
+	private Received receivedOid2;
+	private Received receivedNoOid;
 
 	@BeforeEach
 	void setUp() {
@@ -65,6 +69,17 @@ class ProductTrackerTest {
 		msgJson.addProperty("price", 29.0);
 		msgJson.addProperty("size", 1.0);
 		matchAsk2 = new Match(msgJson);
+
+		msgJson.addProperty("side", "buy");
+		msgJson.addProperty("order_type", "limit");
+		msgJson.addProperty("client_oid", UUID.randomUUID().toString());
+		receivedOid1 = new Received(msgJson);
+		msgJson.addProperty("side", "sell");
+		msgJson.addProperty("client_oid", UUID.randomUUID().toString());
+		receivedOid2 = new Received(msgJson);
+		msgJson.addProperty("side", "buy");
+		msgJson.remove("client_oid");
+		receivedNoOid = new Received(msgJson);
 	}
 
 
@@ -78,6 +93,9 @@ class ProductTrackerTest {
 		tracker.process(canceledAsk);
 		tracker.process(canceledBid1);
 		tracker.process(canceledBid2);
+		tracker.process(receivedOid1);
+		tracker.process(receivedOid2);
+		tracker.process(receivedNoOid);
 
 		IntervalData intervalData = tracker.snapshot();
 		assertEquals(Double.NaN, intervalData.lastPrice);
@@ -96,6 +114,8 @@ class ProductTrackerTest {
 		assertEquals(openBid.getRemainingSize(), intervalData.newBidSize);
 		assertEquals(1, intervalData.newAskCount);
 		assertEquals(openAsk.getRemainingSize(), intervalData.newAskSize);
+		assertEquals(1, intervalData.clientOidBuyCount);
+		assertEquals(1, intervalData.clientOidSellCount);
 
 		// now verify trades
 		tracker.process(matchBid);

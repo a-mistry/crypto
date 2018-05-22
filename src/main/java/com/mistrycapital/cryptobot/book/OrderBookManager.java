@@ -1,13 +1,6 @@
 package com.mistrycapital.cryptobot.book;
 
-import com.mistrycapital.cryptobot.gdax.websocket.Activate;
-import com.mistrycapital.cryptobot.gdax.websocket.Book;
-import com.mistrycapital.cryptobot.gdax.websocket.ChangeFunds;
-import com.mistrycapital.cryptobot.gdax.websocket.ChangeSize;
-import com.mistrycapital.cryptobot.gdax.websocket.Done;
-import com.mistrycapital.cryptobot.gdax.websocket.GdaxMessageProcessor;
-import com.mistrycapital.cryptobot.gdax.websocket.Match;
-import com.mistrycapital.cryptobot.gdax.websocket.Open;
+import com.mistrycapital.cryptobot.gdax.websocket.*;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 
@@ -31,6 +24,11 @@ public class OrderBookManager implements GdaxMessageProcessor {
 
 	@Override
 	public void process(Book msg) {
+		bookProcessors[msg.getProduct().getIndex()].process(msg);
+	}
+
+	@Override
+	public void process(Received msg) {
 		bookProcessors[msg.getProduct().getIndex()].process(msg);
 	}
 

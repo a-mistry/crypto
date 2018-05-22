@@ -68,6 +68,7 @@ public class GdaxMessageTranslator implements Runnable {
 	}
 
 	private GdaxMessage parseMessage(String msgStr) {
+		// TODO: Reuse websocket code
 		JsonObject json = jsonParser.parse(msgStr).getAsJsonObject();
 		String type = json.get("type").getAsString();
 		GdaxMessage message = null;
@@ -102,7 +103,8 @@ public class GdaxMessageTranslator implements Runnable {
 				message = new Activate(json);
 				break;
 			case "received":
-				// received a new order - we don't really do anything with these
+				// received message
+				message = new Received(json);
 			default:
 				// this could be a new message type or received
 				// or something else

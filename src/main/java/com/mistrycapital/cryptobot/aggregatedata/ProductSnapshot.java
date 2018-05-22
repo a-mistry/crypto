@@ -77,6 +77,10 @@ public class ProductSnapshot {
 	public final double bidCancelSize;
 	/** Size of asks canceled */
 	public final double askCancelSize;
+	/** Number of received buy orders with a client order id */
+	public long clientOidBuyCount;
+	/** Number of received sell orders with a client order id */
+	public long clientOidSellCount;
 
 	public static ProductSnapshot getSnapshot(Product product, OrderBook orderBook, IntervalData intervalData) {
 		BBO bbo = new BBO();
@@ -124,6 +128,8 @@ public class ProductSnapshot {
 		askCancelCount = intervalData.askCancelCount;
 		bidCancelSize = intervalData.bidCancelSize;
 		askCancelSize = intervalData.askCancelSize;
+		clientOidBuyCount = intervalData.clientOidBuyCount;
+		clientOidSellCount = intervalData.clientOidSellCount;
 	}
 
 	public ProductSnapshot(CSVRecord record) {
@@ -157,6 +163,8 @@ public class ProductSnapshot {
 		askCancelCount = Long.parseLong(record.get("askCancelCount"));
 		bidCancelSize = Double.parseDouble(record.get("bidCancelSize"));
 		askCancelSize = Double.parseDouble(record.get("askCancelSize"));
+		clientOidBuyCount = Long.parseLong(record.get("clientOidBuyCount"));
+		clientOidSellCount = Long.parseLong(record.get("clientOidSellCount"));
 	}
 
 	/** @return Column headers for csv output */
@@ -166,7 +174,8 @@ public class ProductSnapshot {
 			"lastPrice,ret,volume,vwap," +
 			"bidTradeCount,askTradeCount,bidTradeSize,askTradeSize," +
 			"newBidCount,newAskCount,newBidSize,newAskSize," +
-			"bidCancelCount,askCancelCount,bidCancelSize,askCancelSize";
+			"bidCancelCount,askCancelCount,bidCancelSize,askCancelSize," +
+			"clientOidBuyCount,clientOidSellCount";
 	}
 
 	/** @return CSV output row */
@@ -231,6 +240,10 @@ public class ProductSnapshot {
 		builder.append(bidCancelSize);
 		builder.append(',');
 		builder.append(askCancelSize);
+		builder.append(',');
+		builder.append(clientOidBuyCount);
+		builder.append(',');
+		builder.append(clientOidSellCount);
 		return builder.toString();
 	}
 }

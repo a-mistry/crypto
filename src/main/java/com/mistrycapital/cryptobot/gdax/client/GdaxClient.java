@@ -134,7 +134,7 @@ public class GdaxClient {
 	 * @return OrderInfo returned by gdax
 	 */
 	public CompletableFuture<OrderInfo> placePostOnlyLimitOrder(Product product, OrderSide side, double amount,
-		double limitPrice, TimeUnit cancelAfter)
+		double limitPrice, UUID clientOid, TimeUnit cancelAfter)
 	{
 		JsonObject body = new JsonObject();
 		body.addProperty("type", "limit");
@@ -143,6 +143,8 @@ public class GdaxClient {
 		body.addProperty("price", decimalFormat.format(limitPrice));
 		body.addProperty("size", decimalFormat.format(amount));
 		body.addProperty("post_only", true);
+		if(clientOid != null)
+			body.addProperty("client_oid", clientOid.toString());
 		if(cancelAfter != null) {
 			body.addProperty("time_in_force", "GTT");
 			switch(cancelAfter) {

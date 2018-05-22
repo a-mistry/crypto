@@ -56,6 +56,15 @@ class ProductTracker implements GdaxMessageProcessor {
 		}
 	}
 
+	private synchronized void recordReceived(final Received msg) {
+		if(msg.getClientOid() != null) {
+			if(msg.getOrderSide() == OrderSide.BUY)
+				curInterval.clientOidBuyCount++;
+			else
+				curInterval.clientOidSellCount++;
+		}
+	}
+
 	public synchronized IntervalData snapshot() {
 		// finalize current interval
 		if(!Double.isNaN(prevLastPrice))
@@ -74,6 +83,11 @@ class ProductTracker implements GdaxMessageProcessor {
 	@Override
 	public void process(final Book msg) {
 		// nothing to do
+	}
+
+	@Override
+	public void process(final Received msg) {
+		recordReceived(msg);
 	}
 
 	@Override

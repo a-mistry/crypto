@@ -150,7 +150,7 @@ class GdaxClientTest {
 		// post $10 of ETH specifying funds
 		var price = Double.isNaN(bbo.bidPrice) ? 10.0 : bbo.bidPrice;
 		var orderFuture =
-			gdaxClient.placePostOnlyLimitOrder(Product.ETH_USD, OrderSide.BUY, 10.0 / price, price, TimeUnit.MINUTES);
+			gdaxClient.placePostOnlyLimitOrder(Product.ETH_USD, OrderSide.BUY, 10.0 / price, price, null, TimeUnit.MINUTES);
 		var orderInfo = orderFuture.get();
 		UUID orderId = orderInfo.getOrderId();
 
