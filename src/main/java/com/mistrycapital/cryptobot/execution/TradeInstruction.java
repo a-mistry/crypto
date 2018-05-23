@@ -39,4 +39,10 @@ public class TradeInstruction {
 	public final Aggression getAggression() {
 		return aggression;
 	}
+
+	/** @return Description of instruction in text, e.g. "BUY 1.32 of BTC-USD using TAKE" */
+	@Override
+	public String toString() {
+		return orderSide + " " + amount + " of " + product + " using " + aggression;
+	}
 }

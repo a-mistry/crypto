@@ -11,6 +11,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
+import java.util.stream.Collectors;
 
 public class TradeRiskValidator {
 	private static final Logger log = MCLoggerFactory.getLogger();
@@ -32,12 +33,14 @@ public class TradeRiskValidator {
 		// 1. No more than X trades in past 24 hours
 		// 2. Do not trade more than we have
 		// 3. Don't buy more than position limit in any currency
+		// 4. Must trade in 0.001 increments
 
 		// NEED TO UNIT TEST THESE!
 		if(instructions == null) return null;
 
 		instructions = validateTradeCount(instructions);
 		instructions = validatePosition(instructions);
+		instructions = validateSize(instructions);
 
 		return instructions;
 	}
@@ -68,5 +71,12 @@ public class TradeRiskValidator {
 	List<TradeInstruction> validatePosition(List<TradeInstruction> instructions) {
 		// TODO: implement this
 		return instructions;
+	}
+
+	/** Validate the size is sufficiently large (0.001) */
+	List<TradeInstruction> validateSize(List<TradeInstruction> instructions) {
+		return instructions.stream()
+			.filter(instruction -> instruction.getAmount()>0.001)
+			.collect(Collectors.toList());
 	}
 }

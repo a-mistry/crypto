@@ -5,6 +5,7 @@ import com.mistrycapital.cryptobot.book.BBO;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
 import com.mistrycapital.cryptobot.database.DBRecorder;
 import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
+import com.mistrycapital.cryptobot.gdax.client.GdaxClient.GdaxException;
 import com.mistrycapital.cryptobot.gdax.client.MarketOrderSizingType;
 import com.mistrycapital.cryptobot.gdax.client.OrderInfo;
 import com.mistrycapital.cryptobot.gdax.client.OrderStatus;
@@ -23,9 +24,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcessor {
 	private static final Logger log = MCLoggerFactory.getLogger();
@@ -153,25 +152,47 @@ public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcesso
 
 	private Map<UUID,TradeInstruction> clientOids = new HashMap<>();
 	private Map<UUID,TradeInstruction> gdaxIds = new HashMap<>();
+	private double filledAmountTotal;
+	private double orderedAmountTotal;
 
 	/**
 	 * Execution strategy that posts at the current bid/ask and cancels any outstanding amount if not completed within
 	 * 80% of the current interval time
 	 */
 	private void post(TradeInstruction instruction) {
+		log.debug("Posting instruction " + instruction);
 		Product product = instruction.getProduct();
 		BBO bbo = orderBookManager.getBook(product).getBBO();
+		if(Double.isNaN(bbo.bidPrice) || Double.isNaN(bbo.askPrice)) {
+			log.error("Tried to post order to " + instruction + " but top of book has NaN so we can't determine price");
+			return;
+		}
+
 		UUID clientOid = UUID.randomUUID();
+		clientOids.put(clientOid, instruction);
+		final CompletableFuture<OrderInfo> orderInfoFuture;
 		if(instruction.getOrderSide() == OrderSide.BUY) {
-			gdaxClient.placePostOnlyLimitOrder(product, OrderSide.BUY, instruction.getAmount(), bbo.bidPrice,
-				clientOid, TimeUnit.HOURS);
-			log.info("Placed post-only order to buy " + instruction.getAmount() + " of " + product + " at bid " +
-				bbo.bidPrice + " with 1 hour GTT");
+			orderInfoFuture = gdaxClient.placePostOnlyLimitOrder(product, OrderSide.BUY, instruction.getAmount(),
+				bbo.bidPrice, clientOid, TimeUnit.HOURS);
+			log.info("Placed post-only order to " + instruction + " at bid " + bbo.bidPrice
+				+ " with 1 hour GTT, client_oid " + clientOid);
 		} else {
-			gdaxClient.placePostOnlyLimitOrder(product, OrderSide.SELL, instruction.getAmount(), bbo.askPrice,
-				clientOid, TimeUnit.HOURS);
-			log.info("Placed post-only order to sell " + instruction.getAmount() + " of " + product + " at ask " +
-				bbo.askPrice + " with 1 hour GTT");
+			orderInfoFuture = gdaxClient.placePostOnlyLimitOrder(product, OrderSide.SELL, instruction.getAmount(),
+				bbo.askPrice, clientOid, TimeUnit.HOURS);
+			log.info("Placed post-only order to " + instruction + " at ask " + bbo.askPrice
+				+ " with 1 hour GTT, client_oid " + clientOid);
+		}
+
+		// check for client errors
+		try {
+			orderInfoFuture.get();
+		} catch(ExecutionException | InterruptedException e) {
+			if(e.getCause().getClass().isAssignableFrom(GdaxException.class)) {
+				log.error("Could not post order to " + instruction, e);
+				clientOids.remove(clientOid);
+			} else {
+				throw new RuntimeException(e);
+			}
 		}
 	}
 
@@ -184,7 +205,10 @@ public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcesso
 		synchronized(gdaxIds) {
 			UUID clientOid = msg.getClientOid();
 			if(clientOid != null && clientOids.containsKey(clientOid)) {
-				gdaxIds.put(msg.getOrderId(), clientOids.get(clientOid));
+				TradeInstruction instruction = clientOids.get(clientOid);
+				log.debug("Got RECEIVED message for post order to " + instruction + " client_oid " + clientOid
+					+ " maps to gdax order_id: " + msg.getOrderId());
+				gdaxIds.put(msg.getOrderId(), instruction);
 				clientOids.remove(clientOid);
 			}
 		}
@@ -198,7 +222,17 @@ public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcesso
 	public void process(final Done msg) {
 		synchronized(gdaxIds) {
 			if(gdaxIds.containsKey(msg.getOrderId())) {
-				gdaxIds.remove(msg.getOrderId());
+				UUID orderId = msg.getOrderId();
+				TradeInstruction instruction = gdaxIds.get(orderId);
+				log.info("Post order " + orderId + " was done at " + msg.getTimeMicros()
+					+ " with reason " + msg.getReason() + " and remaining size " + msg.getRemainingSize()
+					+ ", original size was " + instruction.getAmount());
+				filledAmountTotal += instruction.getAmount() - msg.getRemainingSize();
+				orderedAmountTotal += instruction.getAmount();
+				log.info("Fill rate is running at " + (100 * filledAmountTotal / orderedAmountTotal));
+				gdaxIds.remove(orderId);
+
+				// TODO: send text on done, record cancel if any
 			}
 		}
 	}
@@ -207,8 +241,13 @@ public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcesso
 	public void process(final Match msg) {
 		synchronized(gdaxIds) {
 			if(gdaxIds.containsKey(msg.getMakerOrderId())) {
+				UUID orderId = msg.getMakerOrderId();
+				log.info("FILL received for post order " + orderId + ": " + msg.getSize() + " " + msg.getOrderSide()
+					+ " " + msg.getProduct() + " at " + msg.getPrice());
 				tactic.notifyFill(gdaxIds.get(msg.getMakerOrderId()), msg.getProduct(), msg.getOrderSide(),
 					msg.getSize(), msg.getPrice());
+
+				// TODO: record trade in db
 			}
 		}
 	}
