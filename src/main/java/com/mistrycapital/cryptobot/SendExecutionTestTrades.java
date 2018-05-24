@@ -1,6 +1,7 @@
 package com.mistrycapital.cryptobot;
 
 import com.mistrycapital.cryptobot.accounting.Accountant;
+import com.mistrycapital.cryptobot.accounting.PositionsProvider;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.appender.FileAppender;
 import com.mistrycapital.cryptobot.appender.GdaxMessageAppender;
@@ -11,6 +12,7 @@ import com.mistrycapital.cryptobot.execution.GdaxExecutionEngine;
 import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.gdax.GdaxPositionsProvider;
 import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
+import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.gdax.websocket.GdaxWebSocket;
@@ -38,7 +40,9 @@ import java.util.Properties;
 public class SendExecutionTestTrades {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
-	public static void main(String[] args) throws Exception {
+	public static void main(String[] args)
+		throws Exception
+	{
 		MCProperties properties = new MCProperties();
 		Path dataDir = Paths.get(properties.getProperty("dataDir"));
 		log.debug("Saving message and sample data to " + dataDir);
@@ -60,7 +64,7 @@ public class SendExecutionTestTrades {
 		GdaxClient gdaxClient = new GdaxClient(new URI("https://api.gdax.com"), credentials.getProperty("gdaxApiKey"),
 			credentials.getProperty("gdaxApiSecret"), credentials.getProperty("gdaxPassPhrase"));
 		GdaxPositionsProvider gdaxPositionsProvider = new GdaxPositionsProvider(timeKeeper, gdaxClient);
-		Accountant accountant = new Accountant(gdaxPositionsProvider);
+		Accountant accountant = new DummyAccountant(gdaxPositionsProvider);
 
 		Tactic tactic = new DummyTactic();
 		TwilioSender twilioSender =
@@ -83,7 +87,8 @@ public class SendExecutionTestTrades {
 
 		Thread.sleep(20000); // wait for order books to be built
 
-		TradeInstruction instruction = new TradeInstruction(Product.BTC_USD, 0.001, OrderSide.SELL, Aggression.POST_ONLY);
+		TradeInstruction instruction =
+			new TradeInstruction(Product.BTC_USD, 0.001, OrderSide.SELL, Aggression.POST_ONLY);
 		log.debug("Instruction object is " + instruction);
 		executionEngine.trade(Collections.singletonList(instruction));
 
@@ -105,7 +110,21 @@ public class SendExecutionTestTrades {
 			final double amount,
 			final double price)
 		{
-			log.info("FILL RECEIVED " + instruction + " " + amount + " "  + orderSide + " " + product + " at " + price);
+			log.info("FILL RECEIVED " + instruction + " " + amount + " " + orderSide + " " + product + " at " + price);
+		}
+	}
+
+	static class DummyAccountant extends Accountant {
+
+		@Override
+		public synchronized void recordTrade(Currency source, double sourcePosChange, Currency dest,
+			double destPosChange)
+		{
+			log.info("RECORDED TRADE " + source + " " + sourcePosChange + " " + dest + " " + destPosChange);
+		}
+
+		public DummyAccountant(final PositionsProvider positionsProvider) {
+			super(positionsProvider);
 		}
 	}
 }

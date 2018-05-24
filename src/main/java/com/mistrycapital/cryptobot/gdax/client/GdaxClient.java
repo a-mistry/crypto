@@ -8,7 +8,6 @@ import com.mistrycapital.cryptobot.book.BBO;
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
-import com.mistrycapital.cryptobot.util.MCProperties;
 import jdk.incubator.http.HttpClient;
 import jdk.incubator.http.HttpRequest;
 import jdk.incubator.http.HttpRequest.BodyPublisher;
@@ -17,21 +16,14 @@ import org.slf4j.Logger;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import java.io.IOException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.InvalidKeyException;
-import java.security.Key;
 import java.security.NoSuchAlgorithmException;
 import java.text.DecimalFormat;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 /**
  * Asynchronous gdax REST client
@@ -46,7 +38,7 @@ public class GdaxClient {
 	private final HttpClient httpClient;
 	private final JsonParser jsonParser;
 
-	private final DecimalFormat decimalFormat = new DecimalFormat("#.########");
+	public static final DecimalFormat gdaxDecimalFormat = new DecimalFormat("#.########");
 
 	/**
 	 * Create a new client
@@ -116,7 +108,7 @@ public class GdaxClient {
 		body.addProperty("type", "market");
 		body.addProperty("side", side == OrderSide.BUY ? "buy" : "sell");
 		body.addProperty("product_id", product.toString());
-		body.addProperty(sizingType == MarketOrderSizingType.SIZE ? "size" : "funds", decimalFormat.format(amount));
+		body.addProperty(sizingType == MarketOrderSizingType.SIZE ? "size" : "funds", gdaxDecimalFormat.format(amount));
 		return submit("/orders", "POST", body)
 			.thenApply(JsonElement::getAsJsonObject)
 			.thenApply(OrderInfo::new);
@@ -140,8 +132,8 @@ public class GdaxClient {
 		body.addProperty("type", "limit");
 		body.addProperty("side", side == OrderSide.BUY ? "buy" : "sell");
 		body.addProperty("product_id", product.toString());
-		body.addProperty("price", decimalFormat.format(limitPrice));
-		body.addProperty("size", decimalFormat.format(amount));
+		body.addProperty("price", gdaxDecimalFormat.format(limitPrice));
+		body.addProperty("size", gdaxDecimalFormat.format(amount));
 		body.addProperty("post_only", true);
 		if(clientOid != null)
 			body.addProperty("client_oid", clientOid.toString());

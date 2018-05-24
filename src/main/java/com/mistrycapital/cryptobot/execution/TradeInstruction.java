@@ -3,6 +3,8 @@ package com.mistrycapital.cryptobot.execution;
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 
+import static com.mistrycapital.cryptobot.gdax.client.GdaxClient.gdaxDecimalFormat;
+
 public class TradeInstruction {
 	/** Product to buy/sell */
 	private final Product product;
@@ -43,6 +45,6 @@ public class TradeInstruction {
 	/** @return Description of instruction in text, e.g. "BUY 1.32 of BTC-USD using TAKE" */
 	@Override
 	public String toString() {
-		return orderSide + " " + amount + " of " + product + " using " + aggression;
+		return orderSide + " " + gdaxDecimalFormat.format(amount) + " of " + product + " using " + aggression;
 	}
 }

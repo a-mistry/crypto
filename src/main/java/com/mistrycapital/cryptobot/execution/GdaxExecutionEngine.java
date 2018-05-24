@@ -20,11 +20,17 @@ import com.mistrycapital.cryptobot.twilio.TwilioSender;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import org.slf4j.Logger;
 
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
+
+import static com.mistrycapital.cryptobot.gdax.client.GdaxClient.gdaxDecimalFormat;
 
 public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcessor {
 	private static final Logger log = MCLoggerFactory.getLogger();
@@ -163,25 +169,24 @@ public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcesso
 		log.debug("Posting instruction " + instruction);
 		Product product = instruction.getProduct();
 		BBO bbo = orderBookManager.getBook(product).getBBO();
-		if(Double.isNaN(bbo.bidPrice) || Double.isNaN(bbo.askPrice)) {
-			log.error("Tried to post order to " + instruction + " but top of book has NaN so we can't determine price");
+		final double price = instruction.getOrderSide() == OrderSide.BUY ? bbo.bidPrice : bbo.askPrice;
+		if(Double.isNaN(price)) {
+			log.error("Tried to post order to " + instruction + " but top of book is NaN so we can't determine price");
 			return;
 		}
 
 		UUID clientOid = UUID.randomUUID();
-		clientOids.put(clientOid, instruction);
-		final CompletableFuture<OrderInfo> orderInfoFuture;
-		if(instruction.getOrderSide() == OrderSide.BUY) {
-			orderInfoFuture = gdaxClient.placePostOnlyLimitOrder(product, OrderSide.BUY, instruction.getAmount(),
-				bbo.bidPrice, clientOid, TimeUnit.HOURS);
-			log.info("Placed post-only order to " + instruction + " at bid " + bbo.bidPrice
-				+ " with 1 hour GTT, client_oid " + clientOid);
-		} else {
-			orderInfoFuture = gdaxClient.placePostOnlyLimitOrder(product, OrderSide.SELL, instruction.getAmount(),
-				bbo.askPrice, clientOid, TimeUnit.HOURS);
-			log.info("Placed post-only order to " + instruction + " at ask " + bbo.askPrice
-				+ " with 1 hour GTT, client_oid " + clientOid);
+		synchronized(gdaxIds) {
+			clientOids.put(clientOid, instruction);
 		}
+
+		final CompletableFuture<OrderInfo> orderInfoFuture;
+		orderInfoFuture = gdaxClient.placePostOnlyLimitOrder(product, instruction.getOrderSide(),
+			instruction.getAmount(), price, clientOid, TimeUnit.HOURS);
+		log.info("Placed post-only order to " + instruction + " at " + price + " with 1 hour GTT, client_oid "
+			+ clientOid);
+
+		dbRecorder.recordPostOnlyAttempt(instruction, clientOid, price);
 
 		// check for client errors
 		try {
@@ -210,6 +215,7 @@ public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcesso
 					+ " maps to gdax order_id: " + msg.getOrderId());
 				gdaxIds.put(msg.getOrderId(), instruction);
 				clientOids.remove(clientOid);
+				dbRecorder.updatePostOnlyId(clientOid, msg.getOrderId());
 			}
 		}
 	}
@@ -224,15 +230,35 @@ public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcesso
 			if(gdaxIds.containsKey(msg.getOrderId())) {
 				UUID orderId = msg.getOrderId();
 				TradeInstruction instruction = gdaxIds.get(orderId);
-				log.info("Post order " + orderId + " was done at " + msg.getTimeMicros()
-					+ " with reason " + msg.getReason() + " and remaining size " + msg.getRemainingSize()
-					+ ", original size was " + instruction.getAmount());
-				filledAmountTotal += instruction.getAmount() - msg.getRemainingSize();
-				orderedAmountTotal += instruction.getAmount();
-				log.info("Fill rate is running at " + (100 * filledAmountTotal / orderedAmountTotal));
 				gdaxIds.remove(orderId);
 
-				// TODO: send text on done, record cancel if any
+				final double originalSize = instruction.getAmount();
+				final double remainingSize = msg.getRemainingSize();
+				final double filledAmount = originalSize - remainingSize;
+				final String originalSizeStr = gdaxDecimalFormat.format(originalSize);
+				final String remainingSizeStr = gdaxDecimalFormat.format(remainingSize);
+				final String filledAmountStr = gdaxDecimalFormat.format(filledAmount);
+				final String timeStr = ZonedDateTime.ofInstant(
+					Instant.ofEpochMilli(msg.getTimeMicros()),
+					ZoneOffset.UTC
+				).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+
+				log.info("Post order " + orderId + " was done at " + timeStr
+					+ " with reason " + msg.getReason() + " and remaining size " + remainingSizeStr
+					+ ", original size was " + originalSizeStr);
+
+				filledAmountTotal += filledAmount;
+				orderedAmountTotal += instruction.getAmount();
+				log.info("Fill rate is running at " + (100 * filledAmountTotal / orderedAmountTotal));
+
+				// Record in db and send text message
+				if(msg.getRemainingSize() > 0)
+					dbRecorder.recordPostOnlyCancel(msg, originalSize);
+
+				final String text = (msg.getOrderSide() == OrderSide.BUY ? "Bot " : "Sold ")
+					+ filledAmountStr + " " + msg.getProduct() + " at " + msg.getPrice()
+					+ " with " + remainingSizeStr + " remaining";
+				twilioSender.sendMessage(text);
 			}
 		}
 	}
@@ -242,12 +268,16 @@ public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcesso
 		synchronized(gdaxIds) {
 			if(gdaxIds.containsKey(msg.getMakerOrderId())) {
 				UUID orderId = msg.getMakerOrderId();
-				log.info("FILL received for post order " + orderId + ": " + msg.getSize() + " " + msg.getOrderSide()
-					+ " " + msg.getProduct() + " at " + msg.getPrice());
+				log.info("FILL received for post order " + orderId + ": " + gdaxDecimalFormat.format(msg.getSize())
+					+ " " + msg.getOrderSide() + " " + msg.getProduct() + " at " + msg.getPrice());
 				tactic.notifyFill(gdaxIds.get(msg.getMakerOrderId()), msg.getProduct(), msg.getOrderSide(),
 					msg.getSize(), msg.getPrice());
 
-				// TODO: record trade in db
+				final int buySign = msg.getOrderSide() == OrderSide.BUY ? 1 : -1;
+				accountant.recordTrade(Currency.USD, -buySign * msg.getSize() * msg.getPrice(),
+					msg.getProduct().getCryptoCurrency(), buySign * msg.getSize());
+
+				dbRecorder.recordPostOnlyFill(msg);
 			}
 		}
 	}
