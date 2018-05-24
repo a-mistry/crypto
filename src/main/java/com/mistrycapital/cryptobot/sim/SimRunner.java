@@ -68,6 +68,7 @@ public class SimRunner implements Runnable {
 				SimResult result = parameterOptimizer.optimize(simProperties,
 					Arrays.asList(
 						new ParameterSearchSpace("tactic.buyThreshold", 0.0, 0.0075),
+//						new ParameterSearchSpace("tactic.tradeUsdThreshold", 0.0, 100.0)
 						new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 8.0)
 					),
 					properties -> {
@@ -82,6 +83,7 @@ public class SimRunner implements Runnable {
 				log.info("Max return of " + result.holdingPeriodReturn + " sharpe of " + result.sharpeRatio
 					+ " achieved at"
 					+ " buyThreshold=" + simProperties.getDoubleProperty("tactic.buyThreshold")
+					+ " tradeUsdThreshold=" + simProperties.getDoubleProperty("tactic.tradeUsdThreshold")
 					+ " tradeScaleFactor=" + simProperties.getDoubleProperty("tactic.tradeScaleFactor"));
 			}
 			simProperties.put("sim.logDecisions", "true");
