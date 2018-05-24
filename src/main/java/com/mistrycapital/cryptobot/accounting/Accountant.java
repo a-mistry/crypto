@@ -26,6 +26,7 @@ public class Accountant {
 	}
 
 	public void refreshPositions() {
+		// TODO: make this a completablefuture
 		double[] availableFound = positionsProvider.getAvailable();
 		double[] balanceFound = positionsProvider.getBalance();
 		synchronized(this) {

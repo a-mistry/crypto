@@ -46,8 +46,8 @@ public class DBRecorder {
 		}
 	}
 
-	/** Records current positions and prices to the database */
-	public void recordPositions() {
+	/** Records current positions and prices to the database (done daily) */
+	public void recordDailyPositions() {
 		try {
 			Connection con = dataSource.getConnection();
 			con.setAutoCommit(false);
@@ -72,6 +72,50 @@ public class DBRecorder {
 				}
 				statement.executeUpdate();
 			}
+			statement.close();
+			con.commit();
+			con.close();
+		} catch(Exception e) {
+			log.error("Could not save positions to database", e);
+		}
+	}
+
+	/** Records current positions and prices to the database (done hourly) */
+	public void recordHourlyPositions() {
+		try {
+			Connection con = dataSource.getConnection();
+			con.setAutoCommit(false);
+			con.commit();
+			PreparedStatement statement = con.prepareStatement(
+				"INSERT INTO crypto_hourly "
+					+ " (time,btc,bch,eth,ltc,usd,eur,gbp,price_btc,price_bch,price_eth,price_ltc,position_usd)"
+					+ " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
+			);
+			final double btc = accountant.getBalance(Currency.BTC);
+			final double bch = accountant.getBalance(Currency.BCH);
+			final double eth = accountant.getBalance(Currency.ETH);
+			final double ltc = accountant.getBalance(Currency.LTC);
+			final double usd = accountant.getBalance(Currency.USD);
+			final double priceBtc = orderBookManager.getBook(Product.BTC_USD).getBBO().midPrice();
+			final double priceBch = orderBookManager.getBook(Product.BCH_USD).getBBO().midPrice();
+			final double priceEth = orderBookManager.getBook(Product.ETH_USD).getBBO().midPrice();
+			final double priceLtc = orderBookManager.getBook(Product.LTC_USD).getBBO().midPrice();
+			statement.setTimestamp(1, new Timestamp(timeKeeper.epochMs()));
+			statement.setDouble(2, btc);
+			statement.setDouble(3, bch);
+			statement.setDouble(4, eth);
+			statement.setDouble(5, ltc);
+			statement.setDouble(6, usd);
+			statement.setDouble(7, accountant.getBalance(Currency.EUR));
+			statement.setDouble(8, accountant.getBalance(Currency.GBP));
+			statement.setDouble(9, priceBtc);
+			statement.setDouble(10, priceBch);
+			statement.setDouble(11, priceEth);
+			statement.setDouble(12, priceLtc);
+			statement.setDouble(13,
+				btc * priceBtc + bch * priceBch + eth * priceEth + ltc * priceLtc + usd
+			);
+			statement.executeUpdate();
 			statement.close();
 			con.commit();
 			con.close();

@@ -62,16 +62,7 @@ public class OrderBookPeriodicEvaluator implements Runnable {
 	public void run() {
 		while(true) {
 			try {
-				if(timeKeeper.epochMs() >= nextHourMillis) {
-					accountant.refreshPositions();
-					nextHourMillis = intervalizer.calcNextHourMillis(timeKeeper.epochMs());
-				}
-				if(timeKeeper.epochMs() >= nextDayMillis) {
-					// new day - record positions to database
-					dbRecorder.recordPositions();
-					nextDayMillis = intervalizer.calcNextDayMillis(timeKeeper.epochMs());
-				}
-
+				// evaluate if needed
 				long remainingMs = nextIntervalMillis - timeKeeper.epochMs();
 				if(remainingMs <= 0) {
 					log.trace("snapshot");
@@ -80,6 +71,21 @@ public class OrderBookPeriodicEvaluator implements Runnable {
 					final long timeMs = timeKeeper.epochMs();
 					nextIntervalMillis = intervalizer.calcNextIntervalMillis(timeMs);
 					remainingMs = nextIntervalMillis - timeMs;
+				}
+
+				// refresh and save positions to db hourly/daily
+				if(timeKeeper.epochMs() >= nextHourMillis) {
+					accountant.refreshPositions();
+					// TODO: use completablefuture to record to db after refresh
+					dbRecorder.recordHourlyPositions();
+					nextHourMillis = intervalizer.calcNextHourMillis(timeKeeper.epochMs());
+					remainingMs = nextIntervalMillis - timeKeeper.epochMs(); // need to recalc because of db access
+				}
+				if(timeKeeper.epochMs() >= nextDayMillis) {
+					// new day - record positions to database
+					dbRecorder.recordDailyPositions();
+					nextDayMillis = intervalizer.calcNextDayMillis(timeKeeper.epochMs());
+					remainingMs = nextIntervalMillis - timeKeeper.epochMs(); // need to recalc because of db access
 				}
 
 				// try to get as close as possible to the beginning of the interval

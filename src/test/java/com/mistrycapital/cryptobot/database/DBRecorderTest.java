@@ -28,6 +28,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -99,21 +100,39 @@ class DBRecorderTest {
 			when(orderBookManager.getBook(product)).thenReturn(orderBook);
 		}
 
-		dbRecorder.recordPositions();
+		dbRecorder.recordDailyPositions();
+		dbRecorder.recordHourlyPositions();
 
 		// verify db
 		Connection con = dataSource.getConnection();
+		con.setAutoCommit(false);
+		con.commit();
 		PreparedStatement statement = con.prepareStatement("SELECT * FROM crypto_positions WHERE time=?");
 		statement.setTimestamp(1, new Timestamp(timeKeeper.epochMs()));
 		ResultSet results = statement.executeQuery();
-		while(results.next()) {
+		assertTrue(results.next());
+		do {
 			Currency currency = Currency.valueOf(results.getString("currency"));
 			assertEquals(positions.get(currency), results.getDouble("position"), EPSILON);
 			if(currency.isCrypto())
 				assertEquals(prices.get(currency.getUsdProduct()), results.getDouble("price"), EPSILON);
 			else
 				assertEquals(0.0, results.getDouble("price"));
+		} while(results.next());
+		statement.close();
+		statement = con.prepareStatement("SELECT * FROM crypto_hourly WHERE time=?");
+		statement.setTimestamp(1, new Timestamp(timeKeeper.epochMs()));
+		results = statement.executeQuery();
+		assertTrue(results.next());
+		for(Currency currency : Currency.FAST_VALUES)
+			assertEquals(positions.get(currency), results.getDouble(currency.toString().toLowerCase(Locale.US)), EPSILON);
+		var positionUsd = positions.get(Currency.USD);
+		for(Product product : Product.FAST_VALUES) {
+			assertEquals(prices.get(product),
+				results.getDouble("price_" + product.getCryptoCurrency().toString().toLowerCase(Locale.US)), EPSILON);
+			positionUsd += prices.get(product) * positions.get(product.getCryptoCurrency());
 		}
+		assertEquals(positionUsd, results.getDouble("position_usd"), EPSILON);
 		statement.close();
 		con.close();
 	}
