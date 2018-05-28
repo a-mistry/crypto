@@ -182,6 +182,7 @@ public class SimRunner implements Runnable {
 		final double sharpeRatio;
 		final double winPct;
 		final double lossPct;
+		final double gainLoss;
 
 		SimResult(List<Double> dailyPositionValuesUsd) {
 			this.dailyPositionValuesUsd = dailyPositionValuesUsd;
@@ -207,12 +208,21 @@ public class SimRunner implements Runnable {
 
 			int winCount = 0;
 			int lossCount = 0;
+			double totalGain = 0.0;
+			double totalLoss = 0.0;
 			for(final double val : dailyReturns) {
-				if(val > 0.0) winCount++;
-				if(val < 0.0) lossCount++;
+				if(val > 0.0) {
+					winCount++;
+					totalGain = (1 + totalGain) * (1 + val) - 1;
+				}
+				if(val < 0.0) {
+					lossCount++;
+					totalLoss = (1 + totalLoss) * (1 - val) - 1;
+				}
 			}
 			winPct = ((double) winCount) / dailyReturns.length;
 			lossPct = ((double) lossCount) / dailyReturns.length;
+			gainLoss = totalLoss == 0 ? 0 : totalGain / totalLoss;
 		}
 
 		/**
@@ -230,6 +240,8 @@ public class SimRunner implements Runnable {
 					final var winloss = lossPct == 0 ? 0 : winPct / lossPct;
 					final var bWinloss = b.lossPct == 0 ? 0 : b.winPct / b.lossPct;
 					return Double.compare(winloss, bWinloss);
+				case "gainloss":
+					return Double.compare(gainLoss, b.gainLoss);
 				default:
 					throw new RuntimeException("Invalid search objective " + searchObjective);
 			}

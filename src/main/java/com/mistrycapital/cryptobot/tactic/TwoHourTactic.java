@@ -11,8 +11,7 @@ import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 /**
  * Tactic that holds positions for two hours based on the forecast value
@@ -24,15 +23,42 @@ public class TwoHourTactic implements Tactic {
 
 	private final TimeKeeper timeKeeper;
 	private final Accountant accountant;
+	/** Number of intervals in two hours */
 	private final int lookback;
+	/** Amount the tactic wanted to purchase each period for each product */
 	private final double[][] purchased;
-	private final TradeInstruction[][] instructions;
-	private final double[] pctAllocation;
-	private final double forecastThreshold;
-	private final double tradeUsdThreshold;
-	private final double tradeScaleFactor;
-
+	/** Current period */
 	private int purchasedIndex;
+	/** Percent allocation for each product */
+	private final double[] pctAllocation;
+	/** Buy above this threshold */
+	private final double forecastThreshold;
+	/** Do not trade if we are not trading at least a minimum number of dollars */
+	private final double tradeUsdThreshold;
+	/** Scales our trades */
+	private final double tradeScaleFactor;
+	/** Outstanding orders */
+	private final List<ActiveOrder> activeOrders;
+
+	private class ActiveOrder {
+		/** Time order was placed */
+		long timeNanos;
+		/** Original trade instruction */
+		TradeInstruction instruction;
+		/** Amount filled so far, as notified by the execution engine */
+		double filledAmount;
+
+		ActiveOrder(long timeNanos, TradeInstruction instruction) {
+			this.timeNanos = timeNanos;
+			this.instruction = instruction;
+			filledAmount = 0;
+		}
+
+		/** @return Amount not yet filled */
+		double getOutstandingAmount() {
+			return instruction.getAmount() - filledAmount;
+		}
+	}
 
 	public TwoHourTactic(MCProperties properties, TimeKeeper timeKeeper, Accountant accountant) {
 		this.timeKeeper = timeKeeper;
@@ -40,7 +66,6 @@ public class TwoHourTactic implements Tactic {
 		final int intervalSeconds = properties.getIntProperty("history.intervalSeconds");
 		lookback = 2 * 60 * 60 / intervalSeconds;
 		purchased = new double[Product.count][lookback];
-		instructions = new TradeInstruction[Product.count][lookback];
 		purchasedIndex = 0;
 		pctAllocation = new double[Product.count];
 		final double defaultPctAllocation = properties.getDoubleProperty("tactic.pctAllocation.default");
@@ -53,6 +78,7 @@ public class TwoHourTactic implements Tactic {
 				properties.getDoubleProperty("tactic.pctAllocation." + product, defaultPctAllocation);
 			log.debug("Two hour tactic " + product + " alloc " + (100 * pctAllocation[productIndex]) + "%");
 		}
+		activeOrders = new LinkedList<>();
 	}
 
 	@Override
@@ -63,14 +89,16 @@ public class TwoHourTactic implements Tactic {
 			final var productIndex = product.getIndex();
 			final var askPrice = snapshot.getProductSnapshot(product).askPrice;
 
-			final boolean purchaseNow =
-				!Double.isNaN(forecasts[productIndex]) && forecasts[productIndex] > forecastThreshold;
+			purgeOlderThanOneHour();
 
-			final var maxLongUsd = totalPositionUsd * pctAllocation[productIndex];
-			final var targetProductPosition = calcTargetPosition(product, purchaseNow, maxLongUsd / askPrice);
+			final var maxLong = totalPositionUsd * pctAllocation[productIndex] / askPrice;
+			purchased[productIndex][purchasedIndex] = calcPurchase(maxLong, forecasts[productIndex]);
 
-			final var currentProductPositionUsd = accountant.getBalance(product.getCryptoCurrency());
-			final var deltaPosition = targetProductPosition - currentProductPositionUsd;
+			final var goalPosition = sum(purchased[productIndex]);
+			final var currentPosition = accountant.getBalance(product.getCryptoCurrency());
+			final var outstandingPurchases = calcOutstandingPurchases(product);
+
+			final var deltaPosition = goalPosition - currentPosition - outstandingPurchases;
 			final var deltaPositionUsd = deltaPosition * askPrice;
 
 			if(Math.abs(deltaPositionUsd) > tradeUsdThreshold) {
@@ -84,13 +112,50 @@ public class TwoHourTactic implements Tactic {
 				trades.add(instruction);
 				log.debug("Tactic decided to " + instruction.getOrderSide() + " " + instruction.getAmount() + " "
 					+ product + " ask " + askPrice);
-				instructions[productIndex][purchasedIndex] = instruction;
-			} else {
-				instructions[productIndex][purchasedIndex] = null;
+				activeOrders.add(new ActiveOrder(timeKeeper.epochNanos(), instruction));
 			}
 		}
-		purchasedIndex = (purchasedIndex + 1) % purchased.length;
+		purchasedIndex = (purchasedIndex + 1) % lookback;
 		return trades;
+	}
+
+	/** Removes orders that are older than one hour ago. Assumes orders are sorted by time */
+	private void purgeOlderThanOneHour() {
+		while(!activeOrders.isEmpty() &&
+			activeOrders.get(0).timeNanos + 60 * 60 * 1000000000L <= timeKeeper.epochNanos()) {
+			activeOrders.remove(0);
+		}
+	}
+
+	/** @return Amount we want to go long this period, given the maximum long position and forecast */
+	private double calcPurchase(final double maxLong, final double forecast) {
+		if(Double.isNaN(forecast) || forecast < forecastThreshold)
+			return 0.0;
+
+		return maxLong * Math.min(1.0, tradeScaleFactor / lookback);
+	}
+
+	/** @return Sum of the given array */
+	private static double sum(double[] array) {
+		double val = 0.0;
+		for(double x : array)
+			val += x;
+		return val;
+	}
+
+	/** @return Any outstanding amount that will be purchased (sold if negative) if all active orders go through */
+	private double calcOutstandingPurchases(Product product) {
+		double outstanding = 0.0;
+		for(ActiveOrder order : activeOrders) {
+			if(order.instruction.getProduct() != product)
+				continue;
+
+			if(order.instruction.getOrderSide() == OrderSide.BUY)
+				outstanding += order.getOutstandingAmount();
+			else
+				outstanding -= order.getOutstandingAmount();
+		}
+		return outstanding;
 	}
 
 	/** Note the amount purchased (negative if sold) for each instruction */
@@ -98,36 +163,16 @@ public class TwoHourTactic implements Tactic {
 	public void notifyFill(final TradeInstruction instruction, final Product product, final OrderSide orderSide,
 		final double amount, final double price)
 	{
-		int productIndex = product.getIndex();
-		final double[] purchasedProduct = purchased[productIndex];
-		final TradeInstruction[] purchasedInstruction = instructions[productIndex];
-		for(int i = 0; i < purchasedInstruction.length; i++)
-			if(purchasedInstruction[i] == instruction) {
-				purchasedProduct[i] += orderSide == OrderSide.BUY ? amount : -amount;
-				if(Math.abs(purchasedProduct[i]) < EPSILON8) purchasedProduct[i] = 0.0;
-				log.debug("Tactic recorded fill " + orderSide + " " + amount + " " + product + " at " + price);
+		ActiveOrder finishedOrder = null;
+		for(ActiveOrder order : activeOrders) {
+			if(order.instruction == instruction) {
+				order.filledAmount += amount;
+				if(Math.abs(instruction.getAmount() - order.filledAmount) < EPSILON8)
+					finishedOrder = order;
+				break;
 			}
-	}
-
-	/**
-	 * Calculates the target position in crypto given the purchase history, whether the forecast indicates to
-	 * purchase now, and max position
-	 *
-	 * @param product     Product
-	 * @param purchaseNow True if we want to purchase now
-	 * @param maxLong     Maximum long position
-	 * @return Crypto amount to be long
-	 */
-	private double calcTargetPosition(final Product product, final boolean purchaseNow, final double maxLong)
-	{
-		final double[] purchasedProduct = purchased[product.getIndex()];
-		double positionCrypto = 0.0;
-		for(double purchase : purchasedProduct)
-			positionCrypto += purchase;
-		if(purchaseNow)
-			positionCrypto += maxLong * tradeScaleFactor / purchased.length;
-		else
-			positionCrypto -= purchasedProduct[purchasedIndex];
-		return Math.max(0.0, Math.min(maxLong, positionCrypto));
+		}
+		if(finishedOrder != null)
+			activeOrders.remove(finishedOrder);
 	}
 }
