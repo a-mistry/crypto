@@ -1,5 +1,35 @@
 package com.mistrycapital.cryptobot;
 
+import com.mistrycapital.cryptobot.accounting.Accountant;
+import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
+import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
+import com.mistrycapital.cryptobot.appender.*;
+import com.mistrycapital.cryptobot.book.OrderBookManager;
+import com.mistrycapital.cryptobot.database.DBRecorder;
+import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
+import com.mistrycapital.cryptobot.execution.GdaxExecutionEngine;
+import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
+import com.mistrycapital.cryptobot.forecasts.Snowbird;
+import com.mistrycapital.cryptobot.gdax.GdaxPositionsProvider;
+import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
+import com.mistrycapital.cryptobot.gdax.common.Product;
+import com.mistrycapital.cryptobot.gdax.websocket.GdaxWebSocket;
+import com.mistrycapital.cryptobot.risk.TradeRiskValidator;
+import com.mistrycapital.cryptobot.sim.SnapshotReader;
+import com.mistrycapital.cryptobot.tactic.OrderBookPeriodicEvaluator;
+import com.mistrycapital.cryptobot.tactic.Tactic;
+import com.mistrycapital.cryptobot.tactic.TwoHourTactic;
+import com.mistrycapital.cryptobot.time.Intervalizer;
+import com.mistrycapital.cryptobot.time.SystemTimeKeeper;
+import com.mistrycapital.cryptobot.time.TimeKeeper;
+import com.mistrycapital.cryptobot.twilio.TwilioSender;
+import com.mistrycapital.cryptobot.util.MCLoggerFactory;
+import com.mistrycapital.cryptobot.util.MCProperties;
+import org.eclipse.jetty.util.ssl.SslContextFactory;
+import org.eclipse.jetty.websocket.client.ClientUpgradeRequest;
+import org.eclipse.jetty.websocket.client.WebSocketClient;
+import org.slf4j.Logger;
+
 import java.io.IOException;
 import java.io.Reader;
 import java.net.URI;
@@ -13,36 +43,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-
-import com.mistrycapital.cryptobot.accounting.Accountant;
-import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
-import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
-import com.mistrycapital.cryptobot.appender.*;
-import com.mistrycapital.cryptobot.database.DBRecorder;
-import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
-import com.mistrycapital.cryptobot.execution.GdaxExecutionEngine;
-import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
-import com.mistrycapital.cryptobot.forecasts.Snowbird;
-import com.mistrycapital.cryptobot.gdax.GdaxPositionsProvider;
-import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
-import com.mistrycapital.cryptobot.risk.TradeRiskValidator;
-import com.mistrycapital.cryptobot.sim.SnapshotReader;
-import com.mistrycapital.cryptobot.tactic.OrderBookPeriodicEvaluator;
-import com.mistrycapital.cryptobot.tactic.Tactic;
-import com.mistrycapital.cryptobot.tactic.TwoHourTactic;
-import com.mistrycapital.cryptobot.time.Intervalizer;
-import com.mistrycapital.cryptobot.twilio.TwilioSender;
-import org.eclipse.jetty.util.ssl.SslContextFactory;
-import org.eclipse.jetty.websocket.client.ClientUpgradeRequest;
-import org.eclipse.jetty.websocket.client.WebSocketClient;
-import org.slf4j.Logger;
-
-import com.mistrycapital.cryptobot.book.OrderBookManager;
-import com.mistrycapital.cryptobot.gdax.websocket.GdaxWebSocket;
-import com.mistrycapital.cryptobot.time.SystemTimeKeeper;
-import com.mistrycapital.cryptobot.time.TimeKeeper;
-import com.mistrycapital.cryptobot.util.MCLoggerFactory;
-import com.mistrycapital.cryptobot.util.MCProperties;
 
 public class TradeCrypto {
 	private static final Logger log = MCLoggerFactory.getLogger();
@@ -95,6 +95,7 @@ public class TradeCrypto {
 			dbRecorder, twilioSender, tactic, gdaxClient);
 
 		ConsolidatedHistory consolidatedHistory = restoreHistory(dataDir, INTERVAL_FILE_NAME, timeKeeper, intervalizer);
+		warmupTactic(consolidatedHistory, forecastCalculator, tactic, intervalizer);
 
 		OrderBookPeriodicEvaluator periodicEvaluator =
 			new OrderBookPeriodicEvaluator(timeKeeper, intervalizer, consolidatedHistory, accountant, orderBookManager,
@@ -157,6 +158,20 @@ public class TradeCrypto {
 			consolidatedHistory.add(snapshot);
 
 		return consolidatedHistory;
+	}
+
+	private static void warmupTactic(ConsolidatedHistory fullHistory, ForecastCalculator forecastCalculator,
+		Tactic tactic, Intervalizer intervalizer)
+	{
+		double[] historicalForecasts = new double[Product.count];
+		ConsolidatedHistory partialHistory = new ConsolidatedHistory(intervalizer);
+		for(ConsolidatedSnapshot snapshot : fullHistory.values()) {
+			partialHistory.add(snapshot);
+			for(Product product : Product.FAST_VALUES) {
+				historicalForecasts[product.getIndex()] = forecastCalculator.calculate(partialHistory, product);
+			}
+			tactic.warmup(snapshot, historicalForecasts);
+		}
 	}
 
 	private static DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");

@@ -11,7 +11,9 @@ import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
 import org.slf4j.Logger;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
 
 /**
  * Tactic that holds positions for two hours based on the forecast value
@@ -174,5 +176,17 @@ public class TwoHourTactic implements Tactic {
 		}
 		if(finishedOrder != null)
 			activeOrders.remove(finishedOrder);
+	}
+
+	@Override
+	public void warmup(ConsolidatedSnapshot snapshot, double[] forecasts) {
+		final var totalPositionUsd = accountant.getPositionValueUsd(snapshot);
+		for(Product product : Product.FAST_VALUES) {
+			final var productIndex = product.getIndex();
+			final var askPrice = snapshot.getProductSnapshot(product).askPrice;
+			final var maxLong = totalPositionUsd * pctAllocation[productIndex] / askPrice;
+			purchased[productIndex][purchasedIndex] = calcPurchase(maxLong, forecasts[productIndex]);
+		}
+		purchasedIndex = (purchasedIndex + 1) % lookback;
 	}
 }

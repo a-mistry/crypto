@@ -24,4 +24,12 @@ public interface Tactic {
 	 */
 	void notifyFill(final TradeInstruction instruction, Product product, OrderSide orderSide, double amount,
 		double price);
+
+	/**
+	 * "Warms up" the tactic with the given interval data point. This is effectively the same as decideTrades
+	 * but does not create trade instructions. This is useful to restore after a restart, although implementations
+	 * are not guaranteed to take into account outstanding orders correctly or have the correct historical positions.
+	 * It is only a rough approximation.
+	 */
+	void warmup(ConsolidatedSnapshot snapshot, double[] forecasts);
 }
