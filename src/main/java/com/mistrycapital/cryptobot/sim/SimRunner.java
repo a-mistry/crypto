@@ -69,7 +69,7 @@ public class SimRunner implements Runnable {
 					Arrays.asList(
 						new ParameterSearchSpace("tactic.buyThreshold", 0.0, 0.0075),
 //						new ParameterSearchSpace("tactic.tradeUsdThreshold", 0.0, 100.0)
-						new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 8.0)
+						new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 12.0)
 					),
 					properties -> {
 						try {
@@ -183,6 +183,7 @@ public class SimRunner implements Runnable {
 		final double winPct;
 		final double lossPct;
 		final double gainLoss;
+		final double maxLossStreak;
 
 		SimResult(List<Double> dailyPositionValuesUsd) {
 			this.dailyPositionValuesUsd = dailyPositionValuesUsd;
@@ -210,16 +211,22 @@ public class SimRunner implements Runnable {
 			int lossCount = 0;
 			double totalGain = 0.0;
 			double totalLoss = 0.0;
+			double lossStreak = 0.0;
+			double maxLossStreak = 0.0;
 			for(final double val : dailyReturns) {
 				if(val > 0.0) {
 					winCount++;
 					totalGain = (1 + totalGain) * (1 + val) - 1;
+					lossStreak = 0.0;
 				}
 				if(val < 0.0) {
 					lossCount++;
 					totalLoss = (1 + totalLoss) * (1 - val) - 1;
+					lossStreak = (1 + lossStreak) * (1 + val) - 1;
+					maxLossStreak = lossStreak < maxLossStreak ? lossStreak : maxLossStreak;
 				}
 			}
+			this.maxLossStreak = maxLossStreak;
 			winPct = ((double) winCount) / dailyReturns.length;
 			lossPct = ((double) lossCount) / dailyReturns.length;
 			gainLoss = totalLoss == 0 ? 0 : totalGain / totalLoss;
@@ -242,9 +249,18 @@ public class SimRunner implements Runnable {
 					return Double.compare(winloss, bWinloss);
 				case "gainloss":
 					return Double.compare(gainLoss, b.gainLoss);
+				case "utility":
+					return Double.compare(
+						holdingPeriodReturn - barrierFunction(0.05, maxLossStreak),
+						b.holdingPeriodReturn - barrierFunction(0.05, b.maxLossStreak)
+					);
 				default:
 					throw new RuntimeException("Invalid search objective " + searchObjective);
 			}
+		}
+
+		private double barrierFunction(double barrierThreshold, double x) {
+			return Math.pow(Math.exp(-10 * x - barrierThreshold), 10) / 10;
 		}
 	}
 }

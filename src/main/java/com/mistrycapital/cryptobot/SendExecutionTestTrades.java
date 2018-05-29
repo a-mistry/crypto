@@ -112,6 +112,11 @@ public class SendExecutionTestTrades {
 		{
 			log.info("FILL RECEIVED " + instruction + " " + amount + " " + orderSide + " " + product + " at " + price);
 		}
+
+		@Override
+		public void warmup(final ConsolidatedSnapshot snapshot, final double[] forecasts) {
+
+		}
 	}
 
 	static class DummyAccountant extends Accountant {
