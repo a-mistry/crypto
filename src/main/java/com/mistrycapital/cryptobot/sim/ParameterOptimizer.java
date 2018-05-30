@@ -9,20 +9,13 @@ import java.util.function.Function;
  * Optimization methods used to find best parameter values
  */
 public class ParameterOptimizer {
-	/** Number of points to divide interval by in ladder search (actual iterations is ladderPoints+1) */
-	private int ladderPoints;
-
-	ParameterOptimizer(int ladderPoints) {
-		this.ladderPoints = ladderPoints;
-	}
-
 	/**
 	 * Searches the given parameters for the parameter values that optimize the given function. Modifies properties
 	 * with the optimal values.
 	 *
 	 * @return Function result at the optimal parameters
 	 */
-	public <T extends Comparable> T optimize(MCProperties properties, List<ParameterSearchSpace> searchList,
+	public <T extends Comparable<T>> T optimize(MCProperties properties, List<ParameterSearchSpace> searchList,
 		Function<MCProperties,T> function)
 	{
 		LadderSearchResult<T> searchResult = ladderSearch(properties, searchList, function, 0);
@@ -31,7 +24,7 @@ public class ParameterOptimizer {
 		return searchResult.functionResult;
 	}
 
-	private <T extends Comparable> LadderSearchResult<T> ladderSearch(MCProperties properties,
+	private <T extends Comparable<T>> LadderSearchResult<T> ladderSearch(MCProperties properties,
 		List<ParameterSearchSpace> searchList, Function<MCProperties,T> function, int index)
 	{
 		if(index >= searchList.size())
@@ -41,9 +34,9 @@ public class ParameterOptimizer {
 
 		T bestFunctionResult = null;
 		double[] bestParameterValues = new double[searchList.size() - index];
-		for(int i = 0; i <= ladderPoints; i++) {
-			final double parameterValue =
-				searchSpace.lowerBound + i * (searchSpace.upperBound - searchSpace.lowerBound) / ladderPoints;
+		for(int i = 0; i <= searchSpace.ladderPoints; i++) {
+			final double parameterValue = searchSpace.lowerBound +
+				i * (searchSpace.upperBound - searchSpace.lowerBound) / searchSpace.ladderPoints;
 
 			properties.put(searchSpace.parameterName, Double.toString(parameterValue));
 			final LadderSearchResult<T> recursiveResult =

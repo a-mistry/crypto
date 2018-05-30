@@ -16,6 +16,7 @@ import com.mistrycapital.cryptobot.util.MCProperties;
 import org.slf4j.Logger;
 
 import java.util.List;
+import java.util.Random;
 
 public class SimExecutionEngine implements ExecutionEngine {
 	private static final Logger log = MCLoggerFactory.getLogger();
@@ -25,6 +26,7 @@ public class SimExecutionEngine implements ExecutionEngine {
 	private final double takeTransactionCost;
 	private final double postFillRate;
 	private final ConsolidatedHistory history;
+	private final Random postFillRandomGen;
 
 	SimExecutionEngine(MCProperties properties, Accountant accountant, Tactic tactic, ConsolidatedHistory history) {
 		this.accountant = accountant;
@@ -32,6 +34,7 @@ public class SimExecutionEngine implements ExecutionEngine {
 		this.history = history;
 		takeTransactionCost = properties.getDoubleProperty("sim.takeTransactionCostOnes", 0.0030);
 		postFillRate = properties.getDoubleProperty("sim.postFillRate", 1.0);
+		postFillRandomGen = new Random(0);
 	}
 
 	@Override
@@ -50,17 +53,19 @@ public class SimExecutionEngine implements ExecutionEngine {
 			final double dollars;
 			final double crypto;
 			final double transactionCost = instruction.getAggression() == Aggression.TAKE ? takeTransactionCost : 0.0;
-			final double fillRate = instruction.getAggression() == Aggression.TAKE ? 1.0 : postFillRate;
-			if(instruction.getOrderSide() == OrderSide.BUY) {
-				dollars = fillRate * Math.min(instruction.getAmount() * price, accountant.getAvailable(Currency.USD));
-				crypto = dollars * (1 - transactionCost) / price;
-				accountant.recordTrade(Currency.USD, -dollars, cryptoCurrency, crypto);
-			} else {
-				crypto = fillRate * Math.min(instruction.getAmount(), accountant.getAvailable(cryptoCurrency));
-				dollars = (1 - transactionCost) * crypto * price;
-				accountant.recordTrade(Currency.USD, dollars, cryptoCurrency, -crypto);
+			if(instruction.getAggression() == Aggression.TAKE || postFillRandomGen.nextDouble() < postFillRate) {
+				// fill if a market order or otherwise target fill rate
+				if(instruction.getOrderSide() == OrderSide.BUY) {
+					dollars = Math.min(instruction.getAmount() * price, accountant.getAvailable(Currency.USD));
+					crypto = dollars * (1 - transactionCost) / price;
+					accountant.recordTrade(Currency.USD, -dollars, cryptoCurrency, crypto);
+				} else {
+					crypto = Math.min(instruction.getAmount(), accountant.getAvailable(cryptoCurrency));
+					dollars = (1 - transactionCost) * crypto * price;
+					accountant.recordTrade(Currency.USD, dollars, cryptoCurrency, -crypto);
+				}
+				tactic.notifyFill(instruction, product, instruction.getOrderSide(), crypto, price);
 			}
-			tactic.notifyFill(instruction, product, instruction.getOrderSide(), crypto, price);
 		}
 	}
 

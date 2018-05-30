@@ -49,7 +49,7 @@ public class SimRunner implements Runnable {
 		dailyFile = properties.getProperty("sim.dailyFile", "daily.csv");
 		forecastCalcFile = dataDir.resolve(properties.getProperty("sim.forecastCalcFile", "forecast-calcs.csv"));
 		startingUsd = properties.getIntProperty("sim.startUsd", 10000);
-		parameterOptimizer = new ParameterOptimizer(properties.getIntProperty("sim.ladderPoints", 10));
+		parameterOptimizer = new ParameterOptimizer();
 		searchObjective = properties.getProperty("sim.searchObjective", "return");
 	}
 
@@ -67,9 +67,9 @@ public class SimRunner implements Runnable {
 				simProperties.put("sim.logForecastCalc", "false");
 				SimResult result = parameterOptimizer.optimize(simProperties,
 					Arrays.asList(
-						new ParameterSearchSpace("tactic.buyThreshold", 0.0, 0.0075),
+						new ParameterSearchSpace("tactic.buyThreshold", 0.0, 0.008, 8),
 //						new ParameterSearchSpace("tactic.tradeUsdThreshold", 0.0, 100.0)
-						new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 12.0)
+						new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 13.0, 5)
 					),
 					properties -> {
 						try {
@@ -166,12 +166,15 @@ public class SimRunner implements Runnable {
 			+ " BCH " + accountant.getAvailable(Currency.BCH)
 			+ " ETH " + accountant.getAvailable(Currency.ETH)
 			+ " LTC " + accountant.getAvailable(Currency.LTC));
-		log.info("Total ending position " + accountant.getPositionValueUsd(lastSnapshot));
+		log.debug("Total ending position " + accountant.getPositionValueUsd(lastSnapshot));
 
 		if(decisionAppender != null) decisionAppender.close();
 		if(dailyAppender != null) dailyAppender.close();
 
-		return new SimResult(dailyPositionValuesUsd);
+		SimResult simResult = new SimResult(dailyPositionValuesUsd);
+		log.info("Simulated completed return " + simResult.holdingPeriodReturn + " sharpe " + simResult.sharpeRatio +
+			" win " + simResult.winPct + " winloss " + simResult.winPct / simResult.lossPct);
+		return simResult;
 	}
 
 	class SimResult implements Comparable<SimResult> {
