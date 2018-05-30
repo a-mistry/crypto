@@ -67,9 +67,9 @@ public class SimRunner implements Runnable {
 				simProperties.put("sim.logForecastCalc", "false");
 				SimResult result = parameterOptimizer.optimize(simProperties,
 					Arrays.asList(
-						new ParameterSearchSpace("tactic.buyThreshold", 0.0, 0.008, 8),
+						new ParameterSearchSpace("tactic.buyThreshold", 0.00, 0.01, 100),
 //						new ParameterSearchSpace("tactic.tradeUsdThreshold", 0.0, 100.0)
-						new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 13.0, 5)
+						new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 20.0, 50)
 					),
 					properties -> {
 						try {
@@ -239,6 +239,8 @@ public class SimRunner implements Runnable {
 		 * This is our searchObjective function
 		 */
 		public int compareTo(SimResult b) {
+			final var winloss = lossPct == 0 ? 0 : winPct / lossPct;
+			final var bWinloss = b.lossPct == 0 ? 0 : b.winPct / b.lossPct;
 			switch(searchObjective) {
 				case "return":
 					return Double.compare(holdingPeriodReturn, b.holdingPeriodReturn);
@@ -247,15 +249,17 @@ public class SimRunner implements Runnable {
 				case "win":
 					return Double.compare(winPct, b.winPct);
 				case "winloss":
-					final var winloss = lossPct == 0 ? 0 : winPct / lossPct;
-					final var bWinloss = b.lossPct == 0 ? 0 : b.winPct / b.lossPct;
 					return Double.compare(winloss, bWinloss);
 				case "gainloss":
 					return Double.compare(gainLoss, b.gainLoss);
 				case "utility":
-					return Double.compare(
+/*					return Double.compare(
 						holdingPeriodReturn - barrierFunction(0.05, maxLossStreak),
 						b.holdingPeriodReturn - barrierFunction(0.05, b.maxLossStreak)
+					);*/
+					return Double.compare(
+						holdingPeriodReturn * winloss,
+						b.holdingPeriodReturn * bWinloss
 					);
 				default:
 					throw new RuntimeException("Invalid search objective " + searchObjective);

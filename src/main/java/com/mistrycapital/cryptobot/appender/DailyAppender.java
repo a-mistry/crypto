@@ -2,6 +2,7 @@ package com.mistrycapital.cryptobot.appender;
 
 import com.mistrycapital.cryptobot.accounting.Accountant;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
+import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.time.Intervalizer;
@@ -11,6 +12,7 @@ import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
 
 public class DailyAppender extends CommonFileAppender {
 	private static final Logger log = MCLoggerFactory.getLogger();
@@ -22,8 +24,11 @@ public class DailyAppender extends CommonFileAppender {
 	private final Accountant accountant;
 	private double prevTotalPositionUsd;
 	private long nextDayMillis;
+	private int dailyTradeCount;
 
-	public DailyAppender(Accountant accountant, TimeKeeper timeKeeper, Intervalizer intervalizer, Path dataDir, String filename) {
+	public DailyAppender(Accountant accountant, TimeKeeper timeKeeper, Intervalizer intervalizer, Path dataDir,
+		String filename)
+	{
 		super(timeKeeper, dataDir, filename.replace(".csv", ""), ".csv", RollingPolicy.NEVER,
 			FlushPolicy.FLUSH_EACH_WRITE);
 		this.timeKeeper = timeKeeper;
@@ -42,13 +47,14 @@ public class DailyAppender extends CommonFileAppender {
 			Currency crypto = product.getCryptoCurrency();
 			builder.append(crypto + "Pos," + crypto + "Mid,");
 		}
-		builder.append("TotalPositionUsd,Return1d");
+		builder.append("TradeCount,TotalPositionUsd,Return1d");
 		append(builder.toString());
 	}
 
-	public void writeDaily(ConsolidatedSnapshot snapshot)
+	public void writeDaily(ConsolidatedSnapshot snapshot, List<TradeInstruction> instructions)
 		throws IOException
 	{
+		dailyTradeCount += instructions != null ? instructions.size() : 0;
 		if(timeKeeper.epochMs() < nextDayMillis)
 			return;
 
@@ -66,6 +72,9 @@ public class DailyAppender extends CommonFileAppender {
 			builder.append(snapshot.getProductSnapshot(product).midPrice);
 			builder.append(',');
 		}
+		builder.append(dailyTradeCount);
+		builder.append(',');
+		dailyTradeCount = 0;
 		final double totalPositionUsd = accountant.getPositionValueUsd(snapshot);
 		builder.append(totalPositionUsd);
 		builder.append(',');

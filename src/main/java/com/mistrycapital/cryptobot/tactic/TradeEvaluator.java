@@ -67,7 +67,7 @@ public class TradeEvaluator {
 			if(decisionAppender != null)
 				decisionAppender.logDecision(snapshot, forecasts, instructions);
 			if(dailyAppender != null)
-				dailyAppender.writeDaily(snapshot);
+				dailyAppender.writeDaily(snapshot, instructions);
 		} catch(IOException e) {
 			log.error("Error saving decision or daily data", e);
 		}
