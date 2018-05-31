@@ -25,7 +25,7 @@ public class Snowbird implements ForecastCalculator {
 
 	private static final String[] signalsToUse =
 		new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
-			"newRatio", "cancelRatio", "timeToMaxMin"};
+			"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6"};
 
 	public Snowbird(MCProperties properties) {
 		final int intervalSeconds = properties.getIntProperty("history.intervalSeconds");
@@ -97,6 +97,8 @@ public class Snowbird implements ForecastCalculator {
 		int clientOidSellCount = 0;
 		int newCount2h = 0;
 		int clientOidCount2h = 0;
+		double lagBTCRet = 0.0;
+		double lagBTCRet6 = 0.0;
 		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values()) {
 			ProductSnapshot data = snapshot.getProductSnapshot(product);
 			if(dataPoints < twelveHourDatapoints) {
@@ -105,6 +107,7 @@ public class Snowbird implements ForecastCalculator {
 			}
 
 			final double periodRet = data.ret;//Math.log(1 + data.ret);
+			final double btcRet = snapshot.getProductSnapshot(Product.BTC_USD).ret;
 
 			if(dataPoints < sixHourDatapoints) {
 				bidTradeCount += data.bidTradeCount;
@@ -131,6 +134,7 @@ public class Snowbird implements ForecastCalculator {
 					lagRet6 += periodRet;
 					illiqUp += periodRet > 0 ? periodRet / data.volume : 0.0;
 					illiqDown += periodRet < 0 ? -periodRet / data.volume : 0.0;
+					lagBTCRet6 += btcRet;
 				}
 
 				if(data.vwap < minPrice) {
@@ -147,6 +151,8 @@ public class Snowbird implements ForecastCalculator {
 				lagRet += periodRet;
 				newCount2h += data.newBidCount + data.newAskCount;
 				clientOidCount2h += data.clientOidBuyCount + data.clientOidSellCount;
+
+				lagBTCRet += Double.isNaN(btcRet) ? 0.0 : btcRet;
 			}
 
 			dataPoints++;
@@ -192,7 +198,9 @@ public class Snowbird implements ForecastCalculator {
 			entry("informedPctxIlliq", informedPct * illiqDown),
 			entry("informedPctxRSI", informedPct * sumUpChange / sumDownChange * lagRet),
 			entry("diffInformed", informedPct - informedPct2h),
-			entry("diffInformedxRet", (informedPct - informedPct2h) * lagRet)
+			entry("diffInformedxRet", (informedPct - informedPct2h) * lagRet),
+			entry("lagBTCRet", lagBTCRet),
+			entry("lagBTCRet6", lagBTCRet6)
 		);
 	}
 

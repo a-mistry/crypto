@@ -70,33 +70,6 @@ public class AnalyzeData {
 		runRegressionPrintResults(joined, "fut_ret_2h",
 			new String[] {"lagRet", "bookRatioxRet", "cancelRatioxRet", "newRatioxRet"});
 		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet", "bookRatioxRet", "cancelRatioxRet", "newRatioxRet", "upRatioxRet"});
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet", "bookRatioxRet", "cancelRatioxRet", "newRatioxRet", "diffVolxRet"});
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "diffVolxRet"});
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet"});
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet", "bookRatioxRet", "tradeRatioxRet", "upRatioxRet", "normVolxRet"});
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "timeToMaxMin"});
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "lagRet6"});
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "illiqUp", "illiqDown"});
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "illiqDown", "illiqDownxRet"});
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "illiqDown"});
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "illiqDown", "RSIRatio"});
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "illiqDown", "RSIRatioxRet"});
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet", "bookRatioxRet", "upRatioxRet", "normVolxRet", "illiqDown", "RSIRatioxRet",
-				"informedDirxRet"});
-		runRegressionPrintResults(joined, "fut_ret_2h",
 			forecastInputs.iterator().next().getColumnNames()); // kitchen sink rsq 0.183
 		runRegressionPrintResults(joined, "fut_ret_2h",
 			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "illiqDown", "RSIRatioxRet",
@@ -104,10 +77,13 @@ public class AnalyzeData {
 		runRegressionPrintResults(joined, "fut_ret_2h",
 			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
 				"newRatio", "cancelRatio", "timeToMaxMin"});
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
+				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6"});
 
 		String[] finalXs =
 			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
-				"newRatio", "cancelRatio", "timeToMaxMin"};
+				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6"};
 
 		printProductCoeffs(joined, "fut_ret_2h", finalXs);
 	}
@@ -115,29 +91,18 @@ public class AnalyzeData {
 	static void printProductCoeffs(Table<TimeProduct> table, String y, String[] xs)
 		throws ColumnNotFoundException
 	{
+		String coeffsStr = "";
 		for(Product product : Product.FAST_VALUES) {
 			final var prodData = table.filter(key -> key.product == product);
 			RegressionResults results = prodData.regress(y, xs);
+			System.out.println("Product " + product + " R-sq " + results.getRSquared());
 			final var coeffString = Arrays.stream(results.getParameterEstimates())
+				.map(x -> Double.isNaN(x) ? 0.0 : x)
 				.mapToObj(Double::toString)
 				.collect(Collectors.joining(","));
-			System.out.println("forecast.snowbird.coeffs." + product + "=" + coeffString);
+			coeffsStr += "forecast.snowbird.coeffs." + product + "=" + coeffString + "\n";
 		}
-	}
-
-	static Object[] getProfit(double[] coeffs, Table<?> table, String[] xs, double betSize, double threshold) {
-		double profit = 0.0;
-		int numBets = 0;
-		for(var row : table) {
-			var predicted = coeffs[0];
-			for(int i = 1; i < coeffs.length; i++)
-				predicted += coeffs[i] * row.getColumn(xs[i - 1]);
-			if(!Double.isNaN(predicted) && !Double.isNaN(row.getColumn("fut_ret_2h")) && predicted > threshold) {
-				numBets++;
-				profit += betSize * row.getColumn("fut_ret_2h");
-			}
-		}
-		return new Object[] {profit, numBets};
+		System.out.println(coeffsStr);
 	}
 
 	static RegressionResults runRegressionPrintResults(Table<?> table, String yCol, String[] xCols)
