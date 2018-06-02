@@ -94,6 +94,7 @@ public class SimRunner implements Runnable {
 				+ " tradeUsdThreshold=" + simProperties.getDoubleProperty("tactic.tradeUsdThreshold")
 				+ " tradeScaleFactor=" + simProperties.getDoubleProperty("tactic.tradeScaleFactor"));
 			log.info("Holding period return:\t" + result.holdingPeriodReturn);
+			log.info("Daily avg trades:     \t" + result.dailyAvgTradeCount);
 			log.info("Daily avg return:     \t" + result.dailyAvgReturn);
 			log.info("Daily volatility:     \t" + result.dailyVolatility);
 			log.info("Sharpe Ratio:         \t" + result.sharpeRatio);
@@ -131,7 +132,7 @@ public class SimRunner implements Runnable {
 		ForecastCalculator forecastCalculator = new Snowbird(simProperties);
 		Tactic tactic = new TwoHourTactic(simProperties, timeKeeper, accountant);
 		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(simProperties, timeKeeper, accountant);
-		ExecutionEngine executionEngine = new SimExecutionEngine(simProperties, accountant, tactic, history);
+		SimExecutionEngine executionEngine = new SimExecutionEngine(simProperties, accountant, tactic, history);
 		DecisionAppender decisionAppender = null;
 		DailyAppender dailyAppender = null;
 		if(shouldLogDecisions) {
@@ -145,6 +146,7 @@ public class SimRunner implements Runnable {
 
 		long nextDay = intervalizer.calcNextDayMillis(0);
 		List<Double> dailyPositionValuesUsd = new ArrayList<>(365);
+		List<Integer> dailyTradeCount = new ArrayList<>(365);
 		for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedSnapshots) {
 			if(shouldSkipJan && consolidatedSnapshot.getTimeNanos() < 1518048000 * 1000000000L)
 				continue; // spotty/strange data before 2/8, just skip
@@ -153,6 +155,7 @@ public class SimRunner implements Runnable {
 			if(timeKeeper.epochMs() >= nextDay) {
 				nextDay = intervalizer.calcNextDayMillis(timeKeeper.epochMs());
 				dailyPositionValuesUsd.add(accountant.getPositionValueUsd(consolidatedSnapshot));
+				dailyTradeCount.add(executionEngine.getAndResetTradeCount());
 			}
 			history.add(consolidatedSnapshot);
 			tradeEvaluator.evaluate();
@@ -171,7 +174,7 @@ public class SimRunner implements Runnable {
 		if(decisionAppender != null) decisionAppender.close();
 		if(dailyAppender != null) dailyAppender.close();
 
-		SimResult simResult = new SimResult(dailyPositionValuesUsd);
+		SimResult simResult = new SimResult(dailyPositionValuesUsd, dailyTradeCount);
 		log.info("Simulated completed return " + simResult.holdingPeriodReturn + " sharpe " + simResult.sharpeRatio +
 			" win " + simResult.winPct + " winloss " + simResult.winPct / simResult.lossPct);
 		return simResult;
@@ -187,8 +190,9 @@ public class SimRunner implements Runnable {
 		final double lossPct;
 		final double gainLoss;
 		final double maxLossStreak;
+		final double dailyAvgTradeCount;
 
-		SimResult(List<Double> dailyPositionValuesUsd) {
+		SimResult(List<Double> dailyPositionValuesUsd, List<Integer> dailyTradeCount) {
 			this.dailyPositionValuesUsd = dailyPositionValuesUsd;
 			holdingPeriodReturn =
 				dailyPositionValuesUsd.get(dailyPositionValuesUsd.size() - 1) / dailyPositionValuesUsd.get(0) - 1;
@@ -233,6 +237,9 @@ public class SimRunner implements Runnable {
 			winPct = ((double) winCount) / dailyReturns.length;
 			lossPct = ((double) lossCount) / dailyReturns.length;
 			gainLoss = totalLoss == 0 ? 0 : totalGain / totalLoss;
+
+			dailyAvgTradeCount =
+				dailyTradeCount.stream().reduce(Integer::sum).get() / ((double) dailyTradeCount.size());
 		}
 
 		/**
@@ -253,10 +260,6 @@ public class SimRunner implements Runnable {
 				case "gainloss":
 					return Double.compare(gainLoss, b.gainLoss);
 				case "utility":
-/*					return Double.compare(
-						holdingPeriodReturn - barrierFunction(0.05, maxLossStreak),
-						b.holdingPeriodReturn - barrierFunction(0.05, b.maxLossStreak)
-					);*/
 					return Double.compare(
 						holdingPeriodReturn * winloss,
 						b.holdingPeriodReturn * bWinloss
@@ -264,10 +267,6 @@ public class SimRunner implements Runnable {
 				default:
 					throw new RuntimeException("Invalid search objective " + searchObjective);
 			}
-		}
-
-		private double barrierFunction(double barrierThreshold, double x) {
-			return Math.pow(Math.exp(-10 * x - barrierThreshold), 10) / 10;
 		}
 	}
 }

@@ -28,6 +28,8 @@ public class SimExecutionEngine implements ExecutionEngine {
 	private final ConsolidatedHistory history;
 	private final Random postFillRandomGen;
 
+	private int tradeCount;
+
 	SimExecutionEngine(MCProperties properties, Accountant accountant, Tactic tactic, ConsolidatedHistory history) {
 		this.accountant = accountant;
 		this.tactic = tactic;
@@ -66,6 +68,7 @@ public class SimExecutionEngine implements ExecutionEngine {
 				}
 				tactic.notifyFill(instruction, product, instruction.getOrderSide(), crypto, price);
 			}
+			tradeCount++;
 		}
 	}
 
@@ -122,5 +125,12 @@ public class SimExecutionEngine implements ExecutionEngine {
 		}
 
 		return priceXSize / amount;
+	}
+
+	/** Used to count trading activity in sim */
+	int getAndResetTradeCount() {
+		int retValue = tradeCount;
+		tradeCount = 0;
+		return retValue;
 	}
 }
