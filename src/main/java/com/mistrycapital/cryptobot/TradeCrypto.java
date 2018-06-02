@@ -172,6 +172,9 @@ public class TradeCrypto {
 			}
 			tactic.warmup(snapshot, historicalForecasts);
 		}
+		for(Product product : Product.FAST_VALUES) {
+			log.debug("Last warmup forecast " + product + ": " + forecastCalculator.calculate(fullHistory, product));
+		}
 	}
 
 	private static DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");

@@ -101,13 +101,14 @@ public class Snowbird implements ForecastCalculator {
 		double lagBTCRet6 = 0.0;
 		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values()) {
 			ProductSnapshot data = snapshot.getProductSnapshot(product);
-			if(dataPoints < twelveHourDatapoints) {
-				if(!Double.isNaN(data.ret))
-					sumVolxRet12 += data.ret * data.volume;
-			}
+			final double periodRet = Double.isNaN(data.ret) ? 0.0 : data.ret;
 
-			final double periodRet = data.ret;//Math.log(1 + data.ret);
-			final double btcRet = snapshot.getProductSnapshot(Product.BTC_USD).ret;
+			final var btcSnapshot = snapshot.getProductSnapshot(Product.BTC_USD);
+			final double btcRet = Double.isNaN(btcSnapshot.ret) ? 0.0 : btcSnapshot.ret;
+
+			if(dataPoints < twelveHourDatapoints) {
+				sumVolxRet12 += periodRet * data.volume;
+			}
 
 			if(dataPoints < sixHourDatapoints) {
 				bidTradeCount += data.bidTradeCount;
@@ -118,24 +119,22 @@ public class Snowbird implements ForecastCalculator {
 				newAskCount += data.newAskCount;
 				clientOidBuyCount += data.clientOidBuyCount;
 				clientOidSellCount += data.clientOidSellCount;
-				if(!Double.isNaN(data.ret)) {
-					final double prevPrice = data.lastPrice / (1 + data.ret);
+				final double prevPrice = data.lastPrice / (1 + periodRet);
 
-					if(data.ret >= 0) {
-						upIntervals++;
-						upVolume += data.volume;
-						sumUpChange += data.lastPrice - prevPrice;
-					} else {
-						downIntervals++;
-						downVolume += data.volume;
-						sumDownChange += prevPrice - data.lastPrice;
-					}
-					sumVolxRet += data.ret * data.volume;
-					lagRet6 += periodRet;
-					illiqUp += periodRet > 0 ? periodRet / data.volume : 0.0;
-					illiqDown += periodRet < 0 ? -periodRet / data.volume : 0.0;
-					lagBTCRet6 += btcRet;
+				if(periodRet >= 0) {
+					upIntervals++;
+					upVolume += data.volume;
+					sumUpChange += data.lastPrice - prevPrice;
+				} else {
+					downIntervals++;
+					downVolume += data.volume;
+					sumDownChange += prevPrice - data.lastPrice;
 				}
+				sumVolxRet += periodRet * data.volume;
+				lagRet6 += periodRet;
+				illiqUp += periodRet > 0 ? periodRet / data.volume : 0.0;
+				illiqDown += periodRet < 0 ? -periodRet / data.volume : 0.0;
+				lagBTCRet6 += btcRet;
 
 				if(data.vwap < minPrice) {
 					minPrice = data.vwap;
@@ -152,7 +151,7 @@ public class Snowbird implements ForecastCalculator {
 				newCount2h += data.newBidCount + data.newAskCount;
 				clientOidCount2h += data.clientOidBuyCount + data.clientOidSellCount;
 
-				lagBTCRet += Double.isNaN(btcRet) ? 0.0 : btcRet;
+				lagBTCRet += btcRet;
 			}
 
 			dataPoints++;
