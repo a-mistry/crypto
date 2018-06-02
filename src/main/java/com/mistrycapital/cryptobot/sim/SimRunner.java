@@ -208,7 +208,7 @@ public class SimRunner implements Runnable {
 			}
 			dailyVolatility = Math.sqrt(dailySum / dailyReturns.length);
 
-			sharpeRatio = dailyVolatility != 0.0 ? dailyAvgReturn / dailyVolatility : 0.0;
+			sharpeRatio = dailyVolatility != 0.0 ? Math.sqrt(365) * dailyAvgReturn / dailyVolatility : 0.0;
 
 			int winCount = 0;
 			int lossCount = 0;
