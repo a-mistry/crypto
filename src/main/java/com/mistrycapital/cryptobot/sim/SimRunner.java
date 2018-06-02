@@ -67,9 +67,9 @@ public class SimRunner implements Runnable {
 				simProperties.put("sim.logForecastCalc", "false");
 				SimResult result = parameterOptimizer.optimize(simProperties,
 					Arrays.asList(
-						new ParameterSearchSpace("tactic.buyThreshold", 0.00, 0.01, 100),
+						new ParameterSearchSpace("tactic.buyThreshold", 0.00, 0.01, 10),
 //						new ParameterSearchSpace("tactic.tradeUsdThreshold", 0.0, 100.0)
-						new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 20.0, 50)
+						new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 20.0, 10)
 					),
 					properties -> {
 						try {
