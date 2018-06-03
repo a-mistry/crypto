@@ -2,6 +2,7 @@ package com.mistrycapital.cryptobot.aggregatedata;
 
 import com.mistrycapital.cryptobot.time.Intervalizer;
 
+import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 
 /**
@@ -12,80 +13,74 @@ public class ConsolidatedHistory {
 	private final int maxIntervals;
 
 	/** Recorded snapshot data, in a linked list with the head containing the latest value */
-	private ConsolidatedDataListNode head;
-
-	private class ConsolidatedDataListNode {
-		ConsolidatedSnapshot data;
-		ConsolidatedDataListNode prev;
-
-		ConsolidatedDataListNode(ConsolidatedSnapshot data, ConsolidatedDataListNode prev) {
-			this.data = data;
-			this.prev = prev;
-		}
-	}
+	private ConsolidatedSnapshot[] buffer;
+	/** Oldest node */
+	private int head;
+	/** Newest node */
+	private int tail;
+	/** Used to track if this object was modified during iteration */
+	private boolean modified;
 
 	public ConsolidatedHistory(Intervalizer intervalizer) {
 		maxIntervals = intervalizer.getHistoryIntervals();
+		buffer = new ConsolidatedSnapshot[maxIntervals];
 	}
 
 	public synchronized void add(ConsolidatedSnapshot newData) {
-		if(head == null) {
-			head = new ConsolidatedDataListNode(newData, null);
-			return;
-		}
+		modified = true;
 
-		head = new ConsolidatedDataListNode(newData, head);
-
-		// remove oldest if needed
-		ConsolidatedDataListNode cur = head;
-		int count = 1;
-		while(count < maxIntervals && cur.prev != null) {
-			cur = cur.prev;
-			count++;
+		if(tail != 0 || buffer[tail] != null) {
+			tail = (tail + 1) % maxIntervals;
+			if(head == tail)
+				head = (head + 1) % maxIntervals;
 		}
-		if(count == maxIntervals)
-			cur.prev = null;
+		buffer[tail] = newData;
 	}
 
 	/**
 	 * @return Latest recorded interval value (not the interval we are currently tracking)
 	 */
 	public synchronized ConsolidatedSnapshot latest() {
-		return head != null ? head.data : null;
+		return buffer[tail];
 	}
 
 	/**
 	 * @return The full history we are storing, sorted from oldest to latest
 	 */
 	public synchronized Iterable<ConsolidatedSnapshot> values() {
-		final ConsolidatedHistory history = this;
-		return () -> new BufferIterator(history, head);
+		modified = false;
+		return () -> new BufferIterator(this);
 	}
 
 	private class BufferIterator implements Iterator<ConsolidatedSnapshot> {
 		private final ConsolidatedHistory history;
-		private ConsolidatedDataListNode cur;
+		private int cur;
 
-		BufferIterator(ConsolidatedHistory history, ConsolidatedDataListNode latest) {
+		BufferIterator(ConsolidatedHistory history) {
 			this.history = history;
-			cur = latest;
+			cur = tail;
 		}
 
 		@Override
 		public boolean hasNext() {
 			synchronized(history) {
-				return cur != null;
+				if(modified) throw new ConcurrentModificationException();
+				return cur >= 0 && buffer[cur] != null;
 			}
 		}
 
 		@Override
 		public ConsolidatedSnapshot next() {
 			synchronized(history) {
-				if(cur == null) {
+				if(modified) throw new ConcurrentModificationException();
+				if(cur < 0 || buffer[cur] == null) {
 					return null;
 				} else {
-					ConsolidatedSnapshot retVal = cur.data;
-					cur = cur.prev;
+					ConsolidatedSnapshot retVal = buffer[cur];
+					if(cur == head)
+						cur = -1;
+					else
+						cur = (cur - 1 + maxIntervals) % maxIntervals;
 					return retVal;
 				}
 			}

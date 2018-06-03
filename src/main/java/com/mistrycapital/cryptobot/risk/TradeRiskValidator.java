@@ -38,6 +38,8 @@ public class TradeRiskValidator {
 		// NEED TO UNIT TEST THESE!
 		if(instructions == null) return null;
 
+		log.debug("Checking risk on " + instructions.size() + " trades");
+
 		instructions = validateTradeCount(instructions);
 		instructions = validatePosition(instructions);
 		instructions = validateSize(instructions);
@@ -47,8 +49,6 @@ public class TradeRiskValidator {
 
 	/** Validate that we are placing no more than the limit of trades in 24 hours */
 	List<TradeInstruction> validateTradeCount(List<TradeInstruction> instructions) {
-		log.debug("Checking risk on " + instructions.size() + " trades at " + timeKeeper.iso8601());
-
 		long oneDayAgoTimeInNanos = timeKeeper.epochNanos() - 24 * 60 * 60 * 1000000000L;
 		while(!lastDayTradeTimesInNanos.isEmpty() && lastDayTradeTimesInNanos.peek() < oneDayAgoTimeInNanos)
 			lastDayTradeTimesInNanos.remove();
@@ -61,8 +61,8 @@ public class TradeRiskValidator {
 			lastDayTradeTimesInNanos.add(timeKeeper.epochNanos());
 			validated.add(instruction);
 
-			log.debug("Validated trade " + instruction.getOrderSide() + " " + instruction.getAmount() + " " +
-				instruction.getProduct() + " at " + timeKeeper.iso8601());
+			log.debug("Validated trade count " + instruction.getOrderSide() + " " + instruction.getAmount() + " " +
+				instruction.getProduct());
 		}
 		return validated;
 	}
@@ -76,7 +76,7 @@ public class TradeRiskValidator {
 	/** Validate the size is sufficiently large (0.001) */
 	List<TradeInstruction> validateSize(List<TradeInstruction> instructions) {
 		return instructions.stream()
-			.filter(instruction -> instruction.getAmount()>0.001)
+			.filter(instruction -> instruction.getAmount() > 0.001)
 			.collect(Collectors.toList());
 	}
 }
