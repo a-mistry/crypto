@@ -70,9 +70,9 @@ public class SimRunner implements Runnable {
 				simProperties.put("sim.logForecastCalc", "false");
 				simProperties.put("tactic.buyForecastProportion", "false");
 				List<ParameterSearchSpace> searchList = Arrays.asList(
-					new ParameterSearchSpace("tactic.buyThreshold", 0.005, 0.01, 21),
+					new ParameterSearchSpace("tactic.buyThreshold", 0.002, 0.01, 5),
 //					new ParameterSearchSpace("tactic.buyUpperThreshold", 0.01, 0.02, 6),
-					new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 10.0, 10)
+					new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 10.0, 5)
 				);
 				try(BufferedWriter writer = Files.newBufferedWriter(dataDir.resolve(searchFile))) {
 					for(var searchSpace : searchList) {

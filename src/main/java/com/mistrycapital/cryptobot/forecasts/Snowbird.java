@@ -27,7 +27,8 @@ public class Snowbird implements ForecastCalculator {
 
 	private static final String[] signalsToUse =
 		new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
-			"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6"};
+			"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "bookRatio", "tradeRatioxRet", "newRatioxRet",
+			"cancelRatioxRet"};
 
 	public Snowbird(MCProperties properties) {
 		final int intervalSeconds = properties.getIntProperty("history.intervalSeconds");
@@ -88,106 +89,96 @@ public class Snowbird implements ForecastCalculator {
 		double minPrice = Double.POSITIVE_INFINITY;
 		int intervalsToMax = 0;
 		double maxPrice = 0.0;
-		double upVolume = 0.0;
-		double downVolume = 0.0;
+		double volume = 0.0;
 		double sumVolxRet = 0.0;
 		double sumVolxRet12 = 0.0;
 		double lagRet = 0.0;
 		double lagRet6 = 0.0;
-		double illiqUp = 0.0;
-		double illiqDown = 0.0;
 		double sumUpChange = 0.0;
 		double sumDownChange = 0.0;
-		int newCount2h = 0;
-		double lagBTCRet = 0.0;
 		double lagBTCRet6 = 0.0;
 		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values()) {
+			dataPoints++;
+
+			if(dataPoints > twelveHourDatapoints)
+				break;
+
 			ProductSnapshot data = snapshot.getProductSnapshot(product);
-			final double periodRet = Double.isNaN(data.ret) ? 0.0 : data.ret;
+			final double periodRet = Double.isNaN(data.ret) ? 0.0 : Math.log(1 + data.ret);
+
+			sumVolxRet12 += periodRet * data.volume;
+
+			if(dataPoints > sixHourDatapoints)
+				continue;
 
 			final var btcSnapshot = snapshot.getProductSnapshot(Product.BTC_USD);
-			final double btcRet = Double.isNaN(btcSnapshot.ret) ? 0.0 : btcSnapshot.ret;
+			final double btcRet = Double.isNaN(btcSnapshot.ret) ? 0.0 : Math.log(1 + btcSnapshot.ret);
 
-			if(dataPoints < twelveHourDatapoints) {
-				sumVolxRet12 += periodRet * data.volume;
+
+			bidTradeCount += data.bidTradeCount;
+			askTradeCount += data.askTradeCount;
+			bidCancelCount += data.bidCancelCount;
+			askCancelCount += data.askCancelCount;
+			newBidCount += data.newBidCount;
+			newAskCount += data.newAskCount;
+			final double prevPrice = data.lastPrice / (1 + periodRet);
+
+			if(periodRet >= 0) {
+				upIntervals++;
+				sumUpChange += data.lastPrice - prevPrice;
+			} else {
+				downIntervals++;
+				sumDownChange += prevPrice - data.lastPrice;
+			}
+			volume += data.volume;
+			sumVolxRet += periodRet * data.volume;
+			lagRet6 += periodRet;
+			lagBTCRet6 += btcRet;
+
+			if(data.vwap < minPrice) {
+				minPrice = data.vwap;
+				intervalsToMin = dataPoints + 1;
+			}
+			if(data.vwap > maxPrice) {
+				maxPrice = data.vwap;
+				intervalsToMax = dataPoints + 1;
 			}
 
-			if(dataPoints < sixHourDatapoints) {
-				bidTradeCount += data.bidTradeCount;
-				askTradeCount += data.askTradeCount;
-				bidCancelCount += data.bidCancelCount;
-				askCancelCount += data.askCancelCount;
-				newBidCount += data.newBidCount;
-				newAskCount += data.newAskCount;
-				final double prevPrice = data.lastPrice / (1 + periodRet);
+			if(dataPoints > twoHourDatapoints)
+				continue;
 
-				if(periodRet >= 0) {
-					upIntervals++;
-					upVolume += data.volume;
-					sumUpChange += data.lastPrice - prevPrice;
-				} else {
-					downIntervals++;
-					downVolume += data.volume;
-					sumDownChange += prevPrice - data.lastPrice;
-				}
-				sumVolxRet += periodRet * data.volume;
-				lagRet6 += periodRet;
-				illiqUp += periodRet > 0 ? periodRet / data.volume : 0.0;
-				illiqDown += periodRet < 0 ? -periodRet / data.volume : 0.0;
-				lagBTCRet6 += btcRet;
+			lagRet += periodRet;
 
-				if(data.vwap < minPrice) {
-					minPrice = data.vwap;
-					intervalsToMin = dataPoints + 1;
-				}
-				if(data.vwap > maxPrice) {
-					maxPrice = data.vwap;
-					intervalsToMax = dataPoints + 1;
-				}
-			}
-
-			if(dataPoints < twoHourDatapoints) {
-				lagRet += periodRet;
-				newCount2h += data.newBidCount + data.newAskCount;
-
-				lagBTCRet += btcRet;
-			}
-
-			dataPoints++;
 		}
 
 		final double tradeRatio = ((double) bidTradeCount) / (bidTradeCount + askTradeCount);
 		final double cancelRatio = (bidCancelCount - askCancelCount) / ((double) book5PctCount);
 		final double newRatio = (newBidCount - newAskCount) / ((double) book5PctCount);
 		final double upRatio = ((double) upIntervals) / (upIntervals + downIntervals);
-		final double upVolumeRatio = upVolume / (upVolume + downVolume);
 
-		variableMap.put("lagRet", lagRet);
+		// Things we tried that didn't work
+		// o 2 hour lag return, btc return
+		// o up volume ratio (up volume / volume), also x ret
+		// o un-normalized on balance volume (sum of volume x ret)
+		// o illiq up and down (ret / volume when down) - down was better, also x ret
+		// o RSI ratio without lag ret
 		variableMap.put("lagRet6", lagRet6);
-		variableMap.put("bookRatio", bookRatio);
 		variableMap.put("bookRatioxRet", bookRatio * lagRet);
 		variableMap.put("tradeRatio", tradeRatio);
-		variableMap.put("tradeRatioxRet", tradeRatio * lagRet);
 		variableMap.put("cancelRatio", cancelRatio);
-		variableMap.put("cancelRatioxRet", cancelRatio * lagRet);
 		variableMap.put("newRatio", newRatio);
+		variableMap.put("upRatioxRet", upRatio * lagRet);
+		variableMap.put("normVolxRet", (sumVolxRet12 - sumVolxRet) / volume); // modified OBV indicator
+		variableMap.put("timeToMaxMin", (double) intervalsToMax - intervalsToMin);
+		variableMap.put("RSIRatioxRet", sumUpChange / sumDownChange * lagRet);
+		variableMap.put("lagBTCRet6", lagBTCRet6);
+
+		// These don't contribute much (0.1% R^2, low t-stats) but may be justified
+		variableMap.put("bookRatio", bookRatio);
+		variableMap.put("tradeRatioxRet", tradeRatio * lagRet);
+		variableMap.put("cancelRatioxRet", cancelRatio * lagRet);
 		variableMap.put("newRatioxRet", newRatio * lagRet);
 		variableMap.put("upRatio", upRatio);
-		variableMap.put("upRatioxRet", upRatio * lagRet);
-		variableMap.put("upVolume", upVolumeRatio);
-		variableMap.put("upVolumexRet", upVolumeRatio * lagRet);
-		variableMap.put("sumVolxRet", sumVolxRet);
-		variableMap.put("diffVolxRet", sumVolxRet12 - sumVolxRet);
-		variableMap.put("normVolxRet", (sumVolxRet12 - sumVolxRet) / (upVolume + downVolume)); // modified OBV indicator
-		variableMap.put("timeToMaxMin", (double) intervalsToMax - intervalsToMin);
-		variableMap.put("illiqUp", illiqUp);
-		variableMap.put("illiqDown", illiqDown);
-		variableMap.put("illiqRatio", illiqUp / illiqDown);
-		variableMap.put("illiqDownxRet", illiqDown * lagRet);
-		variableMap.put("RSIRatio", sumUpChange / sumDownChange);
-		variableMap.put("RSIRatioxRet", sumUpChange / sumDownChange * lagRet);
-		variableMap.put("lagBTCRet", lagBTCRet);
-		variableMap.put("lagBTCRet6", lagBTCRet6);
 
 		return variableMap;
 	}
