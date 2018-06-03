@@ -24,9 +24,7 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
 public class SimRunner implements Runnable {
 	private static final Logger log = MCLoggerFactory.getLogger();
@@ -63,6 +61,7 @@ public class SimRunner implements Runnable {
 			List<ConsolidatedSnapshot> consolidatedSnapshots =
 				SnapshotReader.readSnapshots(SnapshotReader.getSampleFiles(dataDir));
 			MCProperties simProperties = new MCProperties();
+			Map<Long,List<Double>> forecastCache = cacheForecasts(consolidatedSnapshots, simProperties);
 
 			boolean search = simProperties.getBooleanProperty("sim.searchParameters", false);
 			if(search) {
@@ -70,9 +69,9 @@ public class SimRunner implements Runnable {
 				simProperties.put("sim.logForecastCalc", "false");
 				simProperties.put("tactic.buyForecastProportion", "false");
 				List<ParameterSearchSpace> searchList = Arrays.asList(
-					new ParameterSearchSpace("tactic.buyThreshold", 0.002, 0.01, 5),
+					new ParameterSearchSpace("tactic.buyThreshold", 0.002, 0.01, 50),
 //					new ParameterSearchSpace("tactic.buyUpperThreshold", 0.01, 0.02, 6),
-					new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 10.0, 5)
+					new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 10.0, 10)
 				);
 				try(BufferedWriter writer = Files.newBufferedWriter(dataDir.resolve(searchFile))) {
 					for(var searchSpace : searchList) {
@@ -85,7 +84,7 @@ public class SimRunner implements Runnable {
 						searchList,
 						properties -> {
 							try {
-								SimResult result = simulate(consolidatedSnapshots, properties);
+								SimResult result = simulate(consolidatedSnapshots, forecastCache, properties);
 								for(var searchSpace : searchList) {
 									double paramValue = properties.getDoubleProperty(searchSpace.parameterName);
 									writer.append(GdaxClient.gdaxDecimalFormat.format(paramValue));
@@ -110,7 +109,7 @@ public class SimRunner implements Runnable {
 			}
 			simProperties.put("sim.logDecisions", "true");
 			long startNanos = System.nanoTime();
-			SimResult result = simulate(consolidatedSnapshots, simProperties);
+			SimResult result = simulate(consolidatedSnapshots, forecastCache, simProperties);
 			log.info("Simulation treatment ended in " + ((System.nanoTime() - startNanos) / 1000000.0) + "ms");
 			log.info("Tactic buyThreshold=" + simProperties.getDoubleProperty("tactic.buyThreshold")
 				+ " tradeUsdThreshold=" + simProperties.getDoubleProperty("tactic.tradeUsdThreshold")
@@ -129,19 +128,33 @@ public class SimRunner implements Runnable {
 		}
 	}
 
-	private SimResult simulate(List<ConsolidatedSnapshot> consolidatedSnapshots, MCProperties simProperties)
+	private Map<Long,List<Double>> cacheForecasts(List<ConsolidatedSnapshot> consolidatedSnapshots,
+		MCProperties simProperties)
+	{
+		ConsolidatedHistory history = new ConsolidatedHistory(intervalizer);
+		ForecastCalculator forecastCalculator = new Snowbird(simProperties);
+		Map<Long,List<Double>> cache = new HashMap<>(365);
+		for(ConsolidatedSnapshot snapshot : consolidatedSnapshots) {
+			history.add(snapshot);
+			List<Double> forecasts = new ArrayList<>(Product.count);
+			for(Product product : Product.FAST_VALUES) {
+				forecasts.add(product.getIndex(), forecastCalculator.calculate(history, product));
+			}
+			cache.put(snapshot.getTimeNanos(), forecasts);
+		}
+		return cache;
+	}
+
+	private SimResult simulate(List<ConsolidatedSnapshot> consolidatedSnapshots, Map<Long,List<Double>> forecastCache, MCProperties simProperties)
 		throws IOException
 	{
 		final boolean shouldLogDecisions = simProperties.getBooleanProperty("sim.logDecisions", false);
-		final boolean shouldLogForecastCalc = simProperties.getBooleanProperty("sim.logForecastCalc", false);
 		final boolean shouldSkipJan = simProperties.getBooleanProperty("sim.skipJan", true);
 		try {
 			if(shouldLogDecisions) {
 				Files.deleteIfExists(dataDir.resolve(decisionFile));
 				Files.deleteIfExists(dataDir.resolve(dailyFile));
 			}
-			if(shouldLogForecastCalc)
-				Files.deleteIfExists(forecastCalcFile);
 		} catch(IOException e) {
 			log.error("Could not delete existing file", e);
 			throw new RuntimeException(e);
@@ -151,7 +164,7 @@ public class SimRunner implements Runnable {
 		SimTimeKeeper timeKeeper = new SimTimeKeeper();
 		PositionsProvider positionsProvider = new EmptyPositionsProvider(startingUsd);
 		Accountant accountant = new Accountant(positionsProvider);
-		ForecastCalculator forecastCalculator = new Snowbird(simProperties);
+		ForecastCalculator forecastCalculator = new CachedForecastCalculator(forecastCache);
 		Tactic tactic = new TwoHourTactic(simProperties, timeKeeper, accountant);
 		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(simProperties, timeKeeper, accountant);
 		SimExecutionEngine executionEngine = new SimExecutionEngine(simProperties, accountant, tactic, history);
@@ -204,5 +217,25 @@ public class SimRunner implements Runnable {
 		log.info("Simulated completed return " + simResult.holdingPeriodReturn + " sharpe " + simResult.sharpeRatio +
 			" win " + simResult.winPct + " winloss " + simResult.winPct / simResult.lossPct);
 		return simResult;
+	}
+
+	class CachedForecastCalculator implements ForecastCalculator {
+		private Map<Long,List<Double>> cache;
+
+		CachedForecastCalculator(Map<Long,List<Double>> cache) {
+			this.cache = cache;
+		}
+
+		@Override
+		public double calculate(final ConsolidatedHistory consolidatedHistory, final Product product) {
+			return cache.get(consolidatedHistory.latest().getTimeNanos()).get(product.getIndex());
+		}
+
+		@Override
+		public Map<String,Double> getInputVariables(final ConsolidatedHistory consolidatedHistory,
+			final Product product)
+		{
+			throw new UnsupportedOperationException();
+		}
 	}
 }

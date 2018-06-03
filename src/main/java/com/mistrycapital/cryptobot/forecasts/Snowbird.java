@@ -114,7 +114,6 @@ public class Snowbird implements ForecastCalculator {
 			final var btcSnapshot = snapshot.getProductSnapshot(Product.BTC_USD);
 			final double btcRet = Double.isNaN(btcSnapshot.ret) ? 0.0 : Math.log(1 + btcSnapshot.ret);
 
-
 			bidTradeCount += data.bidTradeCount;
 			askTradeCount += data.askTradeCount;
 			bidCancelCount += data.bidCancelCount;
