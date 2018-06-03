@@ -8,6 +8,7 @@ import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
 import org.slf4j.Logger;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import static java.util.Map.entry;
@@ -22,6 +23,7 @@ public class Snowbird implements ForecastCalculator {
 	private final int sixHourDatapoints;
 	private final int twelveHourDatapoints;
 	private final double[][] coeffs;
+	private Map<String,Double> variableMap;
 
 	private static final String[] signalsToUse =
 		new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
@@ -47,6 +49,9 @@ public class Snowbird implements ForecastCalculator {
 			for(int i = 0; i < coeffs[productIndex].length; i++)
 				coeffs[productIndex][i] = Double.parseDouble(split[i]);
 		}
+		variableMap = new HashMap<>();
+		for(String signal : signalsToUse)
+			variableMap.put(signal, 0.0);
 	}
 
 	@Override
@@ -93,10 +98,7 @@ public class Snowbird implements ForecastCalculator {
 		double illiqDown = 0.0;
 		double sumUpChange = 0.0;
 		double sumDownChange = 0.0;
-		int clientOidBuyCount = 0;
-		int clientOidSellCount = 0;
 		int newCount2h = 0;
-		int clientOidCount2h = 0;
 		double lagBTCRet = 0.0;
 		double lagBTCRet6 = 0.0;
 		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values()) {
@@ -117,8 +119,6 @@ public class Snowbird implements ForecastCalculator {
 				askCancelCount += data.askCancelCount;
 				newBidCount += data.newBidCount;
 				newAskCount += data.newAskCount;
-				clientOidBuyCount += data.clientOidBuyCount;
-				clientOidSellCount += data.clientOidSellCount;
 				final double prevPrice = data.lastPrice / (1 + periodRet);
 
 				if(periodRet >= 0) {
@@ -149,7 +149,6 @@ public class Snowbird implements ForecastCalculator {
 			if(dataPoints < twoHourDatapoints) {
 				lagRet += periodRet;
 				newCount2h += data.newBidCount + data.newAskCount;
-				clientOidCount2h += data.clientOidBuyCount + data.clientOidSellCount;
 
 				lagBTCRet += btcRet;
 			}
@@ -162,45 +161,35 @@ public class Snowbird implements ForecastCalculator {
 		final double newRatio = (newBidCount - newAskCount) / ((double) book5PctCount);
 		final double upRatio = ((double) upIntervals) / (upIntervals + downIntervals);
 		final double upVolumeRatio = upVolume / (upVolume + downVolume);
-		final double informedDirection = ((double) clientOidBuyCount) / (clientOidBuyCount + clientOidSellCount);
-		final double informedPct = ((double) clientOidBuyCount + clientOidSellCount) / (newBidCount + newAskCount);
-		final double informedPct2h = ((double) clientOidCount2h) / newCount2h;
 
-		return Map.ofEntries(
-			entry("lagRet", lagRet),
-			entry("lagRet6", lagRet6),
-			entry("bookRatio", bookRatio),
-			entry("bookRatioxRet", bookRatio * lagRet),
-			entry("tradeRatio", tradeRatio),
-			entry("tradeRatioxRet", tradeRatio * lagRet),
-			entry("cancelRatio", cancelRatio),
-			entry("cancelRatioxRet", cancelRatio * lagRet),
-			entry("newRatio", newRatio),
-			entry("newRatioxRet", newRatio * lagRet),
-			entry("upRatio", upRatio),
-			entry("upRatioxRet", upRatio * lagRet),
-			entry("upVolume", upVolumeRatio),
-			entry("upVolumexRet", upVolumeRatio * lagRet),
-			entry("sumVolxRet", sumVolxRet),
-			entry("diffVolxRet", sumVolxRet12 - sumVolxRet),
-			entry("normVolxRet", (sumVolxRet12 - sumVolxRet) / (upVolume + downVolume)), // modified OBV indicator
-			entry("timeToMaxMin", (double) intervalsToMax - intervalsToMin),
-			entry("illiqUp", illiqUp),
-			entry("illiqDown", illiqDown),
-			entry("illiqRatio", illiqUp / illiqDown),
-			entry("illiqDownxRet", illiqDown * lagRet),
-			entry("RSIRatio", sumUpChange / sumDownChange),
-			entry("RSIRatioxRet", sumUpChange / sumDownChange * lagRet),
-			entry("informedDirxRet", informedDirection * lagRet),
-			entry("informedPct", informedPct),
-			entry("informedPctxRet", informedPct * lagRet),
-			entry("informedPctxIlliq", informedPct * illiqDown),
-			entry("informedPctxRSI", informedPct * sumUpChange / sumDownChange * lagRet),
-			entry("diffInformed", informedPct - informedPct2h),
-			entry("diffInformedxRet", (informedPct - informedPct2h) * lagRet),
-			entry("lagBTCRet", lagBTCRet),
-			entry("lagBTCRet6", lagBTCRet6)
-		);
+		variableMap.put("lagRet", lagRet);
+		variableMap.put("lagRet6", lagRet6);
+		variableMap.put("bookRatio", bookRatio);
+		variableMap.put("bookRatioxRet", bookRatio * lagRet);
+		variableMap.put("tradeRatio", tradeRatio);
+		variableMap.put("tradeRatioxRet", tradeRatio * lagRet);
+		variableMap.put("cancelRatio", cancelRatio);
+		variableMap.put("cancelRatioxRet", cancelRatio * lagRet);
+		variableMap.put("newRatio", newRatio);
+		variableMap.put("newRatioxRet", newRatio * lagRet);
+		variableMap.put("upRatio", upRatio);
+		variableMap.put("upRatioxRet", upRatio * lagRet);
+		variableMap.put("upVolume", upVolumeRatio);
+		variableMap.put("upVolumexRet", upVolumeRatio * lagRet);
+		variableMap.put("sumVolxRet", sumVolxRet);
+		variableMap.put("diffVolxRet", sumVolxRet12 - sumVolxRet);
+		variableMap.put("normVolxRet", (sumVolxRet12 - sumVolxRet) / (upVolume + downVolume)); // modified OBV indicator
+		variableMap.put("timeToMaxMin", (double) intervalsToMax - intervalsToMin);
+		variableMap.put("illiqUp", illiqUp);
+		variableMap.put("illiqDown", illiqDown);
+		variableMap.put("illiqRatio", illiqUp / illiqDown);
+		variableMap.put("illiqDownxRet", illiqDown * lagRet);
+		variableMap.put("RSIRatio", sumUpChange / sumDownChange);
+		variableMap.put("RSIRatioxRet", sumUpChange / sumDownChange * lagRet);
+		variableMap.put("lagBTCRet", lagBTCRet);
+		variableMap.put("lagBTCRet6", lagBTCRet6);
+
+		return variableMap;
 	}
 
 }

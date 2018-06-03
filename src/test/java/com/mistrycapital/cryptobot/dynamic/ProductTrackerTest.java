@@ -93,7 +93,7 @@ class ProductTrackerTest {
 		tracker.process(canceledAsk);
 		tracker.process(canceledBid1);
 		tracker.process(canceledBid2);
-		tracker.process(receivedOid1);
+		tracker.process(receivedOid1); // received was used for client oid indicator but no longer needed
 		tracker.process(receivedOid2);
 		tracker.process(receivedNoOid);
 
@@ -114,8 +114,6 @@ class ProductTrackerTest {
 		assertEquals(openBid.getRemainingSize(), intervalData.newBidSize);
 		assertEquals(1, intervalData.newAskCount);
 		assertEquals(openAsk.getRemainingSize(), intervalData.newAskSize);
-		assertEquals(1, intervalData.clientOidBuyCount);
-		assertEquals(1, intervalData.clientOidSellCount);
 
 		// now verify trades
 		tracker.process(matchBid);

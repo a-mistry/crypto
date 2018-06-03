@@ -7,8 +7,8 @@ import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.appender.DailyAppender;
 import com.mistrycapital.cryptobot.appender.DecisionAppender;
-import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.forecasts.*;
+import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.risk.TradeRiskValidator;
@@ -20,6 +20,7 @@ import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
 import org.slf4j.Logger;
 
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -35,6 +36,7 @@ public class SimRunner implements Runnable {
 	private final double[] forecasts;
 	private final String decisionFile;
 	private final String dailyFile;
+	private final String searchFile;
 	private final Path forecastCalcFile;
 	private final int startingUsd;
 	private final ParameterOptimizer parameterOptimizer;
@@ -47,6 +49,7 @@ public class SimRunner implements Runnable {
 		forecasts = new double[Product.count];
 		decisionFile = properties.getProperty("sim.decisionFile", "decisions.csv");
 		dailyFile = properties.getProperty("sim.dailyFile", "daily.csv");
+		searchFile = properties.getProperty("sim.searchFile", "search.csv");
 		forecastCalcFile = dataDir.resolve(properties.getProperty("sim.forecastCalcFile", "forecast-calcs.csv"));
 		startingUsd = properties.getIntProperty("sim.startUsd", 10000);
 		parameterOptimizer = new ParameterOptimizer();
@@ -65,26 +68,45 @@ public class SimRunner implements Runnable {
 			if(search) {
 				simProperties.put("sim.logDecisions", "false");
 				simProperties.put("sim.logForecastCalc", "false");
-				SimResult result = parameterOptimizer.optimize(simProperties,
-					Arrays.asList(
-						new ParameterSearchSpace("tactic.buyThreshold", 0.00, 0.01, 10),
-//						new ParameterSearchSpace("tactic.tradeUsdThreshold", 0.0, 100.0)
-						new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 20.0, 10)
-					),
-					properties -> {
-						try {
-							return simulate(consolidatedSnapshots, properties);
-						} catch(IOException e) {
-							log.error("IO error running simulation", e);
-							throw new RuntimeException(e);
-						}
-					}
+				simProperties.put("tactic.buyForecastProportion", "false");
+				List<ParameterSearchSpace> searchList = Arrays.asList(
+					new ParameterSearchSpace("tactic.buyThreshold", 0.005, 0.01, 21),
+//					new ParameterSearchSpace("tactic.buyUpperThreshold", 0.01, 0.02, 6),
+					new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 10.0, 10)
 				);
-				log.info("Max return of " + result.holdingPeriodReturn + " sharpe of " + result.sharpeRatio
-					+ " achieved at"
-					+ " buyThreshold=" + simProperties.getDoubleProperty("tactic.buyThreshold")
-					+ " tradeUsdThreshold=" + simProperties.getDoubleProperty("tactic.tradeUsdThreshold")
-					+ " tradeScaleFactor=" + simProperties.getDoubleProperty("tactic.tradeScaleFactor"));
+				try(BufferedWriter writer = Files.newBufferedWriter(dataDir.resolve(searchFile))) {
+					for(var searchSpace : searchList) {
+						writer.append(searchSpace.parameterName);
+						writer.append(',');
+					}
+					writer.append(SimResult.csvHeaderRow());
+					writer.append('\n');
+					SimResult maxResult = parameterOptimizer.optimize(simProperties,
+						searchList,
+						properties -> {
+							try {
+								SimResult result = simulate(consolidatedSnapshots, properties);
+								for(var searchSpace : searchList) {
+									double paramValue = properties.getDoubleProperty(searchSpace.parameterName);
+									writer.append(GdaxClient.gdaxDecimalFormat.format(paramValue));
+									writer.append(',');
+								}
+								writer.append(result.toCSVString());
+								writer.append('\n');
+								writer.flush();
+								return result;
+							} catch(IOException e) {
+								log.error("IO error running simulation", e);
+								throw new RuntimeException(e);
+							}
+						}
+					);
+					log.info("Max return of " + maxResult.holdingPeriodReturn + " sharpe of " + maxResult.sharpeRatio
+						+ " achieved at"
+						+ " buyThreshold=" + simProperties.getDoubleProperty("tactic.buyThreshold")
+						+ " tradeUsdThreshold=" + simProperties.getDoubleProperty("tactic.tradeUsdThreshold")
+						+ " tradeScaleFactor=" + simProperties.getDoubleProperty("tactic.tradeScaleFactor"));
+				}
 			}
 			simProperties.put("sim.logDecisions", "true");
 			long startNanos = System.nanoTime();
@@ -144,6 +166,10 @@ public class SimRunner implements Runnable {
 		TradeEvaluator tradeEvaluator = new TradeEvaluator(history, forecastCalculator, tactic, tradeRiskValidator,
 			executionEngine, decisionAppender, dailyAppender);
 
+		// We can speed this up by optimizing the following
+		// 1. snowbird getInputVariables() calculation
+		// 2. snowbird - use a more efficient map or eliminate the map
+		// 3. ConsolidatedHistory add is slow because it is O(n), use a circular buffer
 		long nextDay = intervalizer.calcNextDayMillis(0);
 		List<Double> dailyPositionValuesUsd = new ArrayList<>(365);
 		List<Integer> dailyTradeCount = new ArrayList<>(365);
@@ -174,99 +200,9 @@ public class SimRunner implements Runnable {
 		if(decisionAppender != null) decisionAppender.close();
 		if(dailyAppender != null) dailyAppender.close();
 
-		SimResult simResult = new SimResult(dailyPositionValuesUsd, dailyTradeCount);
+		SimResult simResult = new SimResult(searchObjective, dailyPositionValuesUsd, dailyTradeCount);
 		log.info("Simulated completed return " + simResult.holdingPeriodReturn + " sharpe " + simResult.sharpeRatio +
 			" win " + simResult.winPct + " winloss " + simResult.winPct / simResult.lossPct);
 		return simResult;
-	}
-
-	class SimResult implements Comparable<SimResult> {
-		final List<Double> dailyPositionValuesUsd;
-		final double holdingPeriodReturn;
-		final double dailyAvgReturn;
-		final double dailyVolatility;
-		final double sharpeRatio;
-		final double winPct;
-		final double lossPct;
-		final double gainLoss;
-		final double maxLossStreak;
-		final double dailyAvgTradeCount;
-
-		SimResult(List<Double> dailyPositionValuesUsd, List<Integer> dailyTradeCount) {
-			this.dailyPositionValuesUsd = dailyPositionValuesUsd;
-			holdingPeriodReturn =
-				dailyPositionValuesUsd.get(dailyPositionValuesUsd.size() - 1) / dailyPositionValuesUsd.get(0) - 1;
-
-			final double[] dailyReturns = new double[dailyPositionValuesUsd.size() - 1];
-			for(int i = 0; i < dailyReturns.length; i++)
-				dailyReturns[i] = dailyPositionValuesUsd.get(i + 1) / dailyPositionValuesUsd.get(i) - 1;
-			double dailySum = 0.0;
-			for(final double val : dailyReturns)
-				dailySum += val;
-			dailyAvgReturn = dailySum / dailyReturns.length;
-
-			dailySum = 0.0;
-			for(final double val : dailyReturns) {
-				final double diff = val - dailyAvgReturn;
-				dailySum += diff * diff;
-			}
-			dailyVolatility = Math.sqrt(dailySum / dailyReturns.length);
-
-			sharpeRatio = dailyVolatility != 0.0 ? Math.sqrt(365) * dailyAvgReturn / dailyVolatility : 0.0;
-
-			int winCount = 0;
-			int lossCount = 0;
-			double totalGain = 0.0;
-			double totalLoss = 0.0;
-			double lossStreak = 0.0;
-			double maxLossStreak = 0.0;
-			for(final double val : dailyReturns) {
-				if(val > 0.0) {
-					winCount++;
-					totalGain = (1 + totalGain) * (1 + val) - 1;
-					lossStreak = 0.0;
-				}
-				if(val < 0.0) {
-					lossCount++;
-					totalLoss = (1 + totalLoss) * (1 - val) - 1;
-					lossStreak = (1 + lossStreak) * (1 + val) - 1;
-					maxLossStreak = lossStreak < maxLossStreak ? lossStreak : maxLossStreak;
-				}
-			}
-			this.maxLossStreak = maxLossStreak;
-			winPct = ((double) winCount) / dailyReturns.length;
-			lossPct = ((double) lossCount) / dailyReturns.length;
-			gainLoss = totalLoss == 0 ? 0 : totalGain / totalLoss;
-
-			dailyAvgTradeCount =
-				dailyTradeCount.stream().reduce(Integer::sum).get() / ((double) dailyTradeCount.size());
-		}
-
-		/**
-		 * This is our searchObjective function
-		 */
-		public int compareTo(SimResult b) {
-			final var winloss = lossPct == 0 ? 0 : winPct / lossPct;
-			final var bWinloss = b.lossPct == 0 ? 0 : b.winPct / b.lossPct;
-			switch(searchObjective) {
-				case "return":
-					return Double.compare(holdingPeriodReturn, b.holdingPeriodReturn);
-				case "sharpe":
-					return Double.compare(sharpeRatio, b.sharpeRatio);
-				case "win":
-					return Double.compare(winPct, b.winPct);
-				case "winloss":
-					return Double.compare(winloss, bWinloss);
-				case "gainloss":
-					return Double.compare(gainLoss, b.gainLoss);
-				case "utility":
-					return Double.compare(
-						holdingPeriodReturn * winloss,
-						b.holdingPeriodReturn * bWinloss
-					);
-				default:
-					throw new RuntimeException("Invalid search objective " + searchObjective);
-			}
-		}
 	}
 }

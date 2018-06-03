@@ -104,7 +104,7 @@ public class GdaxMessageTranslator implements Runnable {
 				break;
 			case "received":
 				// received message
-				message = new Received(json);
+				// fall through - we don't need these in sampling
 			default:
 				// this could be a new message type or received
 				// or something else
