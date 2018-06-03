@@ -66,12 +66,11 @@ public class SimRunner implements Runnable {
 			boolean search = simProperties.getBooleanProperty("sim.searchParameters", false);
 			if(search) {
 				simProperties.put("sim.logDecisions", "false");
-				simProperties.put("sim.logForecastCalc", "false");
 				simProperties.put("tactic.buyForecastProportion", "false");
 				List<ParameterSearchSpace> searchList = Arrays.asList(
-					new ParameterSearchSpace("tactic.buyThreshold", 0.002, 0.01, 50),
+					new ParameterSearchSpace("tactic.buyThreshold", 0.001, 0.015, 100)
 //					new ParameterSearchSpace("tactic.buyUpperThreshold", 0.01, 0.02, 6),
-					new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 10.0, 10)
+//					new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 10.0, 10)
 				);
 				try(BufferedWriter writer = Files.newBufferedWriter(dataDir.resolve(searchFile))) {
 					for(var searchSpace : searchList) {
@@ -116,6 +115,7 @@ public class SimRunner implements Runnable {
 				+ " tradeScaleFactor=" + simProperties.getDoubleProperty("tactic.tradeScaleFactor"));
 			log.info("Holding period return:\t" + result.holdingPeriodReturn);
 			log.info("Daily avg trades:     \t" + result.dailyAvgTradeCount);
+			log.info("% days with trades:   \t" + result.pctDaysWithTrades);
 			log.info("Daily avg return:     \t" + result.dailyAvgReturn);
 			log.info("Daily volatility:     \t" + result.dailyVolatility);
 			log.info("Sharpe Ratio:         \t" + result.sharpeRatio);

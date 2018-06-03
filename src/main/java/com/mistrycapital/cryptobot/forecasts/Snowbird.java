@@ -27,8 +27,7 @@ public class Snowbird implements ForecastCalculator {
 
 	private static final String[] signalsToUse =
 		new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
-			"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "bookRatio", "tradeRatioxRet", "newRatioxRet",
-			"cancelRatioxRet"};
+			"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6"};
 
 	public Snowbird(MCProperties properties) {
 		final int intervalSeconds = properties.getIntProperty("history.intervalSeconds");
@@ -173,11 +172,11 @@ public class Snowbird implements ForecastCalculator {
 		variableMap.put("lagBTCRet6", lagBTCRet6);
 
 		// These don't contribute much (0.1% R^2, low t-stats) but may be justified
-		variableMap.put("bookRatio", bookRatio);
-		variableMap.put("tradeRatioxRet", tradeRatio * lagRet);
-		variableMap.put("cancelRatioxRet", cancelRatio * lagRet);
-		variableMap.put("newRatioxRet", newRatio * lagRet);
-		variableMap.put("upRatio", upRatio);
+//		variableMap.put("bookRatio", bookRatio);
+//		variableMap.put("tradeRatioxRet", tradeRatio * lagRet);
+//		variableMap.put("cancelRatioxRet", cancelRatio * lagRet);
+//		variableMap.put("newRatioxRet", newRatio * lagRet);
+//		variableMap.put("upRatio", upRatio);
 
 		return variableMap;
 	}

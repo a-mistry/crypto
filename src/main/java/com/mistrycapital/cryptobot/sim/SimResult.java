@@ -88,8 +88,8 @@ class SimResult implements Comparable<SimResult> {
 				return Double.compare(gainLoss, b.gainLoss);
 			case "utility":
 				return Double.compare(
-					holdingPeriodReturn * winLoss,
-					b.holdingPeriodReturn * b.winLoss
+					holdingPeriodReturn * winLoss * pctDaysWithTrades,
+					b.holdingPeriodReturn * b.winLoss * b.pctDaysWithTrades
 				);
 			default:
 				throw new RuntimeException("Invalid search objective " + searchObjective);
