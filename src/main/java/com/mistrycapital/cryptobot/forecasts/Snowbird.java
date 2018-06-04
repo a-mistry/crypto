@@ -74,80 +74,113 @@ public class Snowbird implements ForecastCalculator {
 		final int book5PctCount = latest.bidCount5Pct + latest.askCount5Pct;
 		final double bookRatio = ((double) latest.bidCount5Pct) / book5PctCount;
 
-		// calc dynamic metrics
+		// get 2h, 6h lag returns
+		double price2h = Double.NaN;
+		double price6h = Double.NaN;
+		double priceBTC6h = Double.NaN;
 		int dataPoints = 0;
+		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values())
+			if(dataPoints <= sixHourDatapoints) {
+				dataPoints++;
+				ProductSnapshot data = snapshot.getProductSnapshot(product);
+				if(Double.isNaN(data.lastPrice))
+					continue;
+
+				price6h = data.lastPrice;
+				final double priceBTC = snapshot.getProductSnapshot(Product.BTC_USD).lastPrice;
+				if(!Double.isNaN(priceBTC))
+					priceBTC6h = priceBTC;
+
+				if(dataPoints <= twoHourDatapoints) {
+					price2h = data.lastPrice;
+				}
+			} else break;
+		final double lagRet = Math.log(latest.lastPrice / price2h);
+		final double lagRet6 = Math.log(latest.lastPrice / price6h);
+		final double lagBTCRet6 = Math.log(
+			consolidatedHistory.latest().getProductSnapshot(Product.BTC_USD).lastPrice / priceBTC6h
+		);
+
+		// calc on balance volume metrics
+		double sumVolxRet = 0.0;
+		double sumVolxRet12 = 0.0;
+		double volume = 0.0;
+		dataPoints = 0;
+		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values())
+			if(dataPoints <= twelveHourDatapoints) {
+				dataPoints++;
+				ProductSnapshot data = snapshot.getProductSnapshot(product);
+
+				if(Double.isNaN(data.ret) || Double.isNaN(data.volume))
+					continue;
+
+				final double volxRet = Math.log(1 + data.ret) * data.volume;
+				sumVolxRet12 += volxRet;
+				if(dataPoints <= sixHourDatapoints) {
+					volume += data.volume;
+					sumVolxRet += volxRet;
+				}
+			} else break;
+
+		// calc 6h sum metrics
 		int bidTradeCount = 0;
 		int askTradeCount = 0;
 		int bidCancelCount = 0;
 		int askCancelCount = 0;
 		int newBidCount = 0;
 		int newAskCount = 0;
+		dataPoints = 0;
+		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values())
+			if(dataPoints <= sixHourDatapoints) {
+				dataPoints++;
+
+				ProductSnapshot data = snapshot.getProductSnapshot(product);
+				// these are longs so they cannot be NaN
+				bidTradeCount += data.bidTradeCount;
+				askTradeCount += data.askTradeCount;
+				bidCancelCount += data.bidCancelCount;
+				askCancelCount += data.askCancelCount;
+				newBidCount += data.newBidCount;
+				newAskCount += data.newAskCount;
+			} else break;
+
+		// calc price change interval metrics
 		int upIntervals = 0;
 		int downIntervals = 0;
 		int intervalsToMin = 0;
-		double minPrice = Double.POSITIVE_INFINITY;
 		int intervalsToMax = 0;
+		double minPrice = Double.POSITIVE_INFINITY;
 		double maxPrice = 0.0;
-		double volume = 0.0;
-		double sumVolxRet = 0.0;
-		double sumVolxRet12 = 0.0;
-		double lagRet = 0.0;
-		double lagRet6 = 0.0;
 		double sumUpChange = 0.0;
 		double sumDownChange = 0.0;
-		double lagBTCRet6 = 0.0;
-		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values()) {
-			dataPoints++;
+		dataPoints = 0;
+		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values())
+			if(dataPoints <= sixHourDatapoints) {
+				dataPoints++;
 
-			if(dataPoints > twelveHourDatapoints)
-				break;
+				ProductSnapshot data = snapshot.getProductSnapshot(product);
+				if(Double.isNaN(data.ret) || Double.isNaN(data.lastPrice) || Double.isNaN(data.vwap))
+					continue;
 
-			ProductSnapshot data = snapshot.getProductSnapshot(product);
-			final double periodRet = Double.isNaN(data.ret) ? 0.0 : Math.log(1 + data.ret);
+				final double prevPrice = data.lastPrice / (1 + data.ret);
+				if(data.ret >= 0) {
+					upIntervals++;
+					sumUpChange += data.lastPrice - prevPrice;
+				} else {
+					downIntervals++;
+					sumDownChange += prevPrice - data.lastPrice;
+				}
 
-			sumVolxRet12 += periodRet * data.volume;
+				if(data.vwap < minPrice) {
+					minPrice = data.vwap;
+					intervalsToMin = dataPoints + 1;
+				}
+				if(data.vwap > maxPrice) {
+					maxPrice = data.vwap;
+					intervalsToMax = dataPoints + 1;
+				}
+			} else break;
 
-			if(dataPoints > sixHourDatapoints)
-				continue;
-
-			final var btcSnapshot = snapshot.getProductSnapshot(Product.BTC_USD);
-			final double btcRet = Double.isNaN(btcSnapshot.ret) ? 0.0 : Math.log(1 + btcSnapshot.ret);
-
-			bidTradeCount += data.bidTradeCount;
-			askTradeCount += data.askTradeCount;
-			bidCancelCount += data.bidCancelCount;
-			askCancelCount += data.askCancelCount;
-			newBidCount += data.newBidCount;
-			newAskCount += data.newAskCount;
-			final double prevPrice = data.lastPrice / (1 + periodRet);
-
-			if(periodRet >= 0) {
-				upIntervals++;
-				sumUpChange += data.lastPrice - prevPrice;
-			} else {
-				downIntervals++;
-				sumDownChange += prevPrice - data.lastPrice;
-			}
-			volume += data.volume;
-			sumVolxRet += periodRet * data.volume;
-			lagRet6 += periodRet;
-			lagBTCRet6 += btcRet;
-
-			if(data.vwap < minPrice) {
-				minPrice = data.vwap;
-				intervalsToMin = dataPoints + 1;
-			}
-			if(data.vwap > maxPrice) {
-				maxPrice = data.vwap;
-				intervalsToMax = dataPoints + 1;
-			}
-
-			if(dataPoints > twoHourDatapoints)
-				continue;
-
-			lagRet += periodRet;
-
-		}
 
 		final double tradeRatio = ((double) bidTradeCount) / (bidTradeCount + askTradeCount);
 		final double cancelRatio = (bidCancelCount - askCancelCount) / ((double) book5PctCount);

@@ -68,8 +68,6 @@ public class AnalyzeData {
 		log.info("Writing data took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
 
 		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet6", "bookRatioxRet", "cancelRatioxRet", "newRatioxRet"});
-		runRegressionPrintResults(joined, "fut_ret_2h",
 			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
 				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6"});
 //		runRegressionPrintResults(joined, "fut_ret_2h",
