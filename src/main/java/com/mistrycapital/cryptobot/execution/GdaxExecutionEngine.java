@@ -239,7 +239,7 @@ public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcesso
 				final String remainingSizeStr = gdaxDecimalFormat.format(remainingSize);
 				final String filledAmountStr = gdaxDecimalFormat.format(filledAmount);
 				final String timeStr = ZonedDateTime.ofInstant(
-					Instant.ofEpochMilli(msg.getTimeMicros()),
+					Instant.ofEpochMilli(msg.getTimeMicros()/1000L),
 					ZoneOffset.UTC
 				).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
 
