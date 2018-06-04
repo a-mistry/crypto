@@ -58,10 +58,14 @@ public class SimRunner implements Runnable {
 	public void run() {
 		try {
 
+			long startNanos = System.nanoTime();
 			List<ConsolidatedSnapshot> consolidatedSnapshots =
 				SnapshotReader.readSnapshots(SnapshotReader.getSampleFiles(dataDir));
+			log.info("Reading snapshots took " + ((System.nanoTime()-startNanos)/1000000000.0) + "sec");
+			startNanos = System.nanoTime();
 			MCProperties simProperties = new MCProperties();
 			Map<Long,List<Double>> forecastCache = cacheForecasts(consolidatedSnapshots, simProperties);
+			log.info("Caching forecasts took " + ((System.nanoTime()-startNanos)/1000000000.0) + "sec");
 
 			boolean search = simProperties.getBooleanProperty("sim.searchParameters", false);
 			if(search) {
@@ -107,7 +111,7 @@ public class SimRunner implements Runnable {
 				}
 			}
 			simProperties.put("sim.logDecisions", "true");
-			long startNanos = System.nanoTime();
+			startNanos = System.nanoTime();
 			SimResult result = simulate(consolidatedSnapshots, forecastCache, simProperties);
 			log.info("Simulation treatment ended in " + ((System.nanoTime() - startNanos) / 1000000.0) + "ms");
 			log.info("Tactic buyThreshold=" + simProperties.getDoubleProperty("tactic.buyThreshold")
