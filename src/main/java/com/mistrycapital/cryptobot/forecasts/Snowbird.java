@@ -19,6 +19,8 @@ import static java.util.Map.entry;
 public class Snowbird implements ForecastCalculator {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
+	private static final int MIN_DATA_POINTS = 10;
+
 	private final int twoHourDatapoints;
 	private final int sixHourDatapoints;
 	private final int twelveHourDatapoints;
@@ -78,10 +80,10 @@ public class Snowbird implements ForecastCalculator {
 		double price2h = Double.NaN;
 		double price6h = Double.NaN;
 		double priceBTC6h = Double.NaN;
-		int dataPoints = 0;
+		int retDataPoints = 0;
 		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values())
-			if(dataPoints <= sixHourDatapoints) {
-				dataPoints++;
+			if(retDataPoints <= sixHourDatapoints) {
+				retDataPoints++;
 				ProductSnapshot data = snapshot.getProductSnapshot(product);
 				if(Double.isNaN(data.lastPrice))
 					continue;
@@ -91,13 +93,13 @@ public class Snowbird implements ForecastCalculator {
 				if(!Double.isNaN(priceBTC))
 					priceBTC6h = priceBTC;
 
-				if(dataPoints <= twoHourDatapoints) {
+				if(retDataPoints <= twoHourDatapoints) {
 					price2h = data.lastPrice;
 				}
 			} else break;
-		final double lagRet = Math.log(latest.lastPrice / price2h);
-		final double lagRet6 = Math.log(latest.lastPrice / price6h);
-		final double lagBTCRet6 = Math.log(
+		final double lagRet = retDataPoints < MIN_DATA_POINTS ? Double.NaN : Math.log(latest.lastPrice / price2h);
+		final double lagRet6 = retDataPoints < MIN_DATA_POINTS ? Double.NaN : Math.log(latest.lastPrice / price6h);
+		final double lagBTCRet6 = retDataPoints < MIN_DATA_POINTS ? Double.NaN : Math.log(
 			consolidatedHistory.latest().getProductSnapshot(Product.BTC_USD).lastPrice / priceBTC6h
 		);
 
@@ -105,10 +107,10 @@ public class Snowbird implements ForecastCalculator {
 		double sumVolxRet = 0.0;
 		double sumVolxRet12 = 0.0;
 		double volume = 0.0;
-		dataPoints = 0;
+		int volDataPoints = 0;
 		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values())
-			if(dataPoints <= twelveHourDatapoints) {
-				dataPoints++;
+			if(volDataPoints <= twelveHourDatapoints) {
+				volDataPoints++;
 				ProductSnapshot data = snapshot.getProductSnapshot(product);
 
 				if(Double.isNaN(data.ret) || Double.isNaN(data.volume))
@@ -116,11 +118,14 @@ public class Snowbird implements ForecastCalculator {
 
 				final double volxRet = Math.log(1 + data.ret) * data.volume;
 				sumVolxRet12 += volxRet;
-				if(dataPoints <= sixHourDatapoints) {
+				if(volDataPoints <= sixHourDatapoints) {
 					volume += data.volume;
 					sumVolxRet += volxRet;
 				}
 			} else break;
+		if(volDataPoints < MIN_DATA_POINTS) {
+			sumVolxRet = sumVolxRet12 = volume = Double.NaN;
+		}
 
 		// calc 6h sum metrics
 		int bidTradeCount = 0;
@@ -129,10 +134,10 @@ public class Snowbird implements ForecastCalculator {
 		int askCancelCount = 0;
 		int newBidCount = 0;
 		int newAskCount = 0;
-		dataPoints = 0;
+		int sumDataPoints = 0;
 		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values())
-			if(dataPoints <= sixHourDatapoints) {
-				dataPoints++;
+			if(sumDataPoints <= sixHourDatapoints) {
+				sumDataPoints++;
 
 				ProductSnapshot data = snapshot.getProductSnapshot(product);
 				// these are longs so they cannot be NaN
@@ -143,6 +148,16 @@ public class Snowbird implements ForecastCalculator {
 				newBidCount += data.newBidCount;
 				newAskCount += data.newAskCount;
 			} else break;
+		final double tradeRatio;
+		final double cancelRatio;
+		final double newRatio;
+		if(sumDataPoints < MIN_DATA_POINTS) {
+			tradeRatio = cancelRatio = newRatio = Double.NaN;
+		} else {
+			tradeRatio = ((double) bidTradeCount) / (bidTradeCount + askTradeCount);
+			cancelRatio = (bidCancelCount - askCancelCount) / ((double) book5PctCount);
+			newRatio = (newBidCount - newAskCount) / ((double) book5PctCount);
+		}
 
 		// calc price change interval metrics
 		int upIntervals = 0;
@@ -153,10 +168,10 @@ public class Snowbird implements ForecastCalculator {
 		double maxPrice = 0.0;
 		double sumUpChange = 0.0;
 		double sumDownChange = 0.0;
-		dataPoints = 0;
+		int changeDataPoints = 0;
 		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values())
-			if(dataPoints <= sixHourDatapoints) {
-				dataPoints++;
+			if(changeDataPoints <= sixHourDatapoints) {
+				changeDataPoints++;
 
 				ProductSnapshot data = snapshot.getProductSnapshot(product);
 				if(Double.isNaN(data.ret) || Double.isNaN(data.lastPrice) || Double.isNaN(data.vwap))
@@ -173,19 +188,23 @@ public class Snowbird implements ForecastCalculator {
 
 				if(data.vwap < minPrice) {
 					minPrice = data.vwap;
-					intervalsToMin = dataPoints + 1;
+					intervalsToMin = changeDataPoints + 1;
 				}
 				if(data.vwap > maxPrice) {
 					maxPrice = data.vwap;
-					intervalsToMax = dataPoints + 1;
+					intervalsToMax = changeDataPoints + 1;
 				}
 			} else break;
-
-
-		final double tradeRatio = ((double) bidTradeCount) / (bidTradeCount + askTradeCount);
-		final double cancelRatio = (bidCancelCount - askCancelCount) / ((double) book5PctCount);
-		final double newRatio = (newBidCount - newAskCount) / ((double) book5PctCount);
-		final double upRatio = ((double) upIntervals) / (upIntervals + downIntervals);
+		final double upRatio;
+		final double timeToMaxMin;
+		final double RSIRatio;
+		if(changeDataPoints < MIN_DATA_POINTS) {
+			upRatio = timeToMaxMin = RSIRatio = Double.NaN;
+		} else {
+			upRatio = ((double) upIntervals) / (upIntervals + downIntervals);
+			timeToMaxMin = intervalsToMax - intervalsToMin;
+			RSIRatio = sumUpChange / sumDownChange;
+		}
 
 		// Things we tried that didn't work
 		// o 2 hour lag return, btc return
@@ -200,8 +219,8 @@ public class Snowbird implements ForecastCalculator {
 		variableMap.put("newRatio", newRatio);
 		variableMap.put("upRatioxRet", upRatio * lagRet);
 		variableMap.put("normVolxRet", (sumVolxRet12 - sumVolxRet) / volume); // modified OBV indicator
-		variableMap.put("timeToMaxMin", (double) intervalsToMax - intervalsToMin);
-		variableMap.put("RSIRatioxRet", sumUpChange / sumDownChange * lagRet);
+		variableMap.put("timeToMaxMin", timeToMaxMin);
+		variableMap.put("RSIRatioxRet", RSIRatio * lagRet);
 		variableMap.put("lagBTCRet6", lagBTCRet6);
 
 		// These don't contribute much (0.1% R^2, low t-stats) but may be justified
