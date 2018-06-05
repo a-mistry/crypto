@@ -65,7 +65,8 @@ public class GdaxWebSocket extends SubmissionPublisher<GdaxMessage> {
 	}
 
 	public void disconnect() {
-		session.close();
+		if(session != null)
+			session.close();
 		connected = false;
 	}
 
@@ -187,7 +188,9 @@ public class GdaxWebSocket extends SubmissionPublisher<GdaxMessage> {
 		return message;
 	}
 
-	void startBuilding(final Product product) throws IOException {
+	void startBuilding(final Product product)
+		throws IOException
+	{
 		// start getting the book info if we are not already doing so
 		if(building[product.getIndex()].compareAndSet(false, true)) {
 			try {
@@ -197,7 +200,7 @@ public class GdaxWebSocket extends SubmissionPublisher<GdaxMessage> {
 				JsonObject fakeMsg = new JsonObject();
 				fakeMsg.addProperty("product_id", product.toString());
 				fakeMsg.addProperty("time", timeKeeper.iso8601());
-				fakeMsg.addProperty("type","book_builder");
+				fakeMsg.addProperty("type", "book_builder");
 				fakeMsg.addProperty("sequence", sequence[product.getIndex()].get());
 				fileAppender.append(fakeMsg.toString());
 
