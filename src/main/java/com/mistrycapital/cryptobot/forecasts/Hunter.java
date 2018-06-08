@@ -2,6 +2,7 @@ package com.mistrycapital.cryptobot.forecasts;
 
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
+import com.mistrycapital.cryptobot.appender.ForecastAppender;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 
 import java.util.HashMap;
@@ -12,7 +13,9 @@ import java.util.Map;
  */
 public class Hunter implements ForecastCalculator {
 	@Override
-	public double calculate(final ConsolidatedHistory consolidatedHistory, final Product product) {
+	public double calculate(final ConsolidatedHistory consolidatedHistory, final Product product,
+		final ForecastAppender forecastAppender)
+	{
 		final double lagRet = getLagRet(consolidatedHistory, product);
 		return -0.15 * lagRet;
 	}

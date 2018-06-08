@@ -7,6 +7,7 @@ import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.appender.DailyAppender;
 import com.mistrycapital.cryptobot.appender.DecisionAppender;
+import com.mistrycapital.cryptobot.appender.ForecastAppender;
 import com.mistrycapital.cryptobot.forecasts.*;
 import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
@@ -35,7 +36,7 @@ public class SimRunner implements Runnable {
 	private final String decisionFile;
 	private final String dailyFile;
 	private final String searchFile;
-	private final Path forecastCalcFile;
+	private final String forecastFile;
 	private final int startingUsd;
 	private final ParameterOptimizer parameterOptimizer;
 	private final String searchObjective;
@@ -48,7 +49,7 @@ public class SimRunner implements Runnable {
 		decisionFile = properties.getProperty("sim.decisionFile", "decisions.csv");
 		dailyFile = properties.getProperty("sim.dailyFile", "daily.csv");
 		searchFile = properties.getProperty("sim.searchFile", "search.csv");
-		forecastCalcFile = dataDir.resolve(properties.getProperty("sim.forecastCalcFile", "forecast-calcs.csv"));
+		forecastFile = properties.getProperty("sim.forecastFile", "forecasts.csv");
 		startingUsd = properties.getIntProperty("sim.startUsd", 10000);
 		parameterOptimizer = new ParameterOptimizer();
 		searchObjective = properties.getProperty("sim.searchObjective", "return");
@@ -61,11 +62,11 @@ public class SimRunner implements Runnable {
 			long startNanos = System.nanoTime();
 			List<ConsolidatedSnapshot> consolidatedSnapshots =
 				SnapshotReader.readSnapshots(SnapshotReader.getSampleFiles(dataDir));
-			log.info("Reading snapshots took " + ((System.nanoTime()-startNanos)/1000000000.0) + "sec");
+			log.info("Reading snapshots took " + ((System.nanoTime() - startNanos) / 1000000000.0) + "sec");
 			startNanos = System.nanoTime();
 			MCProperties simProperties = new MCProperties();
 			Map<Long,List<Double>> forecastCache = cacheForecasts(consolidatedSnapshots, simProperties);
-			log.info("Caching forecasts took " + ((System.nanoTime()-startNanos)/1000000000.0) + "sec");
+			log.info("Caching forecasts took " + ((System.nanoTime() - startNanos) / 1000000000.0) + "sec");
 
 			boolean search = simProperties.getBooleanProperty("sim.searchParameters", false);
 			if(search) {
@@ -134,22 +135,31 @@ public class SimRunner implements Runnable {
 
 	private Map<Long,List<Double>> cacheForecasts(List<ConsolidatedSnapshot> consolidatedSnapshots,
 		MCProperties simProperties)
+		throws IOException
 	{
 		ConsolidatedHistory history = new ConsolidatedHistory(intervalizer);
 		ForecastCalculator forecastCalculator = new Snowbird(simProperties);
+		SimTimeKeeper simTimeKeeper = new SimTimeKeeper();
+		ForecastAppender forecastAppender = null;
+		if(simProperties.getBooleanProperty("sim.logForecasts", false))
+			forecastAppender = new ForecastAppender(dataDir, forecastFile, simTimeKeeper);
 		Map<Long,List<Double>> cache = new HashMap<>(365);
 		for(ConsolidatedSnapshot snapshot : consolidatedSnapshots) {
+			simTimeKeeper.advanceTime(snapshot.getTimeNanos());
 			history.add(snapshot);
 			List<Double> forecasts = new ArrayList<>(Product.count);
 			for(Product product : Product.FAST_VALUES) {
-				forecasts.add(product.getIndex(), forecastCalculator.calculate(history, product));
+				forecasts.add(product.getIndex(), forecastCalculator.calculate(history, product, forecastAppender));
 			}
 			cache.put(snapshot.getTimeNanos(), forecasts);
 		}
+		if(forecastAppender != null)
+			forecastAppender.close();
 		return cache;
 	}
 
-	private SimResult simulate(List<ConsolidatedSnapshot> consolidatedSnapshots, Map<Long,List<Double>> forecastCache, MCProperties simProperties)
+	private SimResult simulate(List<ConsolidatedSnapshot> consolidatedSnapshots, Map<Long,List<Double>> forecastCache,
+		MCProperties simProperties)
 		throws IOException
 	{
 		final boolean shouldLogDecisions = simProperties.getBooleanProperty("sim.logDecisions", false);
@@ -181,7 +191,7 @@ public class SimRunner implements Runnable {
 			dailyAppender.open();
 		}
 		TradeEvaluator tradeEvaluator = new TradeEvaluator(history, forecastCalculator, tactic, tradeRiskValidator,
-			executionEngine, decisionAppender, dailyAppender);
+			executionEngine, decisionAppender, dailyAppender, null);
 
 		// We can speed this up by optimizing the following
 		// 1. snowbird getInputVariables() calculation
@@ -231,7 +241,9 @@ public class SimRunner implements Runnable {
 		}
 
 		@Override
-		public double calculate(final ConsolidatedHistory consolidatedHistory, final Product product) {
+		public double calculate(final ConsolidatedHistory consolidatedHistory, final Product product,
+			final ForecastAppender forecastAppender)
+		{
 			return cache.get(consolidatedHistory.latest().getTimeNanos()).get(product.getIndex());
 		}
 

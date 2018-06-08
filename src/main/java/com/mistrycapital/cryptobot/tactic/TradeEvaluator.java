@@ -3,6 +3,7 @@ package com.mistrycapital.cryptobot.tactic;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.appender.DailyAppender;
+import com.mistrycapital.cryptobot.appender.ForecastAppender;
 import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
@@ -26,6 +27,7 @@ public class TradeEvaluator {
 	private final ExecutionEngine executionEngine;
 	private final DecisionAppender decisionAppender;
 	private final DailyAppender dailyAppender;
+	private final ForecastAppender forecastAppender;
 
 	private double[] forecasts;
 
@@ -35,7 +37,8 @@ public class TradeEvaluator {
 	 */
 	public TradeEvaluator(ConsolidatedHistory consolidatedHistory, ForecastCalculator forecastCalculator, Tactic tactic,
 		TradeRiskValidator tradeRiskValidator, ExecutionEngine executionEngine,
-		@Nullable DecisionAppender decisionAppender, @Nullable DailyAppender dailyAppender)
+		@Nullable DecisionAppender decisionAppender, @Nullable DailyAppender dailyAppender,
+		@Nullable ForecastAppender forecastAppender)
 	{
 		this.consolidatedHistory = consolidatedHistory;
 		this.forecastCalculator = forecastCalculator;
@@ -44,6 +47,7 @@ public class TradeEvaluator {
 		this.executionEngine = executionEngine;
 		this.decisionAppender = decisionAppender;
 		this.dailyAppender = dailyAppender;
+		this.forecastAppender = forecastAppender;
 		forecasts = new double[Product.count];
 	}
 
@@ -55,7 +59,8 @@ public class TradeEvaluator {
 
 		// update signals
 		for(Product product : Product.FAST_VALUES) {
-			forecasts[product.getIndex()] = forecastCalculator.calculate(consolidatedHistory, product);
+			forecasts[product.getIndex()] =
+				forecastCalculator.calculate(consolidatedHistory, product, forecastAppender);
 		}
 
 		// possibly trade

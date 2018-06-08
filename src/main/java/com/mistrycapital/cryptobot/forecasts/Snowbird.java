@@ -3,11 +3,13 @@ package com.mistrycapital.cryptobot.forecasts;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
+import com.mistrycapital.cryptobot.appender.ForecastAppender;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
 import org.slf4j.Logger;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -57,7 +59,9 @@ public class Snowbird implements ForecastCalculator {
 	}
 
 	@Override
-	public double calculate(final ConsolidatedHistory consolidatedHistory, final Product product) {
+	public double calculate(final ConsolidatedHistory consolidatedHistory, final Product product,
+		final ForecastAppender forecastAppender)
+	{
 		final Map<String,Double> signals = getInputVariables(consolidatedHistory, product);
 		final double[] productCoeffs = coeffs[product.getIndex()];
 
@@ -65,6 +69,14 @@ public class Snowbird implements ForecastCalculator {
 		for(int i = 0; i < signalsToUse.length; i++) {
 			fcVal += productCoeffs[i + 1] * signals.get(signalsToUse[i]);
 		}
+
+		if(forecastAppender != null)
+			try {
+				forecastAppender.logForecast(product, signals, fcVal);
+			} catch(IOException e) {
+				log.error("Could not log forecast for " + product, e);
+			}
+
 		return fcVal;
 	}
 

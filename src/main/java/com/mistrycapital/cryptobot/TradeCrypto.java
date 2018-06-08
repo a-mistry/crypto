@@ -64,6 +64,7 @@ public class TradeCrypto {
 		final String INTERVAL_FILE_NAME = properties.getProperty("output.filenameBase.samples", "samples");
 		final String DECISION_FILE_NAME = properties.getProperty("output.filenameBase.decisions", "decisions");
 		final String DAILY_FILE_NAME = properties.getProperty("output.filenameBase.daily", "daily");
+		final String FORECAST_FILE_NAME = properties.getProperty("output.filenameBase.forecasts", "forecasts");
 
 		TimeKeeper timeKeeper = new SystemTimeKeeper();
 		OrderBookManager orderBookManager = new OrderBookManager(timeKeeper);
@@ -82,6 +83,7 @@ public class TradeCrypto {
 		decisionAppender.open();
 		DailyAppender dailyAppender = new DailyAppender(accountant, timeKeeper, intervalizer, dataDir, DAILY_FILE_NAME);
 		dailyAppender.open();
+		ForecastAppender forecastAppender = new ForecastAppender(dataDir, FORECAST_FILE_NAME, timeKeeper);
 		DynamicTracker dynamicTracker = new DynamicTracker();
 		ForecastCalculator forecastCalculator = new Snowbird(properties);
 
@@ -100,7 +102,7 @@ public class TradeCrypto {
 		OrderBookPeriodicEvaluator periodicEvaluator =
 			new OrderBookPeriodicEvaluator(timeKeeper, intervalizer, consolidatedHistory, accountant, orderBookManager,
 				dynamicTracker, intervalAppender, forecastCalculator, tactic, tradeRiskValidator, executionEngine,
-				decisionAppender, dailyAppender, dbRecorder);
+				decisionAppender, dailyAppender, forecastAppender, dbRecorder);
 
 		gdaxWebSocket.subscribe(orderBookManager);
 		gdaxWebSocket.subscribe(dynamicTracker);
@@ -168,12 +170,13 @@ public class TradeCrypto {
 		for(ConsolidatedSnapshot snapshot : fullHistory.values()) {
 			partialHistory.add(snapshot);
 			for(Product product : Product.FAST_VALUES) {
-				historicalForecasts[product.getIndex()] = forecastCalculator.calculate(partialHistory, product);
+				historicalForecasts[product.getIndex()] = forecastCalculator.calculate(partialHistory, product, null);
 			}
 			tactic.warmup(snapshot, historicalForecasts);
 		}
 		for(Product product : Product.FAST_VALUES) {
-			log.debug("Last warmup forecast " + product + ": " + forecastCalculator.calculate(fullHistory, product));
+			log.debug("Last warmup forecast " + product + ": "
+				+ forecastCalculator.calculate(fullHistory, product, null));
 		}
 	}
 
