@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class SimRunner implements Runnable {
 	private static final Logger log = MCLoggerFactory.getLogger();
@@ -141,8 +142,15 @@ public class SimRunner implements Runnable {
 		ForecastCalculator forecastCalculator = new Snowbird(simProperties);
 		SimTimeKeeper simTimeKeeper = new SimTimeKeeper();
 		ForecastAppender forecastAppender = null;
-		if(simProperties.getBooleanProperty("sim.logForecasts", false))
+		if(simProperties.getBooleanProperty("sim.logForecasts", false)) {
+			List<Path> existingFiles = Files.find(dataDir, 1,
+				(path, attr) -> path.getFileName().toString().matches("forecasts-\\d{4}-\\d{2}-\\d{2}.csv"))
+				.sorted()
+				.collect(Collectors.toList());
+			for(Path file : existingFiles)
+				Files.deleteIfExists(file);
 			forecastAppender = new ForecastAppender(dataDir, forecastFile, simTimeKeeper);
+		}
 		Map<Long,List<Double>> cache = new HashMap<>(365);
 		for(ConsolidatedSnapshot snapshot : consolidatedSnapshots) {
 			simTimeKeeper.advanceTime(snapshot.getTimeNanos());
@@ -213,9 +221,11 @@ public class SimRunner implements Runnable {
 			history.add(consolidatedSnapshot);
 			tradeEvaluator.evaluate();
 		}
-
 		ConsolidatedSnapshot lastSnapshot = consolidatedSnapshots.get(consolidatedSnapshots.size() - 1);
+		timeKeeper.advanceTime(nextDay * 1000000L);
 		dailyPositionValuesUsd.add(accountant.getPositionValueUsd(lastSnapshot));
+		dailyTradeCount.add(executionEngine.getAndResetTradeCount());
+		dailyAppender.writeDaily(lastSnapshot, null);
 
 		log.debug("Ending positions USD " + accountant.getAvailable(Currency.USD)
 			+ " BTC " + accountant.getAvailable(Currency.BTC)
