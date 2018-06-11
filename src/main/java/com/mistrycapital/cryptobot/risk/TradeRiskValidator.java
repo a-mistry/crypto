@@ -55,14 +55,15 @@ public class TradeRiskValidator {
 
 		List<TradeInstruction> validated = new ArrayList<>(instructions.size());
 		for(TradeInstruction instruction : instructions) {
-			if(lastDayTradeTimesInNanos.size() >= max24HourTrades)
+			if(lastDayTradeTimesInNanos.size() >= max24HourTrades) {
+				log.debug("Skipping trade " + instruction + " because max trade count hit");
 				continue; // trade count limit
+			}
 
 			lastDayTradeTimesInNanos.add(timeKeeper.epochNanos());
 			validated.add(instruction);
 
-			log.debug("Validated trade count " + instruction.getOrderSide() + " " + instruction.getAmount() + " " +
-				instruction.getProduct());
+			log.debug("Validated trade count " + instruction);
 		}
 		return validated;
 	}
