@@ -1,6 +1,11 @@
 package com.mistrycapital.cryptobot.database;
 
 import java.sql.*;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.UUID;
 
 import com.mistrycapital.cryptobot.accounting.Accountant;
@@ -250,5 +255,31 @@ public class DBRecorder {
 			log.error("Could not record cancel post to database " + msg.getOrderSide() + " " + msg.getRemainingSize()
 				+ " of " + msg.getProduct() + " at " + msg.getPrice(), e);
 		}
+	}
+
+	public SortedMap<ZonedDateTime,Double> getDailyPositionUsd()
+		throws SQLException
+	{
+		final SortedMap<ZonedDateTime,Double> map = new TreeMap<>();
+		Connection con = dataSource.getConnection();
+		con.setAutoCommit(false);
+		con.commit();
+		PreparedStatement statement =
+			con.prepareStatement("SELECT time,position_usd FROM crypto_hourly WHERE hour(time)=0");
+		ResultSet results = statement.executeQuery();
+		while(results.next()) {
+			Timestamp timestamp = results.getTimestamp("time");
+			Instant instant = Instant.ofEpochMilli(timestamp.getTime());
+			ZonedDateTime dateTime = ZonedDateTime.ofInstant(instant, ZoneOffset.UTC)
+				.withHour(0)
+				.withMinute(0)
+				.withSecond(0)
+				.withNano(0);
+			double positionUsd = results.getDouble("position_usd");
+			map.put(dateTime, positionUsd);
+		}
+		statement.close();
+		con.close();
+		return map;
 	}
 }
