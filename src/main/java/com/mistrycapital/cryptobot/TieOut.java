@@ -98,6 +98,9 @@ public class TieOut {
 				dateTime.isBefore(now);
 				dateTime = dateTime.plus(Period.ofDays(1))) {
 
+				if(!positions.containsKey(dateTime))
+					continue;
+
 				if(simPosition == 0.0) {
 					simPosition = simPositions.get(dateTime);
 					adjSimPosition = position = positions.get(dateTime);
