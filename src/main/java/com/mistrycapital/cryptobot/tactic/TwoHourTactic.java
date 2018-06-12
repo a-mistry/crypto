@@ -114,9 +114,11 @@ public class TwoHourTactic implements Tactic {
 					trades = new ArrayList<>(Product.count);
 				final TradeInstruction instruction;
 				if(deltaPosition > 0)
-					instruction = new TradeInstruction(product, deltaPosition, OrderSide.BUY, Aggression.POST_ONLY);
+					instruction = new TradeInstruction(product, deltaPosition, OrderSide.BUY, Aggression.POST_ONLY,
+						forecasts[productIndex]);
 				else
-					instruction = new TradeInstruction(product, -deltaPosition, OrderSide.SELL, Aggression.POST_ONLY);
+					instruction = new TradeInstruction(product, -deltaPosition, OrderSide.SELL, Aggression.POST_ONLY,
+						forecasts[productIndex]);
 				trades.add(instruction);
 				log.debug("Tactic decided to " + instruction.getOrderSide() + " " + instruction.getAmount() + " "
 					+ product + " ask " + askPrice);
@@ -159,8 +161,7 @@ public class TwoHourTactic implements Tactic {
 	/** @return Sum of the given array */
 	private static double sum(double[] array) {
 		double val = 0.0;
-		for(double x : array)
-			val += x;
+		for(double x : array) { val += x; }
 		return val;
 	}
 

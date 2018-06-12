@@ -7,10 +7,14 @@ import com.mistrycapital.cryptobot.book.BBO;
 import com.mistrycapital.cryptobot.book.Order;
 import com.mistrycapital.cryptobot.book.OrderBook;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
+import com.mistrycapital.cryptobot.execution.Aggression;
+import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.gdax.client.OrderInfo;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.Product;
+import com.mistrycapital.cryptobot.gdax.websocket.Done;
+import com.mistrycapital.cryptobot.gdax.websocket.Match;
 import com.mistrycapital.cryptobot.sim.SimTimeKeeper;
 import com.mistrycapital.cryptobot.util.MCProperties;
 import com.mysql.cj.jdbc.MysqlDataSource;
@@ -30,6 +34,7 @@ import java.sql.Timestamp;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Properties;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
@@ -85,8 +90,9 @@ class DBRecorderTest {
 		positions.put(Currency.LTC, 14.0);
 		positions.put(Currency.EUR, 19.0);
 		positions.put(Currency.GBP, 19.0);
-		for(Currency currency : Currency.FAST_VALUES)
+		for(Currency currency : Currency.FAST_VALUES) {
 			when(accountant.getBalance(currency)).thenReturn(positions.get(currency));
+		}
 		var prices = new HashMap<Product,Double>();
 		prices.put(Product.BTC_USD, 20.0);
 		prices.put(Product.BCH_USD, 23.0);
@@ -121,11 +127,13 @@ class DBRecorderTest {
 		} while(results.next());
 		statement.close();
 		statement = con.prepareStatement("SELECT * FROM crypto_hourly WHERE time=?");
-		statement.setTimestamp(1, new Timestamp(timeKeeper.epochMs()));
+		statement.setTimestamp(1, new Timestamp(timeKeeper.epochMs()/1000*1000));
 		results = statement.executeQuery();
 		assertTrue(results.next());
-		for(Currency currency : Currency.FAST_VALUES)
-			assertEquals(positions.get(currency), results.getDouble(currency.toString().toLowerCase(Locale.US)), EPSILON);
+		for(Currency currency : Currency.FAST_VALUES) {
+			assertEquals(positions.get(currency), results.getDouble(currency.toString().toLowerCase(Locale.US)),
+				EPSILON);
+		}
 		var positionUsd = positions.get(Currency.USD);
 		for(Product product : Product.FAST_VALUES) {
 			assertEquals(prices.get(product),
@@ -180,6 +188,98 @@ class DBRecorderTest {
 		assertEquals(202.0, results.getDouble("executed_value"), EPSILON);
 		assertEquals(1.0, results.getDouble("fees_usd"), EPSILON);
 		assertFalse(results.next());
+		con.close();
+	}
+
+	@Test
+	public void shouldRecordPost()
+		throws Exception
+	{
+		UUID clientOid = UUID.randomUUID();
+		TradeInstruction instruction =
+			new TradeInstruction(Product.ETH_USD, 3.14, OrderSide.BUY, Aggression.POST_ONLY, 0.005);
+		dbRecorder.recordPostOnlyAttempt(instruction, clientOid, 50.0);
+
+		UUID orderId = UUID.randomUUID();
+		dbRecorder.updatePostOnlyId(clientOid, orderId);
+
+		// fill part and cancel part
+		JsonParser jsonParser = new JsonParser();
+		JsonObject json = jsonParser.parse("{\n" +
+			"    \"type\": \"match\",\n" +
+			"    \"trade_id\": 10,\n" +
+			"    \"sequence\": 50,\n" +
+			"    \"maker_order_id\": \"" + orderId + "\",\n" +
+			"    \"taker_order_id\": \"132fb6ae-456b-4654-b4e0-d681ac05cea1\",\n" +
+			"    \"time\": \"2014-11-07T08:19:27.028459Z\",\n" +
+			"    \"product_id\": \"ETH-USD\",\n" +
+			"    \"size\": \"2.0\",\n" +
+			"    \"price\": \"50.0\",\n" +
+			"    \"side\": \"buy\"\n" +
+			"}").getAsJsonObject();
+		dbRecorder.recordPostOnlyFill(new Match(json));
+		json = jsonParser.parse("{\n" +
+			"    \"type\": \"done\",\n" +
+			"    \"time\": \"2014-11-07T08:19:27.028459Z\",\n" +
+			"    \"product_id\": \"ETH-USD\",\n" +
+			"    \"sequence\": 10,\n" +
+			"    \"price\": \"50.0\",\n" +
+			"    \"order_id\": \"" + orderId + "\",\n" +
+			"    \"reason\": \"canceled\",\n" +
+			"    \"side\": \"buy\",\n" +
+			"    \"remaining_size\": \"1.14\"\n" +
+			"}").getAsJsonObject();
+		dbRecorder.recordPostOnlyCancel(new Done(json), 3.14);
+
+		Connection con = dataSource.getConnection();
+		PreparedStatement statement = con.prepareStatement("SELECT * FROM crypto_posts WHERE client_oid=?");
+		statement.setString(1, clientOid.toString());
+		ResultSet results = statement.executeQuery();
+		assertTrue(results.next());
+		// IMPORTANT NOTE
+		// Mysql does not resolve milliseconds; it will round to the nearest second. So we have no need to check nanos here
+		// and need to put a second tolerance
+		assertEquals(timeKeeper.epochNanos() / 1000000000L, results.getTimestamp("time").getTime() / 1000L, 1);
+		assertEquals("ETH-USD", results.getString("product"));
+		assertEquals("BUY", results.getString("side"));
+		assertEquals(3.14, results.getDouble("amount"), EPSILON);
+		assertEquals(50.0, results.getDouble("price"), EPSILON);
+		assertEquals(0.005, results.getDouble("forecast"), EPSILON);
+		assertFalse(results.next());
+		statement.close();
+		statement = con.prepareStatement("SELECT * FROM crypto_posts_client_oids WHERE client_oid=?");
+		statement.setString(1, clientOid.toString());
+		results = statement.executeQuery();
+		assertTrue(results.next());
+		assertEquals(orderId.toString(), results.getString("order_id"));
+		assertFalse(results.next());
+		statement.close();
+		statement = con.prepareStatement("SELECT * FROM crypto_trades WHERE order_id=?");
+		statement.setString(1, orderId.toString());
+		results = statement.executeQuery();
+		assertTrue(results.next());
+		final long jsonTimeNanos = 1415348367028459000L;
+		assertEquals(jsonTimeNanos / 1000000000L, results.getTimestamp("time").getTime() / 1000L, 1);
+		assertEquals("ETH-USD", results.getString("product"));
+		assertEquals("BUY", results.getString("side"));
+		assertEquals(2.0, results.getDouble("amount"), EPSILON);
+		assertEquals(50.0, results.getDouble("price"), EPSILON);
+		assertEquals(100.0, results.getDouble("executed_value"), EPSILON);
+		assertEquals(0.0, results.getDouble("fees_usd"), EPSILON);
+		assertFalse(results.next());
+		statement.close();
+		statement = con.prepareStatement("SELECT * FROM crypto_posts_unfilled WHERE order_id=?");
+		statement.setString(1, orderId.toString());
+		results = statement.executeQuery();
+		assertTrue(results.next());
+		assertEquals(jsonTimeNanos / 1000000000L, results.getTimestamp("time").getTime() / 1000L, 1);
+		assertEquals("ETH-USD", results.getString("product"));
+		assertEquals("BUY", results.getString("side"));
+		assertEquals(3.14, results.getDouble("original_amount"), EPSILON);
+		assertEquals(1.14, results.getDouble("remaining_amount"), EPSILON);
+		assertEquals(50.0, results.getDouble("price"), EPSILON);
+		assertFalse(results.next());
+		statement.close();
 		con.close();
 	}
 }

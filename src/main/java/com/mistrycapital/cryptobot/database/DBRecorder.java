@@ -105,7 +105,7 @@ public class DBRecorder {
 			final double priceBch = orderBookManager.getBook(Product.BCH_USD).getBBO().midPrice();
 			final double priceEth = orderBookManager.getBook(Product.ETH_USD).getBBO().midPrice();
 			final double priceLtc = orderBookManager.getBook(Product.LTC_USD).getBBO().midPrice();
-			statement.setTimestamp(1, new Timestamp(timeKeeper.epochMs()));
+			statement.setTimestamp(1, new Timestamp((timeKeeper.epochMs() / 1000) * 1000));
 			statement.setDouble(2, btc);
 			statement.setDouble(3, bch);
 			statement.setDouble(4, eth);
@@ -139,8 +139,9 @@ public class DBRecorder {
 			con.commit();
 			PreparedStatement statement = con.prepareStatement("INSERT INTO crypto_trades"
 				+ " (time,order_id,product,side,amount,price,executed_value,fees_usd) VALUES (?,?,?,?,?,?,?,?)");
-			Timestamp timestamp = new Timestamp(orderInfo.getTimeMicros() / 1000L);
-			timestamp.setNanos((int) (orderInfo.getTimeMicros() % 1000L) * 1000);
+			final long nanos = orderInfo.getTimeMicros() * 1000;
+			Timestamp timestamp = new Timestamp((nanos / 1000000000L) * 1000);
+			timestamp.setNanos((int) (nanos % 1000000000L));
 			statement.setTimestamp(1, timestamp);
 			statement.setString(2, orderInfo.getOrderId().toString());
 			statement.setString(3, orderInfo.getProduct().toString());
@@ -168,8 +169,9 @@ public class DBRecorder {
 			con.commit();
 			PreparedStatement statement = con.prepareStatement("INSERT INTO crypto_trades"
 				+ " (time,order_id,product,side,amount,price,executed_value,fees_usd) VALUES (?,?,?,?,?,?,?,?)");
-			Timestamp timestamp = new Timestamp(msg.getTimeMicros() / 1000L);
-			timestamp.setNanos((int) (msg.getTimeMicros() % 1000L) * 1000);
+			final long nanos = msg.getTimeMicros() * 1000;
+			Timestamp timestamp = new Timestamp((nanos / 1000000000L) * 1000);
+			timestamp.setNanos((int) (nanos % 1000000000L));
 			statement.setTimestamp(1, timestamp);
 			statement.setString(2, msg.getMakerOrderId().toString());
 			statement.setString(3, msg.getProduct().toString());
@@ -194,15 +196,17 @@ public class DBRecorder {
 			con.setAutoCommit(false);
 			con.commit();
 			PreparedStatement statement = con.prepareStatement("INSERT INTO crypto_posts"
-				+ " (time,client_oid,product,side,amount,price) VALUES (?,?,?,?,?,?)");
-			Timestamp timestamp = new Timestamp(timeKeeper.epochMs());
-			timestamp.setNanos((int) (timeKeeper.epochNanos() % 1000000L));
+				+ " (time,client_oid,product,side,amount,price,forecast) VALUES (?,?,?,?,?,?,?)");
+			final long nanos = timeKeeper.epochNanos();
+			Timestamp timestamp = new Timestamp((nanos / 1000000000L) * 1000);
+			timestamp.setNanos((int) (nanos % 1000000000L));
 			statement.setTimestamp(1, timestamp);
 			statement.setString(2, clientOid.toString());
 			statement.setString(3, instruction.getProduct().toString());
 			statement.setString(4, instruction.getOrderSide().toString());
 			statement.setDouble(5, instruction.getAmount());
 			statement.setDouble(6, price);
+			statement.setDouble(7, instruction.getForecast());
 			statement.executeUpdate();
 			statement.close();
 			con.commit();
@@ -238,8 +242,9 @@ public class DBRecorder {
 			con.commit();
 			PreparedStatement statement = con.prepareStatement("INSERT INTO crypto_posts_unfilled"
 				+ " (time,order_id,product,side,original_amount,remaining_amount,price) VALUES (?,?,?,?,?,?,?)");
-			Timestamp timestamp = new Timestamp(msg.getTimeMicros() / 1000L);
-			timestamp.setNanos((int) (msg.getTimeMicros() % 1000L) * 1000);
+			final long nanos = msg.getTimeMicros() * 1000;
+			Timestamp timestamp = new Timestamp((nanos / 1000000000L) * 1000);
+			timestamp.setNanos((int) (nanos % 1000000000L));
 			statement.setTimestamp(1, timestamp);
 			statement.setString(2, msg.getOrderId().toString());
 			statement.setString(3, msg.getProduct().toString());

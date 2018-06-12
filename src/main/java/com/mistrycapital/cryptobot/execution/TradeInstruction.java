@@ -14,12 +14,17 @@ public class TradeInstruction {
 	private final OrderSide orderSide;
 	/** Aggression - should we take or post passively */
 	private final Aggression aggression;
+	/** Forecast on the product (used for tracking) */
+	private final double forecast;
 
-	public TradeInstruction(final Product product, final double amount, final OrderSide orderSide, final Aggression aggression) {
+	public TradeInstruction(final Product product, final double amount, final OrderSide orderSide,
+		final Aggression aggression, final double forecast)
+	{
 		this.product = product;
 		this.amount = amount;
 		this.orderSide = orderSide;
 		this.aggression = aggression;
+		this.forecast = forecast;
 	}
 
 	/** @return Product to buy/sell */
@@ -42,9 +47,15 @@ public class TradeInstruction {
 		return aggression;
 	}
 
+	/** @return Forecast on the product (used for tracking) */
+	public final double getForecast() {
+		return forecast;
+	}
+
 	/** @return Description of instruction in text, e.g. "BUY 1.32 of BTC-USD using TAKE" */
 	@Override
 	public String toString() {
-		return orderSide + " " + gdaxDecimalFormat.format(amount) + " of " + product + " using " + aggression;
+		return orderSide + " " + gdaxDecimalFormat.format(amount) + " of " + product + " using " + aggression +
+			" with forecast " + forecast;
 	}
 }
