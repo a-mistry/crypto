@@ -17,6 +17,11 @@ public enum OrderSide {
 		return shortStr;
 	}
 
+	/** @return 1 if buy, -1 if sell */
+	public int sign() {
+		return this == BUY ? 1 : -1;
+	}
+
 	public static OrderSide parse(String sideString) {
 		return OrderSide.valueOf(sideString.toUpperCase(Locale.US));
 	}

@@ -25,6 +25,7 @@ public class SimExecutionEngine implements ExecutionEngine {
 	private final Tactic tactic;
 	private final double takeTransactionCost;
 	private final double postFillRate;
+	private final double adverseFillPenalty;
 	private final ConsolidatedHistory history;
 	private final Random postFillRandomGen;
 
@@ -36,6 +37,7 @@ public class SimExecutionEngine implements ExecutionEngine {
 		this.history = history;
 		takeTransactionCost = properties.getDoubleProperty("sim.takeTransactionCostOnes", 0.0030);
 		postFillRate = properties.getDoubleProperty("sim.postFillRate", 1.0);
+		adverseFillPenalty = properties.getDoubleProperty("sim.adverseFillPenalty", 0.10);
 		postFillRandomGen = new Random(0);
 	}
 
@@ -54,8 +56,18 @@ public class SimExecutionEngine implements ExecutionEngine {
 			// make sure not to trade more than we have available, regardless of the instructions
 			final double dollars;
 			final double crypto;
-			final double transactionCost = instruction.getAggression() == Aggression.TAKE ? takeTransactionCost : 0.0;
-			if(instruction.getAggression() == Aggression.TAKE || postFillRandomGen.nextDouble() < postFillRate) {
+			double transactionCost = 0.0;
+			boolean shouldFillOrder = false;
+			if(instruction.getAggression() == Aggression.TAKE) {
+				shouldFillOrder = true;
+				transactionCost = takeTransactionCost;
+			} else {
+				// adverse fills when we are going in the same direction as the forecast
+				final double fillRate = instruction.getOrderSide().sign() == Math.signum(instruction.getForecast())
+					? postFillRate * (1 - adverseFillPenalty) : postFillRate * (1 + adverseFillPenalty);
+				shouldFillOrder = postFillRandomGen.nextDouble() < fillRate;
+			}
+			if(shouldFillOrder) {
 				// fill if a market order or otherwise target fill rate
 				if(instruction.getOrderSide() == OrderSide.BUY) {
 					dollars = Math.min(instruction.getAmount() * price, accountant.getAvailable(Currency.USD));
