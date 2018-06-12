@@ -26,6 +26,11 @@ public interface Tactic {
 		double price);
 
 	/**
+	 * Callback from risk if the trade is rejected
+	 */
+	void notifyReject(final TradeInstruction instruction);
+
+	/**
 	 * "Warms up" the tactic with the given interval data point. This is effectively the same as decideTrades
 	 * but does not create trade instructions. This is useful to restore after a restart, although implementations
 	 * are not guaranteed to take into account outstanding orders correctly or have the correct historical positions.

@@ -12,6 +12,7 @@ import com.mistrycapital.cryptobot.util.MCProperties;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -109,7 +110,12 @@ public class TwoHourTactic implements Tactic {
 			final var deltaPosition = goalPosition - currentPosition - outstandingPurchases;
 			final var deltaPositionUsd = deltaPosition * askPrice;
 
-			if(Math.abs(deltaPositionUsd) > tradeUsdThreshold) {
+			// This is to handle the situation where the tactic wanted to buy in the past but because of
+			// bugs or rejected trades it was unable to do so, now it wants to catch up. But if the
+			// forecast is bad, we should not buy regardless
+			final var catchUpBadBuy = deltaPosition > 0 && forecasts[productIndex] < 0;
+
+			if(Math.abs(deltaPositionUsd) > tradeUsdThreshold && !catchUpBadBuy) {
 				if(trades == null)
 					trades = new ArrayList<>(Product.count);
 				final TradeInstruction instruction;
@@ -196,6 +202,17 @@ public class TwoHourTactic implements Tactic {
 		}
 		if(finishedOrder != null)
 			activeOrders.remove(finishedOrder);
+	}
+
+	/** Remove the trade from active orders */
+	@Override
+	public void notifyReject(final TradeInstruction instruction) {
+		for(Iterator<ActiveOrder> iter = activeOrders.iterator(); iter.hasNext(); ) {
+			if(iter.next().instruction == instruction) {
+				iter.remove();
+				break;
+			}
+		}
 	}
 
 	@Override

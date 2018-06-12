@@ -114,6 +114,11 @@ public class SendExecutionTestTrades {
 		}
 
 		@Override
+		public void notifyReject(final TradeInstruction instruction) {
+
+		}
+
+		@Override
 		public void warmup(final ConsolidatedSnapshot snapshot, final double[] forecasts) {
 
 		}

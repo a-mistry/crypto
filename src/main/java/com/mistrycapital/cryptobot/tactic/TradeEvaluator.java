@@ -64,7 +64,14 @@ public class TradeEvaluator {
 		}
 
 		// possibly trade
-		List<TradeInstruction> instructions = tradeRiskValidator.validate(tactic.decideTrades(snapshot, forecasts));
+		List<TradeInstruction> origInstructions = tactic.decideTrades(snapshot, forecasts);
+		List<TradeInstruction> instructions = tradeRiskValidator.validate(origInstructions);
+		if(instructions != null && origInstructions != null && origInstructions.size() != instructions.size()) {
+			for(TradeInstruction instruction : origInstructions) {
+				if(!instructions.contains(instruction))
+					tactic.notifyReject(instruction);
+			}
+		}
 		if(instructions != null && instructions.size() > 0)
 			executionEngine.trade(instructions);
 
