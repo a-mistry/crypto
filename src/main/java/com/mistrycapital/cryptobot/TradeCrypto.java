@@ -84,7 +84,6 @@ public class TradeCrypto {
 		DailyAppender dailyAppender = new DailyAppender(accountant, timeKeeper, intervalizer, dataDir, DAILY_FILE_NAME);
 		dailyAppender.open();
 		ForecastAppender forecastAppender = new ForecastAppender(dataDir, FORECAST_FILE_NAME, timeKeeper);
-		DynamicTracker dynamicTracker = new DynamicTracker();
 		ForecastCalculator forecastCalculator = new Snowbird(properties);
 
 		Tactic tactic = new TwoHourTactic(properties, timeKeeper, accountant);
@@ -98,6 +97,8 @@ public class TradeCrypto {
 
 		ConsolidatedHistory consolidatedHistory = restoreHistory(dataDir, INTERVAL_FILE_NAME, timeKeeper, intervalizer);
 		warmupTactic(consolidatedHistory, forecastCalculator, tactic, intervalizer);
+
+		DynamicTracker dynamicTracker = new DynamicTracker(consolidatedHistory.latest());
 
 		OrderBookPeriodicEvaluator periodicEvaluator =
 			new OrderBookPeriodicEvaluator(timeKeeper, intervalizer, consolidatedHistory, accountant, orderBookManager,

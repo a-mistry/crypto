@@ -147,8 +147,7 @@ public class SimRunner implements Runnable {
 				(path, attr) -> path.getFileName().toString().matches("forecasts-\\d{4}-\\d{2}-\\d{2}.csv"))
 				.sorted()
 				.collect(Collectors.toList());
-			for(Path file : existingFiles)
-				Files.deleteIfExists(file);
+			for(Path file : existingFiles) { Files.deleteIfExists(file); }
 			forecastAppender = new ForecastAppender(dataDir, forecastFile, simTimeKeeper);
 		}
 		Map<Long,List<Double>> cache = new HashMap<>(365);
@@ -225,7 +224,8 @@ public class SimRunner implements Runnable {
 		timeKeeper.advanceTime(nextDay * 1000000L);
 		dailyPositionValuesUsd.add(accountant.getPositionValueUsd(lastSnapshot));
 		dailyTradeCount.add(executionEngine.getAndResetTradeCount());
-		dailyAppender.writeDaily(lastSnapshot, null);
+		if(dailyAppender != null)
+			dailyAppender.writeDaily(lastSnapshot, null);
 
 		log.debug("Ending positions USD " + accountant.getAvailable(Currency.USD)
 			+ " BTC " + accountant.getAvailable(Currency.BTC)

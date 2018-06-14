@@ -1,5 +1,6 @@
 package com.mistrycapital.cryptobot.dynamic;
 
+import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.Reason;
 import com.mistrycapital.cryptobot.gdax.websocket.*;
@@ -17,6 +18,11 @@ class ProductTracker implements GdaxMessageProcessor {
 		curInterval = new IntervalData();
 		prevLastPrice = Double.NaN;
 		volumeTimesPrice = 0.0;
+	}
+
+	ProductTracker(ProductSnapshot lastSnapshot) {
+		this();
+		if(lastSnapshot != null) prevLastPrice = lastSnapshot.lastPrice;
 	}
 
 	private synchronized void recordNewOrder(final Open msg) {

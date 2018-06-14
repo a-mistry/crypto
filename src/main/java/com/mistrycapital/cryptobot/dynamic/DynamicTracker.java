@@ -1,5 +1,6 @@
 package com.mistrycapital.cryptobot.dynamic;
 
+import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.gdax.websocket.*;
 
@@ -7,9 +8,15 @@ public class DynamicTracker implements GdaxMessageProcessor {
 	private final ProductTracker[] productTrackers;
 
 	public DynamicTracker() {
+		this(null);
+	}
+
+	public DynamicTracker(ConsolidatedSnapshot snapshot) {
 		productTrackers = new ProductTracker[Product.count];
 		for(Product product : Product.FAST_VALUES) {
-			productTrackers[product.getIndex()] = new ProductTracker();
+			productTrackers[product.getIndex()] = new ProductTracker(
+				snapshot == null ? null : snapshot.getProductSnapshot(product)
+			);
 		}
 	}
 
