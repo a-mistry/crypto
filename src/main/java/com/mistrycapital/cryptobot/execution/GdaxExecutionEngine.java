@@ -106,7 +106,8 @@ public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcesso
 	private synchronized void verifyOrderComplete(OrderInfo orderInfo) {
 		// only try getting status for a minute, then log error and continue
 		if(orderInfo.getStatus() != OrderStatus.DONE
-			&& timeKeeper.epochMs() - orderInfo.getTimeMicros() / 1000L > 60000L) {
+			&& timeKeeper.epochMs() - orderInfo.getTimeMicros() / 1000L > 60000L)
+		{
 
 			log.error("Order was not done after 1 minute: " + orderInfo);
 			accountant.refreshPositions(); // make sure we have accurate positions
@@ -161,9 +162,14 @@ public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcesso
 	private double filledAmountTotal;
 	private double orderedAmountTotal;
 
+	/** Run task in the background - used to run DB queries / twilio calls outside of this thread */
+	private void runInBackground(Runnable runnable) {
+		// reuse the executor we created for taking
+		executorService.schedule(runnable, 0, TimeUnit.NANOSECONDS);
+	}
+
 	/**
-	 * Execution strategy that posts at the current bid/ask and cancels any outstanding amount if not completed within
-	 * 80% of the current interval time
+	 * Execution strategy that posts at the current bid/ask
 	 */
 	private void post(TradeInstruction instruction) {
 		log.debug("Posting instruction " + instruction);
@@ -186,7 +192,7 @@ public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcesso
 		log.info("Placed post-only order to " + instruction + " at " + price + " with 1 hour GTT, client_oid "
 			+ clientOid);
 
-		dbRecorder.recordPostOnlyAttempt(instruction, clientOid, price);
+		runInBackground(() -> dbRecorder.recordPostOnlyAttempt(instruction, clientOid, price));
 
 		// check for client errors
 		try {
@@ -207,17 +213,20 @@ public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcesso
 
 	@Override
 	public void process(final Received msg) {
+		final UUID clientOid = msg.getClientOid();
+		boolean isSelfOrder = false;
 		synchronized(gdaxIds) {
-			UUID clientOid = msg.getClientOid();
 			if(clientOid != null && clientOids.containsKey(clientOid)) {
+				isSelfOrder = true;
 				TradeInstruction instruction = clientOids.get(clientOid);
 				log.debug("Got RECEIVED message for post order to " + instruction + " client_oid " + clientOid
 					+ " maps to gdax order_id: " + msg.getOrderId());
 				gdaxIds.put(msg.getOrderId(), instruction);
 				clientOids.remove(clientOid);
-				dbRecorder.updatePostOnlyId(clientOid, msg.getOrderId());
 			}
 		}
+		if(isSelfOrder)
+			runInBackground(() -> dbRecorder.updatePostOnlyId(clientOid, msg.getOrderId()));
 	}
 
 	@Override
@@ -226,32 +235,38 @@ public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcesso
 
 	@Override
 	public void process(final Done msg) {
+		boolean isSelfOrder = false;
+		final UUID orderId = msg.getOrderId();
+		TradeInstruction instruction = null;
 		synchronized(gdaxIds) {
-			if(gdaxIds.containsKey(msg.getOrderId())) {
-				UUID orderId = msg.getOrderId();
-				TradeInstruction instruction = gdaxIds.get(orderId);
+			if(gdaxIds.containsKey(orderId)) {
+				isSelfOrder = true;
+				instruction = gdaxIds.get(orderId);
 				gdaxIds.remove(orderId);
+			}
+		}
+		if(isSelfOrder) {
+			final double originalSize = instruction.getAmount();
+			final double remainingSize = msg.getRemainingSize();
+			final double filledAmount = originalSize - remainingSize;
+			final String originalSizeStr = gdaxDecimalFormat.format(originalSize);
+			final String remainingSizeStr = gdaxDecimalFormat.format(remainingSize);
+			final String filledAmountStr = gdaxDecimalFormat.format(filledAmount);
+			final String timeStr = ZonedDateTime.ofInstant(
+				Instant.ofEpochMilli(msg.getTimeMicros() / 1000L),
+				ZoneOffset.UTC
+			).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
 
-				final double originalSize = instruction.getAmount();
-				final double remainingSize = msg.getRemainingSize();
-				final double filledAmount = originalSize - remainingSize;
-				final String originalSizeStr = gdaxDecimalFormat.format(originalSize);
-				final String remainingSizeStr = gdaxDecimalFormat.format(remainingSize);
-				final String filledAmountStr = gdaxDecimalFormat.format(filledAmount);
-				final String timeStr = ZonedDateTime.ofInstant(
-					Instant.ofEpochMilli(msg.getTimeMicros()/1000L),
-					ZoneOffset.UTC
-				).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+			log.info("Post order " + orderId + " was done at " + timeStr
+				+ " with reason " + msg.getReason() + " and remaining size " + remainingSizeStr
+				+ ", original size was " + originalSizeStr);
 
-				log.info("Post order " + orderId + " was done at " + timeStr
-					+ " with reason " + msg.getReason() + " and remaining size " + remainingSizeStr
-					+ ", original size was " + originalSizeStr);
+			filledAmountTotal += filledAmount;
+			orderedAmountTotal += instruction.getAmount();
+			log.info("Fill rate is running at " + (100 * filledAmountTotal / orderedAmountTotal));
 
-				filledAmountTotal += filledAmount;
-				orderedAmountTotal += instruction.getAmount();
-				log.info("Fill rate is running at " + (100 * filledAmountTotal / orderedAmountTotal));
-
-				// Record in db and send text message
+			// Record in db and send text message
+			runInBackground(() -> {
 				if(msg.getRemainingSize() > 0)
 					dbRecorder.recordPostOnlyCancel(msg, originalSize);
 
@@ -259,14 +274,16 @@ public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcesso
 					+ filledAmountStr + " " + msg.getProduct() + " at " + msg.getPrice()
 					+ " with " + remainingSizeStr + " remaining";
 				twilioSender.sendMessage(text);
-			}
+			});
 		}
 	}
 
 	@Override
 	public void process(final Match msg) {
+		boolean isSelfOrder = false;
 		synchronized(gdaxIds) {
 			if(gdaxIds.containsKey(msg.getMakerOrderId())) {
+				isSelfOrder = true;
 				UUID orderId = msg.getMakerOrderId();
 				log.info("FILL received for post order " + orderId + ": " + gdaxDecimalFormat.format(msg.getSize())
 					+ " " + msg.getOrderSide() + " " + msg.getProduct() + " at " + msg.getPrice());
@@ -276,10 +293,10 @@ public class GdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcesso
 				final int buySign = msg.getOrderSide() == OrderSide.BUY ? 1 : -1;
 				accountant.recordTrade(Currency.USD, -buySign * msg.getSize() * msg.getPrice(),
 					msg.getProduct().getCryptoCurrency(), buySign * msg.getSize());
-
-				dbRecorder.recordPostOnlyFill(msg);
 			}
 		}
+		if(isSelfOrder)
+			runInBackground(() -> dbRecorder.recordPostOnlyFill(msg));
 	}
 
 	@Override

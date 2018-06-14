@@ -200,10 +200,6 @@ public class SimRunner implements Runnable {
 		TradeEvaluator tradeEvaluator = new TradeEvaluator(history, forecastCalculator, tactic, tradeRiskValidator,
 			executionEngine, decisionAppender, dailyAppender, null);
 
-		// We can speed this up by optimizing the following
-		// 1. snowbird getInputVariables() calculation
-		// 2. snowbird - use a more efficient map or eliminate the map
-		// 3. ConsolidatedHistory add is slow because it is O(n), use a circular buffer
 		long nextDay = intervalizer.calcNextDayMillis(0);
 		List<Double> dailyPositionValuesUsd = new ArrayList<>(365);
 		List<Integer> dailyTradeCount = new ArrayList<>(365);
