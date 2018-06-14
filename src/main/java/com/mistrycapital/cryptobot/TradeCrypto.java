@@ -7,12 +7,15 @@ import com.mistrycapital.cryptobot.appender.*;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
 import com.mistrycapital.cryptobot.database.DBRecorder;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
+import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.execution.GdaxExecutionEngine;
+import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.GdaxPositionsProvider;
 import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
 import com.mistrycapital.cryptobot.gdax.common.Product;
+import com.mistrycapital.cryptobot.gdax.websocket.GdaxMessageProcessor;
 import com.mistrycapital.cryptobot.gdax.websocket.GdaxWebSocket;
 import com.mistrycapital.cryptobot.risk.TradeRiskValidator;
 import com.mistrycapital.cryptobot.sim.SnapshotReader;
@@ -92,8 +95,10 @@ public class TradeCrypto {
 			new TwilioSender(credentials.getProperty("TwilioAccountSid"), credentials.getProperty("TwilioAuthToken"));
 		DBRecorder dbRecorder = new DBRecorder(timeKeeper, accountant, orderBookManager, "mistrycapital",
 			credentials.getProperty("MysqlUser"), credentials.getProperty("MysqlPassword"));
-		GdaxExecutionEngine executionEngine = new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager,
+		ExecutionEngine executionEngine = new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager,
 			dbRecorder, twilioSender, tactic, gdaxClient);
+		// use this if we want to test without sending orders
+		//ExecutionEngine executionEngine = instructions -> {};
 
 		ConsolidatedHistory consolidatedHistory = restoreHistory(dataDir, INTERVAL_FILE_NAME, timeKeeper, intervalizer);
 		warmupTactic(consolidatedHistory, forecastCalculator, tactic, intervalizer);
@@ -107,7 +112,8 @@ public class TradeCrypto {
 
 		gdaxWebSocket.subscribe(orderBookManager);
 		gdaxWebSocket.subscribe(dynamicTracker);
-		gdaxWebSocket.subscribe(executionEngine);
+		if(executionEngine instanceof GdaxMessageProcessor)
+			gdaxWebSocket.subscribe((GdaxMessageProcessor) executionEngine);
 
 		URI gdaxWebSocketURI = new URI("wss://ws-feed.gdax.com");
 		WebSocketClient socketClient = new WebSocketClient(new SslContextFactory());
@@ -157,8 +163,7 @@ public class TradeCrypto {
 		if(yesterdayFile != null) files.add(yesterdayFile);
 		if(todayFile != null) files.add(todayFile);
 
-		for(ConsolidatedSnapshot snapshot : SnapshotReader.readSnapshots(files))
-			consolidatedHistory.add(snapshot);
+		for(ConsolidatedSnapshot snapshot : SnapshotReader.readSnapshots(files)) { consolidatedHistory.add(snapshot); }
 
 		return consolidatedHistory;
 	}
@@ -175,9 +180,11 @@ public class TradeCrypto {
 			}
 			tactic.warmup(snapshot, historicalForecasts);
 		}
-		for(Product product : Product.FAST_VALUES) {
-			log.debug("Last warmup forecast " + product + ": "
-				+ forecastCalculator.calculate(fullHistory, product, null));
+		if(fullHistory.latest() != null) {
+			for(Product product : Product.FAST_VALUES) {
+				log.debug("Last warmup forecast " + product + ": "
+					+ forecastCalculator.calculate(fullHistory, product, null));
+			}
 		}
 	}
 
