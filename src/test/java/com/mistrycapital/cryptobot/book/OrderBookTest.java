@@ -122,8 +122,12 @@ class OrderBookTest {
 		depths[0].pctFromMid = 296.0 / 295.965 - 1.0;
 		depths[1] = new Depth();
 		depths[1].pctFromMid = 1.0 - 292.0 / 295.965;
-		book.recordDepthsAndBBO(bbo, depths, null);
-		fail("not yet implemented mids");
+		WeightedMid[] mids = new WeightedMid[3];
+		for(int i = 0; i < mids.length; i++) { mids[i] = new WeightedMid(); }
+		mids[0].numLevels = 1;
+		mids[1].numLevels = 2;
+		mids[2].numLevels = 3;
+		book.recordDepthsAndBBO(bbo, depths, mids);
 
 		assertEquals(295.96, bbo.bidPrice, EPSILON);
 		assertEquals(295.97, bbo.askPrice, EPSILON);
@@ -138,6 +142,21 @@ class OrderBookTest {
 		assertEquals(2, depths[1].askCount);
 		assertEquals(0.05088265 * 2 + 1, depths[1].bidSize, EPSILON);
 		assertEquals(0.72036512 * 2 + 11, depths[1].askSize, EPSILON);
+
+		final double priceSize1 = 295.96 * 0.05088265 + 295.97 * 5.72036512;
+		final double totalSize1 = 0.05088265 + 5.72036512;
+		assertEquals(priceSize1 / totalSize1, mids[0].weightedMidPrice, EPSILON);
+		assertEquals(totalSize1, mids[0].size, EPSILON);
+		final double priceSize2 =
+			295.96 * 0.05088265 + 293.96 * 1.05088265 + 295.97 * 5.72036512 + 296.97 * 6.72036512;
+		final double totalSize2 = 0.05088265 + 1.05088265 + 5.72036512 + 6.72036512;
+		assertEquals(priceSize2 / totalSize2, mids[1].weightedMidPrice, EPSILON);
+		assertEquals(totalSize2, mids[1].size, EPSILON);
+		final double priceSize3 =
+			295.96 * 0.05088265 + 293.96 * 1.05088265 + 290.96 * 5.05088265 + 295.97 * 5.72036512 + 296.97 * 6.72036512;
+		final double totalSize3 = 0.05088265 + 1.05088265 + 5.05088265 + 5.72036512 + 6.72036512;
+		assertEquals(priceSize3 / totalSize3, mids[2].weightedMidPrice, EPSILON);
+		assertEquals(totalSize3, mids[2].size, EPSILON);
 	}
 
 	@Test

@@ -3,6 +3,7 @@ package com.mistrycapital.cryptobot.aggregatedata;
 import com.mistrycapital.cryptobot.book.BBO;
 import com.mistrycapital.cryptobot.book.Depth;
 import com.mistrycapital.cryptobot.book.OrderBook;
+import com.mistrycapital.cryptobot.book.WeightedMid;
 import com.mistrycapital.cryptobot.dynamic.IntervalData;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import org.junit.jupiter.api.Test;
@@ -37,9 +38,13 @@ class ProductSnapshotTest {
 			depths[1].bidSize = 3.0;
 			depths[1].askCount = 7;
 			depths[1].askSize = 5.14;
+			WeightedMid[] mids = invocationOnMock.getArgument(2);
+			for(int i = 0; i < mids.length; i++) {
+				mids[i].size = mids[i].numLevels;
+				mids[i].weightedMidPrice = mids[i].numLevels * 100;
+			}
 			return null;
 		}).when(orderBook).recordDepthsAndBBO(any(), any(), any());
-		fail("not yet implemented mids");
 		IntervalData intervalData = new IntervalData();
 		intervalData.lastPrice = 45.0;
 		intervalData.ret = 0.007;
@@ -72,6 +77,18 @@ class ProductSnapshotTest {
 		assertEquals(3.0, snapshot.bidSize5Pct, EPSILON);
 		assertEquals(7, snapshot.askCount5Pct);
 		assertEquals(5.14, snapshot.askSize5Pct, EPSILON);
+		assertEquals(100, snapshot.weightedMid1, EPSILON);
+		assertEquals(500, snapshot.weightedMid5, EPSILON);
+		assertEquals(1000, snapshot.weightedMid10, EPSILON);
+		assertEquals(2000, snapshot.weightedMid20, EPSILON);
+		assertEquals(5000, snapshot.weightedMid50, EPSILON);
+		assertEquals(10000, snapshot.weightedMid100, EPSILON);
+		assertEquals(1, snapshot.size1Level, EPSILON);
+		assertEquals(5, snapshot.size5Level, EPSILON);
+		assertEquals(10, snapshot.size10Level, EPSILON);
+		assertEquals(20, snapshot.size20Level, EPSILON);
+		assertEquals(50, snapshot.size50Level, EPSILON);
+		assertEquals(100, snapshot.size100Level, EPSILON);
 		assertEquals(45.0, snapshot.lastPrice, EPSILON);
 		assertEquals(0.007, snapshot.ret, EPSILON);
 		assertEquals(15.4, snapshot.volume, EPSILON);
@@ -104,6 +121,18 @@ class ProductSnapshotTest {
 			snapshot.askCount5Pct,
 			snapshot.bidSize5Pct,
 			snapshot.askSize5Pct,
+			snapshot.weightedMid1,
+			snapshot.weightedMid5,
+			snapshot.weightedMid10,
+			snapshot.weightedMid20,
+			snapshot.weightedMid50,
+			snapshot.weightedMid100,
+			snapshot.size1Level,
+			snapshot.size5Level,
+			snapshot.size10Level,
+			snapshot.size20Level,
+			snapshot.size50Level,
+			snapshot.size100Level,
 			snapshot.lastPrice,
 			snapshot.ret,
 			snapshot.volume,
