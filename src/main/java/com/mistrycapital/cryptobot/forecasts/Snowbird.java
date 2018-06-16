@@ -88,6 +88,19 @@ public class Snowbird implements ForecastCalculator {
 		final int book5PctCount = latest.bidCount5Pct + latest.askCount5Pct;
 		final double bookRatio = ((double) latest.bidCount5Pct) / book5PctCount;
 
+		// weighted mid and 2h ago
+		final double weightedMidRet100 = latest.weightedMid100 / latest.midPrice - 1;
+		double weightedMid2h100 = Double.NaN;
+		double mid2h = Double.NaN;
+		int weightedMidDataPoints = 0;
+		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values()) {
+			if(weightedMidDataPoints <= twoHourDatapoints) {
+				ProductSnapshot data = snapshot.getProductSnapshot(product);
+				weightedMid2h100 = data.weightedMid100;
+				mid2h = data.midPrice;
+			} else break;
+		}
+
 		// get 2h, 6h lag returns
 		double price2h = Double.NaN;
 		double price6h = Double.NaN;
@@ -234,6 +247,14 @@ public class Snowbird implements ForecastCalculator {
 		variableMap.put("timeToMaxMin", timeToMaxMin);
 		variableMap.put("RSIRatioxRet", RSIRatio * lagRet);
 		variableMap.put("lagBTCRet6", lagBTCRet6);
+
+		variableMap.put("weightedMidRet1", latest.weightedMid1 / latest.midPrice - 1);
+		variableMap.put("weightedMidRet5", latest.weightedMid5 / latest.midPrice - 1);
+		variableMap.put("weightedMidRet10", latest.weightedMid10 / latest.midPrice - 1);
+		variableMap.put("weightedMidRet20", latest.weightedMid20 / latest.midPrice - 1);
+		variableMap.put("weightedMidRet50", latest.weightedMid50 / latest.midPrice - 1);
+		variableMap.put("weightedMidRet100", latest.weightedMid100 / latest.midPrice - 1);
+		variableMap.put("weightedMidRet2h100", weightedMid2h100 / mid2h - 1);
 
 		// These don't contribute much (0.1% R^2, low t-stats) but may be justified
 //		variableMap.put("bookRatio", bookRatio);
