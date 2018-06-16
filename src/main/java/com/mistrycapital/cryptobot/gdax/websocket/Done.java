@@ -28,7 +28,7 @@ public class Done extends OrderGdaxMessage {
 			remainingSize = 0.0;
 			orderType = OrderType.MARKET;
 		}
-		reason = Reason.valueOf(json.get("reason").getAsString().toUpperCase());
+		reason = Reason.parse(json.get("reason").getAsString());
 	}
 
 	@Override

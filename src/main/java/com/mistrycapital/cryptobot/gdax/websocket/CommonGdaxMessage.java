@@ -29,7 +29,7 @@ abstract class CommonGdaxMessage implements GdaxMessage {
 		Pattern.compile("(\\d\\d\\d\\d)-(\\d\\d)-(\\d\\d)T(\\d\\d):(\\d\\d):(\\d\\d)\\.?(\\d*)Z");
 
 
-	static final long parseTimeMicros(String timeString) {
+	static final long parseTimeMicrosOld(String timeString) {
 		final Matcher matcher = gdaxIsoPattern.matcher(timeString);
 		if(!matcher.matches()) {
 			return 0;
@@ -46,6 +46,49 @@ abstract class CommonGdaxMessage implements GdaxMessage {
 			final long seconds = utcCal.getTimeInMillis() / 1000L;
 			return seconds * 1000000L + micros;
 		}
+	}
+
+	/** Highly optimized time parser. This is useful because profiling results showed ~20% of message parsing
+	 * time was spent in parsing time strings.
+	 * @param timeString Time string in the format 2014-11-07T08:19:28.464459Z or 2014-11-07T08:19:28Z
+	 * @return Time in micros since epoch
+	 */
+	static final long parseTimeMicros(String timeString) {
+		char[] timeChars = timeString.toCharArray();
+		final int year = parseIntFromChars(timeChars, 0, 4);
+		final int month = parseIntFromChars(timeChars, 5, 7);
+		final int day = parseIntFromChars(timeChars, 8, 10);
+		final int hour = parseIntFromChars(timeChars, 11, 13);
+		final int min = parseIntFromChars(timeChars, 14, 16);
+		final int sec = parseIntFromChars(timeChars, 17, 19);
+		final int micros;
+		if(timeChars.length == 20)
+			micros = 0;
+		else
+			micros = parseIntFromChars(timeChars, 20, timeChars.length-1);
+		utcCal.set(year, month - 1, day, hour, min, sec);
+		final long seconds = utcCal.getTimeInMillis() / 1000L;
+		return seconds * 1000000L + micros;
+	}
+
+	/**
+	 * Parses the characters in the array starting at startIdx and ending at endIdx-1
+	 * @return int value of the given characters
+	 */
+	static final int parseIntFromChars(char[] chars, int startIdx, int endIdx) {
+		if(startIdx>=chars.length || endIdx>chars.length)
+			throw new NumberFormatException();
+
+		int retVal = 0;
+		for(int i=startIdx; i<endIdx; i++) {
+			char ch = chars[i];
+			if(ch < '0' || ch > '9')
+				throw new NumberFormatException();
+
+			retVal *= 10;
+			retVal += ch - '0';
+		}
+		return retVal;
 	}
 
 	@Override

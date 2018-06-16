@@ -1,12 +1,15 @@
 package com.mistrycapital.cryptobot.gdax.common;
 
-import java.util.Locale;
-
 public enum Reason {
 	FILLED,
 	CANCELED;
 
 	public static Reason parse(String reasonString) {
-		return valueOf(reasonString.toUpperCase(Locale.US));
+		// this is faster than uppercasing
+		if("filled".equals(reasonString))
+			return FILLED;
+		if("canceled".equals(reasonString))
+			return CANCELED;
+		return valueOf(reasonString);
 	}
 }

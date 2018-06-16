@@ -82,7 +82,7 @@ class ObjectCreationTest {
 		verifyCorrectObject("{\n" +
 				"    \"type\": \"open\",\n" +
 				"    \"time\": \"2014-11-07T08:19:27.028459Z\",\n" +
-				"    \"product_id\": \"BTC-USD\",\n" +
+				"    \"product_id\": \"ETH-USD\",\n" +
 				"    \"sequence\": 10,\n" +
 				"    \"order_id\": \"d50ec984-77a8-460a-b958-66f114b0de9b\",\n" +
 				"    \"price\": \"200.2\",\n" +
@@ -93,7 +93,7 @@ class ObjectCreationTest {
 			open -> {
 				assertEquals(Type.OPEN, open.getType());
 				assertEquals(1415348367028459L, open.getTimeMicros());
-				assertEquals(Product.BTC_USD, open.getProduct());
+				assertEquals(Product.ETH_USD, open.getProduct());
 				assertEquals(10L, open.getSequence());
 				assertEquals(UUID.fromString("d50ec984-77a8-460a-b958-66f114b0de9b"), open.getOrderId());
 				assertEquals(200.2, open.getPrice(), EPSILON);
@@ -104,7 +104,7 @@ class ObjectCreationTest {
 		verifyCorrectObject("{\n" +
 				"    \"type\": \"done\",\n" +
 				"    \"time\": \"2014-11-07T08:19:27.028459Z\",\n" +
-				"    \"product_id\": \"BTC-USD\",\n" +
+				"    \"product_id\": \"BCH-USD\",\n" +
 				"    \"sequence\": 10,\n" +
 				"    \"price\": \"200.2\",\n" +
 				"    \"order_id\": \"d50ec984-77a8-460a-b958-66f114b0de9b\",\n" +
@@ -116,7 +116,7 @@ class ObjectCreationTest {
 			done -> {
 				assertEquals(Type.DONE, done.getType());
 				assertEquals(1415348367028459L, done.getTimeMicros());
-				assertEquals(Product.BTC_USD, done.getProduct());
+				assertEquals(Product.BCH_USD, done.getProduct());
 				assertEquals(10L, done.getSequence());
 				assertEquals(200.2, done.getPrice(), EPSILON);
 				assertEquals(UUID.fromString("d50ec984-77a8-460a-b958-66f114b0de9b"), done.getOrderId());
@@ -134,7 +134,7 @@ class ObjectCreationTest {
 				"    \"maker_order_id\": \"ac928c66-ca53-498f-9c13-a110027a60e8\",\n" +
 				"    \"taker_order_id\": \"132fb6ae-456b-4654-b4e0-d681ac05cea1\",\n" +
 				"    \"time\": \"2014-11-07T08:19:27.028459Z\",\n" +
-				"    \"product_id\": \"BTC-USD\",\n" +
+				"    \"product_id\": \"LTC-USD\",\n" +
 				"    \"size\": \"5.23512\",\n" +
 				"    \"price\": \"400.23\",\n" +
 				"    \"side\": \"sell\"\n" +
@@ -147,7 +147,7 @@ class ObjectCreationTest {
 				assertEquals(UUID.fromString("ac928c66-ca53-498f-9c13-a110027a60e8"), match.getMakerOrderId());
 				assertEquals(UUID.fromString("132fb6ae-456b-4654-b4e0-d681ac05cea1"), match.getTakerOrderId());
 				assertEquals(1415348367028459L, match.getTimeMicros());
-				assertEquals(Product.BTC_USD, match.getProduct());
+				assertEquals(Product.LTC_USD, match.getProduct());
 				assertEquals(5.23512, match.getSize(), EPSILON);
 				assertEquals(400.23, match.getPrice(), EPSILON);
 				assertEquals(OrderSide.SELL, match.getOrderSide());

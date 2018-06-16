@@ -1,7 +1,5 @@
 package com.mistrycapital.cryptobot.gdax.common;
 
-import java.util.Locale;
-
 public enum OrderSide {
 	BUY("B"),
 	SELL("S");
@@ -23,6 +21,11 @@ public enum OrderSide {
 	}
 
 	public static OrderSide parse(String sideString) {
-		return OrderSide.valueOf(sideString.toUpperCase(Locale.US));
+		// faster to do this than uppercase and use valueOf
+		if("buy".equals(sideString))
+			return BUY;
+		if("sell".equals(sideString))
+			return SELL;
+		return valueOf(sideString);
 	}
 }

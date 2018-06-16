@@ -1,12 +1,15 @@
 package com.mistrycapital.cryptobot.gdax.websocket;
 
-import java.util.Locale;
-
 public enum StopType {
 	LOSS,
 	ENTRY;
-	
+
 	public static StopType parse(String typeString) {
-		return StopType.valueOf(typeString.toUpperCase(Locale.US));
+		// this is faster than uppercasing
+		if("loss".equals(typeString))
+			return LOSS;
+		if("entry".equals(typeString))
+			return ENTRY;
+		return StopType.valueOf(typeString);
 	}
 }

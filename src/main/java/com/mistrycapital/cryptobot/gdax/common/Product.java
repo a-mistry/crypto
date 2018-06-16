@@ -39,6 +39,19 @@ public enum Product {
 	}
 	
 	public static Product parse(String productString) {
-		return Product.valueOf(productString.replace("-","_"));
+		// The following line was slow so we do a more complicated matching
+		// return Product.valueOf(productString.replace("-","_"));
+		char firstChar = productString.charAt(0);
+		switch(firstChar) {
+			case 'B':
+				char secondChar = productString.charAt(1);
+				return secondChar == 'T' ? BTC_USD  : BCH_USD;
+			case 'E':
+				return ETH_USD;
+			case 'L':
+				return LTC_USD;
+			default:
+				return Product.valueOf(productString.replace("-","_"));
+		}
 	}
 }
