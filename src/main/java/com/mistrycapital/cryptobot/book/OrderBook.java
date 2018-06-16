@@ -230,8 +230,14 @@ public class OrderBook {
 	 * Inserts a new order into the book from the given Open message
 	 */
 	private synchronized void insert(final Open msg) {
+		final OrderLine orderLine;
+		if(msg.getOrderSide() == OrderSide.BUY) {
+			orderLine = bids.findOrCreate(msg.getPrice());
+		} else {
+			orderLine = asks.findOrCreate(msg.getPrice());
+		}
 		insertNonSynchronized(msg.getOrderId(), msg.getPrice(), msg.getRemainingSize(), msg.getTimeMicros(),
-			msg.getOrderSide());
+			msg.getOrderSide(), orderLine);
 	}
 
 	/**
@@ -239,7 +245,7 @@ public class OrderBook {
 	 * NOTE: For thread safety, this method MUST be called from a synchronized method
 	 */
 	private void insertNonSynchronized(final UUID orderId, final double price, final double size, final long timeMicros,
-		final OrderSide side)
+		final OrderSide side, final OrderLine orderLine)
 	{
 		// if we've seen this order (maybe because of rebuilding the book), skip it
 		if(recentlyDoneSet.contains(orderId)) return;
@@ -258,13 +264,7 @@ public class OrderBook {
 
 		// now add to map and to order line
 		activeOrders.put(order.getId(), order);
-		final OrderLine line;
-		if(order.getSide() == OrderSide.BUY) {
-			line = bids.findOrCreate(order.getPrice());
-		} else {
-			line = asks.findOrCreate(order.getPrice());
-		}
-		order.setLine(line);
+		order.setLine(orderLine);
 	}
 
 	/**
@@ -347,13 +347,20 @@ public class OrderBook {
 
 		// note that since level 3 does not give us the times, we will use the time of book message as a best
 		// approximation
-		for(Book.Order bookOrder : book.getBids()) {
+		// memoize lines to save computation
+		Map<Double,OrderLine> orderLineMap = new HashMap<>(1000);
+		for(final Book.Order bookOrder : book.getBids()) {
+			OrderLine orderLine =
+				orderLineMap.computeIfAbsent(bookOrder.price, key -> bids.findOrCreate(bookOrder.price));
 			insertNonSynchronized(bookOrder.orderId, bookOrder.price, bookOrder.size, book.getTimeMicros(),
-				OrderSide.BUY);
+				OrderSide.BUY, orderLine);
 		}
+		orderLineMap.clear();
 		for(Book.Order bookOrder : book.getAsks()) {
+			OrderLine orderLine =
+				orderLineMap.computeIfAbsent(bookOrder.price, key -> asks.findOrCreate(bookOrder.price));
 			insertNonSynchronized(bookOrder.orderId, bookOrder.price, bookOrder.size, book.getTimeMicros(),
-				OrderSide.SELL);
+				OrderSide.SELL, orderLine);
 		}
 	}
 
