@@ -131,8 +131,9 @@ public class OrderBook {
 	}
 
 	/**
-	 * Record top of book and depth of book. For depth, takes as input an array of objects. For each object,
-	 * fills in the counts and sizes of orders that are within the given percentage from the midpoint.
+	 * Record top of book, depth of book, and weighted mid prices. For depth, takes as input an array of objects.
+	 * For each object, fills in the counts and sizes of orders that are within the given percentage from the midpoint.
+	 * For weighted mids, takes as input an array of objects containing the number of levels to use.
 	 * <p>
 	 * This is a significantly more efficient method for getting multiple pieces of book data than querying
 	 * individually since the synchronization cost is paid once.
@@ -140,7 +141,7 @@ public class OrderBook {
 	 * @param bbo    Best bid/offer object to record
 	 * @param depths Array of depth objects with the pctFromMid given. The remaining fields will be filled
 	 */
-	public synchronized void recordDepthsAndBBO(BBO bbo, Depth[] depths) {
+	public synchronized void recordDepthsAndBBO(BBO bbo, Depth[] depths, WeightedMid[] mids) {
 		recordBBO(bbo);
 
 		final double mid = bbo.midPrice();
@@ -156,6 +157,19 @@ public class OrderBook {
 				asks.getSizeBeforePrice(askThreshold)
 			);
 		}
+
+		// garbage free calc
+		if(mids != null)
+			for(int i = 0; i < mids.length; i++) {
+				bids.calcWeightedAvgPrice(mids[i]);
+				double size = mids[i].size;
+				double priceSize = mids[i].weightedMidPrice * size;
+				asks.calcWeightedAvgPrice(mids[i]);
+				priceSize += mids[i].weightedMidPrice * mids[i].size;
+				size += mids[i].size;
+				mids[i].weightedMidPrice = priceSize / size;
+				mids[i].size = size;
+			}
 	}
 
 	/**

@@ -38,7 +38,8 @@ class ProductSnapshotTest {
 			depths[1].askCount = 7;
 			depths[1].askSize = 5.14;
 			return null;
-		}).when(orderBook).recordDepthsAndBBO(any(), any());
+		}).when(orderBook).recordDepthsAndBBO(any(), any(), any());
+		fail("not yet implemented mids");
 		IntervalData intervalData = new IntervalData();
 		intervalData.lastPrice = 45.0;
 		intervalData.ret = 0.007;

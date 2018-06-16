@@ -71,6 +71,22 @@ class OrderLineList extends OrderLine {
 			|| (!isAscending && line.getPrice() >= thresholdPrice);
 	}
 
+	/**
+	 * @return Average price of the first number of levels, weighted by size of the levels, stored in the object
+	 * that was passed in
+	 */
+	public void calcWeightedAvgPrice(WeightedMid midObj) {
+		int count = 0;
+		double priceSize = 0.0;
+		double size = 0.0;
+		for(OrderLine line = this.getNext(); line != null && count < midObj.numLevels; line = line.getNext(), count++) {
+			priceSize += line.getPrice() * line.getSize();
+			size += line.getSize();
+		}
+		midObj.weightedMidPrice = priceSize / size;
+		midObj.size = size;
+	}
+
 	// This next section has methods for modifying the order lines
 
 	/**

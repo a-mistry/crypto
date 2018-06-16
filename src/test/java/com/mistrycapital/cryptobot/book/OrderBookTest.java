@@ -122,7 +122,8 @@ class OrderBookTest {
 		depths[0].pctFromMid = 296.0 / 295.965 - 1.0;
 		depths[1] = new Depth();
 		depths[1].pctFromMid = 1.0 - 292.0 / 295.965;
-		book.recordDepthsAndBBO(bbo, depths);
+		book.recordDepthsAndBBO(bbo, depths, null);
+		fail("not yet implemented mids");
 
 		assertEquals(295.96, bbo.bidPrice, EPSILON);
 		assertEquals(295.97, bbo.askPrice, EPSILON);
@@ -199,7 +200,7 @@ class OrderBookTest {
 		assertEquals(1.0, bbo.bidSize, EPSILON);
 		assertEquals(3.5, bbo.askSize, EPSILON);
 		assertEquals(21.0, bbo.midPrice(), EPSILON);
-		assertEquals(3.5+3.14, book.getAskSize(), EPSILON);
+		assertEquals(3.5 + 3.14, book.getAskSize(), EPSILON);
 
 		// fill order
 		msgJson = new JsonObject();
@@ -219,7 +220,7 @@ class OrderBookTest {
 		assertEquals(1.0, bbo.bidSize, EPSILON);
 		assertEquals(0.5, bbo.askSize, EPSILON);
 		assertEquals(21.0, bbo.midPrice(), EPSILON);
-		assertEquals(0.5+3.14, book.getAskSize(), EPSILON);
+		assertEquals(0.5 + 3.14, book.getAskSize(), EPSILON);
 
 		// cancel order
 		msgJson.addProperty("order_id", orderId3.toString());

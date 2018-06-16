@@ -3,6 +3,7 @@ package com.mistrycapital.cryptobot.aggregatedata;
 import com.mistrycapital.cryptobot.book.BBO;
 import com.mistrycapital.cryptobot.book.Depth;
 import com.mistrycapital.cryptobot.book.OrderBook;
+import com.mistrycapital.cryptobot.book.WeightedMid;
 import com.mistrycapital.cryptobot.dynamic.IntervalData;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import org.apache.commons.csv.CSVRecord;
@@ -45,6 +46,32 @@ public class ProductSnapshot {
 	/** Size of asks within 5% of mid */
 	public final double askSize5Pct;
 
+	/** Weighted mid using top level */
+	public final double weightedMid1;
+	/** Weighted mid using top 5 levels */
+	public final double weightedMid5;
+	/** Weighted mid using top 10 levels */
+	public final double weightedMid10;
+	/** Weighted mid using top 20 levels */
+	public final double weightedMid20;
+	/** Weighted mid using top 50 levels */
+	public final double weightedMid50;
+	/** Weighted mid using top 100 levels */
+	public final double weightedMid100;
+
+	/** Size of top level */
+	public final double size1Level;
+	/** Size of top 5 levels */
+	public final double size5Level;
+	/** Size of top 10 levels */
+	public final double size10Level;
+	/** Size of top 20 levels */
+	public final double size20Level;
+	/** Size of top 50 levels */
+	public final double size50Level;
+	/** Size of top 100 levels */
+	public final double size100Level;
+
 	/** Last trade price */
 	public final double lastPrice;
 	/** Return over interval */
@@ -85,12 +112,21 @@ public class ProductSnapshot {
 		depths[DEPTH_1PCT].pctFromMid = 0.01;
 		depths[DEPTH_5PCT] = new Depth();
 		depths[DEPTH_5PCT].pctFromMid = 0.05;
-		orderBook.recordDepthsAndBBO(bbo, depths);
+		WeightedMid[] mids = new WeightedMid[6];
+		for(int i=0; i<mids.length; i++)
+			mids[i] = new WeightedMid();
+		mids[0].numLevels = 1;
+		mids[1].numLevels = 5;
+		mids[2].numLevels = 10;
+		mids[3].numLevels = 20;
+		mids[4].numLevels = 50;
+		mids[5].numLevels = 100;
+		orderBook.recordDepthsAndBBO(bbo, depths, mids);
 
-		return new ProductSnapshot(product, bbo, depths[0], depths[1], intervalData);
+		return new ProductSnapshot(product, bbo, depths[0], depths[1], mids, intervalData);
 	}
 
-	private ProductSnapshot(Product product, BBO bbo, Depth depth1Pct, Depth depth5Pct, IntervalData intervalData) {
+	private ProductSnapshot(Product product, BBO bbo, Depth depth1Pct, Depth depth5Pct, WeightedMid[] mids, IntervalData intervalData) {
 		this.product = product;
 
 		bidPrice = bbo.bidPrice;
@@ -107,6 +143,20 @@ public class ProductSnapshot {
 		askSize1Pct = depth1Pct.askSize;
 		bidSize5Pct = depth5Pct.bidSize;
 		askSize5Pct = depth5Pct.askSize;
+
+		weightedMid1 = mids[0].weightedMidPrice;
+		weightedMid5 = mids[1].weightedMidPrice;
+		weightedMid10 = mids[2].weightedMidPrice;
+		weightedMid20 = mids[3].weightedMidPrice;
+		weightedMid50 = mids[4].weightedMidPrice;
+		weightedMid100 = mids[5].weightedMidPrice;
+
+		size1Level = mids[0].size;
+		size5Level = mids[1].size;
+		size10Level = mids[2].size;
+		size20Level = mids[3].size;
+		size50Level = mids[4].size;
+		size100Level = mids[5].size;
 
 		lastPrice = intervalData.lastPrice;
 		ret = intervalData.ret;
@@ -141,6 +191,18 @@ public class ProductSnapshot {
 		askSize1Pct = Double.parseDouble(record.get("askSize1Pct"));
 		bidSize5Pct = Double.parseDouble(record.get("bidSize5Pct"));
 		askSize5Pct = Double.parseDouble(record.get("askSize5Pct"));
+		weightedMid1 = Double.parseDouble(record.get("weightedMid1"));
+		weightedMid5 = Double.parseDouble(record.get("weightedMid5"));
+		weightedMid10 = Double.parseDouble(record.get("weightedMid10"));
+		weightedMid20 = Double.parseDouble(record.get("weightedMid20"));
+		weightedMid50 = Double.parseDouble(record.get("weightedMid50"));
+		weightedMid100 = Double.parseDouble(record.get("weightedMid100"));
+		size1Level = Double.parseDouble(record.get("size1Level"));
+		size5Level = Double.parseDouble(record.get("size5Level"));
+		size10Level = Double.parseDouble(record.get("size10Level"));
+		size20Level = Double.parseDouble(record.get("size20Level"));
+		size50Level = Double.parseDouble(record.get("size50Level"));
+		size100Level = Double.parseDouble(record.get("size100Level"));
 		lastPrice = Double.parseDouble(record.get("lastPrice"));
 		ret = Double.parseDouble(record.get("ret"));
 		volume = Double.parseDouble(record.get("volume"));
@@ -163,6 +225,8 @@ public class ProductSnapshot {
 	public static final String csvHeaderRow() {
 		return "product,bidPrice,askPrice,midPrice,bidSize,askSize,bidCount1Pct,askCount1Pct,bidSize1Pct,askSize1Pct," +
 			"bidCount5Pct,askCount5Pct,bidSize5Pct,askSize5Pct," +
+			"weightedMid1,weightedMid5,weightedMid10,weightedMid20,weightedMid50,weightedMid100," +
+			"size1Level,size5Level,size10Level,size20Level,size50Level,size100Level," +
 			"lastPrice,ret,volume,vwap," +
 			"bidTradeCount,askTradeCount,bidTradeSize,askTradeSize," +
 			"newBidCount,newAskCount,newBidSize,newAskSize," +
@@ -199,6 +263,30 @@ public class ProductSnapshot {
 		builder.append(bidSize5Pct);
 		builder.append(',');
 		builder.append(askSize5Pct);
+		builder.append(',');
+		builder.append(weightedMid1);
+		builder.append(',');
+		builder.append(weightedMid5);
+		builder.append(',');
+		builder.append(weightedMid10);
+		builder.append(',');
+		builder.append(weightedMid20);
+		builder.append(',');
+		builder.append(weightedMid50);
+		builder.append(',');
+		builder.append(weightedMid100);
+		builder.append(',');
+		builder.append(size1Level);
+		builder.append(',');
+		builder.append(size5Level);
+		builder.append(',');
+		builder.append(size10Level);
+		builder.append(',');
+		builder.append(size20Level);
+		builder.append(',');
+		builder.append(size50Level);
+		builder.append(',');
+		builder.append(size100Level);
 		builder.append(',');
 		builder.append(lastPrice);
 		builder.append(',');
