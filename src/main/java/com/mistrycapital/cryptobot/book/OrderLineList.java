@@ -98,22 +98,31 @@ class OrderLineList extends OrderLine {
 	 * @return Order line with the given price level
 	 */
 	public OrderLine findOrCreate(double price) {
-		for(OrderLine cur = this; cur != null; cur = cur.getNext()) {
-			if(Math.abs(cur.getPrice() - price) < OrderBook.PRICE_EPSILON) {
+		// this logic is heavily optimized since profiling showed this is slow
+		OrderLine cur = this;
+		final double priceMinusEpsilon = price - OrderBook.PRICE_EPSILON;
+		final double pricePlusEpsilon = price + OrderBook.PRICE_EPSILON;
+		double nextPrice = cur.getPrice();
+		do {
+			if(nextPrice > priceMinusEpsilon && nextPrice < pricePlusEpsilon) {
 				// we found the matching price level
 				return cur;
 			}
 
 			// check if we can insert in the next position
 			final OrderLine next = cur.getNext();
+			nextPrice = next == null ? 0.0 : next.getPrice();
 			final boolean insertNext = (next == null)
-				|| (isAscending && price < next.getPrice() - OrderBook.PRICE_EPSILON)
-				|| (!isAscending && price > next.getPrice() + OrderBook.PRICE_EPSILON);
+				|| (isAscending && pricePlusEpsilon < nextPrice)
+				|| (!isAscending && priceMinusEpsilon > nextPrice);
 			if(insertNext) {
 				cur.insert(price);
 				return cur.getNext();
 			}
-		}
+
+			cur = next;
+
+		} while(cur != null);
 		throw new RuntimeException("Should not reach end of order line list without inserting");
 	}
 
