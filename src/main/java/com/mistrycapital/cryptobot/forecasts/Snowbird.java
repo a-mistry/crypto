@@ -51,11 +51,10 @@ public class Snowbird implements ForecastCalculator {
 				throw new RuntimeException(
 					"Wrong number of Snowbird coeffs for product " + product + ": " + coeffsString);
 			for(int i = 0; i < coeffs[productIndex].length; i++)
-				coeffs[productIndex][i] = Double.parseDouble(split[i]);
+			{ coeffs[productIndex][i] = Double.parseDouble(split[i]); }
 		}
 		variableMap = new HashMap<>();
-		for(String signal : signalsToUse)
-			variableMap.put(signal, 0.0);
+		for(String signal : signalsToUse) { variableMap.put(signal, 0.0); }
 	}
 
 	@Override
@@ -91,13 +90,29 @@ public class Snowbird implements ForecastCalculator {
 		// weighted mid and 2h ago
 		final double weightedMidRet100 = latest.weightedMid100 / latest.midPrice - 1;
 		double weightedMid2h100 = Double.NaN;
+		double weightedMid6h100 = Double.NaN;
+		double weightedMid12h100 = Double.NaN;
 		double mid2h = Double.NaN;
+		double mid6h = Double.NaN;
+		double mid12h = Double.NaN;
 		int weightedMidDataPoints = 0;
 		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values()) {
-			if(weightedMidDataPoints <= twoHourDatapoints) {
+			if(weightedMidDataPoints <= twelveHourDatapoints) {
+				weightedMidDataPoints++;
 				ProductSnapshot data = snapshot.getProductSnapshot(product);
-				weightedMid2h100 = data.weightedMid100;
-				mid2h = data.midPrice;
+
+				weightedMid12h100 = data.weightedMid100;
+				mid12h = data.midPrice;
+
+				if(weightedMidDataPoints <= twelveHourDatapoints) {
+					weightedMid6h100 = data.weightedMid100;
+					mid6h = data.midPrice;
+				}
+
+				if(weightedMidDataPoints <= twoHourDatapoints) {
+					weightedMid2h100 = data.weightedMid100;
+					mid2h = data.midPrice;
+				}
 			} else break;
 		}
 
@@ -106,7 +121,7 @@ public class Snowbird implements ForecastCalculator {
 		double price6h = Double.NaN;
 		double priceBTC6h = Double.NaN;
 		int retDataPoints = 0;
-		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values())
+		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values()) {
 			if(retDataPoints <= sixHourDatapoints) {
 				retDataPoints++;
 				ProductSnapshot data = snapshot.getProductSnapshot(product);
@@ -122,6 +137,7 @@ public class Snowbird implements ForecastCalculator {
 					price2h = data.lastPrice;
 				}
 			} else break;
+		}
 		final double lagRet = retDataPoints < MIN_DATA_POINTS ? Double.NaN : Math.log(latest.lastPrice / price2h);
 		final double lagRet6 = retDataPoints < MIN_DATA_POINTS ? Double.NaN : Math.log(latest.lastPrice / price6h);
 		final double lagBTCRet6 = retDataPoints < MIN_DATA_POINTS ? Double.NaN : Math.log(
@@ -133,7 +149,7 @@ public class Snowbird implements ForecastCalculator {
 		double sumVolxRet12 = 0.0;
 		double volume = 0.0;
 		int volDataPoints = 0;
-		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values())
+		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values()) {
 			if(volDataPoints <= twelveHourDatapoints) {
 				volDataPoints++;
 				ProductSnapshot data = snapshot.getProductSnapshot(product);
@@ -148,6 +164,7 @@ public class Snowbird implements ForecastCalculator {
 					sumVolxRet += volxRet;
 				}
 			} else break;
+		}
 		if(volDataPoints < MIN_DATA_POINTS) {
 			sumVolxRet = sumVolxRet12 = volume = Double.NaN;
 		}
@@ -160,7 +177,7 @@ public class Snowbird implements ForecastCalculator {
 		int newBidCount = 0;
 		int newAskCount = 0;
 		int sumDataPoints = 0;
-		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values())
+		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values()) {
 			if(sumDataPoints <= sixHourDatapoints) {
 				sumDataPoints++;
 
@@ -173,6 +190,7 @@ public class Snowbird implements ForecastCalculator {
 				newBidCount += data.newBidCount;
 				newAskCount += data.newAskCount;
 			} else break;
+		}
 		final double tradeRatio;
 		final double cancelRatio;
 		final double newRatio;
@@ -194,7 +212,7 @@ public class Snowbird implements ForecastCalculator {
 		double sumUpChange = 0.0;
 		double sumDownChange = 0.0;
 		int changeDataPoints = 0;
-		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values())
+		for(ConsolidatedSnapshot snapshot : consolidatedHistory.values()) {
 			if(changeDataPoints <= sixHourDatapoints) {
 				changeDataPoints++;
 
@@ -220,6 +238,7 @@ public class Snowbird implements ForecastCalculator {
 					intervalsToMax = changeDataPoints + 1;
 				}
 			} else break;
+		}
 		final double upRatio;
 		final double timeToMaxMin;
 		final double RSIRatio;
@@ -253,8 +272,10 @@ public class Snowbird implements ForecastCalculator {
 		variableMap.put("weightedMidRet10", latest.weightedMid10 / latest.midPrice - 1);
 		variableMap.put("weightedMidRet20", latest.weightedMid20 / latest.midPrice - 1);
 		variableMap.put("weightedMidRet50", latest.weightedMid50 / latest.midPrice - 1);
-		variableMap.put("weightedMidRet100", latest.weightedMid100 / latest.midPrice - 1);
+		variableMap.put("weightedMidRet100", weightedMidRet100);
 		variableMap.put("weightedMidRet2h100", weightedMid2h100 / mid2h - 1);
+		variableMap.put("weightedMidRet6h100", weightedMid6h100 / mid6h - 1);
+		variableMap.put("weightedMidRet12h100", weightedMid12h100 / mid12h - 1);
 
 		// These don't contribute much (0.1% R^2, low t-stats) but may be justified
 //		variableMap.put("bookRatio", bookRatio);

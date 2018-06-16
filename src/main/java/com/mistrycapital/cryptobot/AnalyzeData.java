@@ -75,15 +75,11 @@ public class AnalyzeData {
 				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6","weightedMidRet100"});
 		runRegressionPrintResults(joined, "fut_ret_2h",
 			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
-				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6","weightedMidRet100","weightedMidRet2h100"});
-//		runRegressionPrintResults(joined, "fut_ret_2h",
-//			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
-//				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6",
-//				"bookRatio", "tradeRatioxRet", "newRatioxRet", "cancelRatioxRet"});
+				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100", "weightedMidRet6h100"});
 
 		String[] finalXs =
 			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
-				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100", "weightedMidRet2h100"};
+				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100", "weightedMidRet6h100"};
 
 		printProductCoeffs(joined, "fut_ret_2h", finalXs);
 	}
