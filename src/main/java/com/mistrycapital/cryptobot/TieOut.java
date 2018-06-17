@@ -146,6 +146,24 @@ public class TieOut {
 		log.info("Return RMSE:     \t" + calcRMSE(returns, simReturns));
 		log.info("Position Correl: \t" + calcCorrelation(positions, simPositions));
 		log.info("Return Correl:   \t" + calcCorrelation(returns, simReturns));
+
+		// also output last 5 data points
+		log.info("");
+		log.info("Last 5 data points");
+		log.info(Joiner.on(',').join(new String[] {
+			TieOutColumn.POSITION_USD.toString(),
+			TieOutColumn.SIM_POSITION_USD.toString(),
+			TieOutColumn.RETURN.toString(),
+			TieOutColumn.SIM_RETURN.toString()
+		}));
+		for(int i=positions.size()-5; i<positions.size(); i++) {
+			log.info(Joiner.on(',').join(Arrays.asList(
+				positions.get(i),
+				simPositions.get(i),
+				returns.get(i),
+				simReturns.get(i)
+			)));
+		}
 	}
 
 	private static double calcRMSE(List<Double> x, List<Double> y) {
