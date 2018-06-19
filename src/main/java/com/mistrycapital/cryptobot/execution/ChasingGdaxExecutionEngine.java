@@ -25,8 +25,13 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.*;
 
+import static com.mistrycapital.cryptobot.execution.ChasingGdaxExecutionEngine.WorkingOrderStatus.POSTED;
+import static com.mistrycapital.cryptobot.execution.ChasingGdaxExecutionEngine.WorkingOrderStatus.POSTING;
 import static com.mistrycapital.cryptobot.gdax.client.GdaxClient.gdaxDecimalFormat;
 
+/**
+ * Execution algo that posts at the current BBO, then cancels/reposts on each tick
+ */
 public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcessor {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
@@ -47,6 +52,11 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 	/** Current view of prices. May be stale to the outside, not inside */
 	private final BBO[] workingPricesByProduct;
 
+	enum WorkingOrderStatus {
+		POSTING,
+		POSTED
+	}
+
 	class WorkingOrder {
 		final TradeInstruction instruction;
 		final UUID clientOid;
@@ -55,12 +65,14 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 		UUID orderId;
 		double filledAmountxPrice;
 		double filledAmount;
+		WorkingOrderStatus status;
 
 		WorkingOrder(final TradeInstruction instruction, final UUID clientOid, final double postedPrice) {
 			this.instruction = instruction;
 			this.clientOid = clientOid;
 			this.postedPrice = postedPrice;
 			origPrice = postedPrice;
+			status = POSTING;
 		}
 	}
 
@@ -180,30 +192,41 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 		}
 		if(cancelRepostList != null) {
 			for(WorkingOrder workingOrder : cancelRepostList)
-				cancelRepost(workingOrder, bbo);
+				if(workingOrder.status != POSTING)
+					cancelRepost(workingOrder, bbo);
 		}
 	}
 
 	private void cancelRepost(final WorkingOrder workingOrder, final BBO bbo) {
-		final double newPostedPrice = workingOrder.instruction.getOrderSide() == OrderSide.BUY
-			? bbo.bidPrice : bbo.askPrice;
-
 		if(workingOrder.orderId == null) {
-			log.error("Supposed to reprice order for " + workingOrder.instruction + " from "
-				+ workingOrder.postedPrice + " to new line at " + newPostedPrice + " but working order has no id");
+			log.error("Supposed to reprice order for " + workingOrder.instruction + " but working order has no id");
 			return;
 		}
 
+		workingOrder.status = POSTING;
 		final double oldPostedPrice = workingOrder.postedPrice;
-		workingOrder.postedPrice = newPostedPrice;
+
+		log.info("Cancel/reposting order to " + workingOrder.instruction + " old price " + oldPostedPrice + " line "
+			+ bbo.bidPrice + "-" + bbo.askPrice + " with 1 day GTT, client_oid " + workingOrder.clientOid);
 
 		CompletableFuture<OrderInfo> future = gdaxClient.cancelOrder(workingOrder.orderId)
 			.thenCompose(json -> {
 				synchronized(lockObj) {
 					postedClientOids.put(workingOrder.clientOid, workingOrder);
 				}
-				log.info("Reposting order to " + workingOrder.instruction + " at " + newPostedPrice
+
+				// refresh prices here, just before we send the order
+				final double newPostedPrice = workingOrder.instruction.getOrderSide() == OrderSide.BUY
+					? bbo.bidPrice : bbo.askPrice;
+				workingOrder.postedPrice = newPostedPrice;
+
+				log.info("Canceled, now reposting order to " + workingOrder.instruction + " at " + newPostedPrice
 					+ " with 1 day GTT, client_oid " + workingOrder.clientOid);
+				runInBackground(() ->
+					twilioSender.sendMessage("Reposting order to " + workingOrder.instruction + " from "
+						+ gdaxDecimalFormat.format(oldPostedPrice) + " to " +
+						gdaxDecimalFormat.format(newPostedPrice)));
+
 				final TradeInstruction instruction = workingOrder.instruction;
 				return gdaxClient.placePostOnlyLimitOrder(instruction.getProduct(), instruction.getOrderSide(),
 					instruction.getAmount(), newPostedPrice, workingOrder.clientOid, TimeUnit.DAYS);
@@ -212,10 +235,6 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 		try {
 			future.get();
 			// TODO: record cancel/repost to db
-
-			runInBackground(() ->
-				twilioSender.sendMessage("Reposting order to " + workingOrder.instruction + "from " + oldPostedPrice
-					+ " to " + newPostedPrice));
 
 		} catch(ExecutionException | InterruptedException e) {
 			if(e.getCause().getClass().isAssignableFrom(GdaxClient.GdaxException.class)) {
@@ -239,7 +258,10 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 
 	@Override
 	public void process(final Book msg) {
-		// nothing to do
+		// when we first start, prices are NaN, but this message means the order book should have the info
+		final OrderBook orderBook = orderBookManager.getBook(msg.getProduct());
+		final BBO bbo = workingPricesByProduct[msg.getProduct().getIndex()];
+		orderBook.recordBBO(bbo);
 	}
 
 	@Override
@@ -255,6 +277,7 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 		}
 		if(workingOrder != null) {
 			workingOrder.orderId = msg.getOrderId();
+			workingOrder.status = POSTED;
 			log.debug("Got RECEIVED message for post order to " + workingOrder.instruction + " client_oid " + clientOid
 				+ " maps to gdax order_id: " + workingOrder.orderId);
 			runInBackground(() -> dbRecorder.updatePostOnlyId(clientOid, workingOrder.orderId));
@@ -280,7 +303,9 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 		final Product product = msg.getProduct();
 		final WorkingOrder workingOrder;
 		synchronized(lockObj) {
-			workingOrder = workingOrdersById.get(orderId);
+			// don't consider "done" if we are cancel/reposting
+			WorkingOrder temp = workingOrdersById.get(orderId);
+			workingOrder = temp != null && temp.status == POSTED ? temp : null;
 			if(workingOrder != null) {
 				workingOrdersById.remove(orderId);
 				workingOrdersByProduct.get(product.getIndex()).remove(workingOrder);
@@ -299,11 +324,13 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 			).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
 			final double filledAvgPrice = workingOrder.filledAmount == 0
 				? 0.0 : workingOrder.filledAmountxPrice / workingOrder.filledAmount;
+			final String filledAvgPriceStr = gdaxDecimalFormat.format(filledAvgPrice);
 			final double slippage = Math.abs(workingOrder.origPrice - filledAvgPrice);
+			final String slippageStr = gdaxDecimalFormat.format(slippage);
 
 			log.info("Post order " + orderId + " was done at " + timeStr
-				+ " with reason " + msg.getReason() + " and remaining size " + remainingSizeStr
-				+ ", original size was " + originalSizeStr);
+				+ " with reason " + msg.getReason() + " filled at " + filledAvgPriceStr + " and remaining size "
+				+ remainingSizeStr + ", slippage was " + slippageStr + " & original size was " + originalSizeStr);
 
 
 			// Record in db and send text message
@@ -314,7 +341,7 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 				//TODO: record post finished, slippage amount
 
 				final String text = (msg.getOrderSide() == OrderSide.BUY ? "Bot " : "Sold ")
-					+ filledAmountStr + " " + msg.getProduct() + " at " + filledAvgPrice
+					+ filledAmountStr + " " + msg.getProduct() + " at " + filledAvgPriceStr
 					+ " with " + slippage + " slippage & " + remainingSizeStr + " remaining";
 				twilioSender.sendMessage(text);
 			});
