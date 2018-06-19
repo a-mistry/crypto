@@ -170,6 +170,16 @@ public class GdaxClient {
 	}
 
 	/**
+	 * Cancel all outstanding orders
+	 *
+	 * @return Json response from server. On success, this will be an array with order ids of all canceled orders.
+	 * On error server will throw a 404, with the json result giving the error in the message field
+	 */
+	public CompletableFuture<JsonElement> cancelAll() {
+		return submit("/orders", "DELETE", null);
+	}
+
+	/**
 	 * Get top of book for the given product
 	 *
 	 * @param product Product to trade (e.g. BTC-USD)

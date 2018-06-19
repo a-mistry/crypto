@@ -26,7 +26,7 @@ public interface Tactic {
 		double price);
 
 	/**
-	 * Callback from risk if the trade is rejected
+	 * Callback from risk or execution engine if the trade is rejected
 	 */
 	void notifyReject(final TradeInstruction instruction);
 

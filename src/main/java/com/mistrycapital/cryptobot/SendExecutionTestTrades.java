@@ -8,6 +8,7 @@ import com.mistrycapital.cryptobot.appender.GdaxMessageAppender;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
 import com.mistrycapital.cryptobot.database.DBRecorder;
 import com.mistrycapital.cryptobot.execution.Aggression;
+import com.mistrycapital.cryptobot.execution.ChasingGdaxExecutionEngine;
 import com.mistrycapital.cryptobot.execution.GdaxExecutionEngine;
 import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.gdax.GdaxPositionsProvider;
@@ -71,7 +72,7 @@ public class SendExecutionTestTrades {
 			new TwilioSender(credentials.getProperty("TwilioAccountSid"), credentials.getProperty("TwilioAuthToken"));
 		DBRecorder dbRecorder = new DBRecorder(timeKeeper, accountant, orderBookManager, "mistrycapital",
 			credentials.getProperty("MysqlUser"), credentials.getProperty("MysqlPassword"));
-		GdaxExecutionEngine executionEngine = new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager,
+		ChasingGdaxExecutionEngine executionEngine = new ChasingGdaxExecutionEngine(accountant, orderBookManager,
 			dbRecorder, twilioSender, tactic, gdaxClient);
 
 		gdaxWebSocket.subscribe(orderBookManager);
@@ -88,11 +89,11 @@ public class SendExecutionTestTrades {
 		Thread.sleep(20000); // wait for order books to be built
 
 		TradeInstruction instruction =
-			new TradeInstruction(Product.BTC_USD, 0.001, OrderSide.SELL, Aggression.POST_ONLY, 0.01);
+			new TradeInstruction(Product.LTC_USD, 0.001, OrderSide.BUY, Aggression.POST_ONLY, 0.01);
 		log.debug("Instruction object is " + instruction);
 		executionEngine.trade(Collections.singletonList(instruction));
 
-		Thread.sleep(300000); // do nothing for 5 min
+		Thread.sleep(3000000); // do nothing for 50 min
 
 		log.info("Shutting down");
 		System.exit(1);
@@ -115,7 +116,7 @@ public class SendExecutionTestTrades {
 
 		@Override
 		public void notifyReject(final TradeInstruction instruction) {
-
+			log.info("REJECTED ORDER " + instruction);
 		}
 
 		@Override

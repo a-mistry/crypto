@@ -14,7 +14,7 @@ public class OrderBook {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
 	/** Tolerance for equating two prices */
-	static final double PRICE_EPSILON = 0.00000001;
+	public static final double PRICE_EPSILON = 0.00000001;
 
 	private final TimeKeeper timeKeeper;
 	private final Product product;

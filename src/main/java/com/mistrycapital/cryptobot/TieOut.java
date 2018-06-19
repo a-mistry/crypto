@@ -156,7 +156,7 @@ public class TieOut {
 			TieOutColumn.RETURN.toString(),
 			TieOutColumn.SIM_RETURN.toString()
 		}));
-		for(int i=positions.size()-5; i<positions.size(); i++) {
+		for(int i = positions.size() - 5; i < positions.size(); i++) {
 			log.info(Joiner.on(',').join(Arrays.asList(
 				positions.get(i),
 				simPositions.get(i),
