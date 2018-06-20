@@ -282,4 +282,70 @@ class DBRecorderTest {
 		statement.close();
 		con.close();
 	}
+
+	@Test
+	public void shouldRecordChasingPost()
+		throws Exception
+	{
+		UUID clientOid = UUID.randomUUID();
+		TradeInstruction instruction =
+			new TradeInstruction(Product.ETH_USD, 3.14, OrderSide.BUY, Aggression.POST_ONLY, 0.005);
+		dbRecorder.recordPostOnlyAttempt(instruction, clientOid, 50.0);
+
+		UUID orderId = UUID.randomUUID();
+
+		JsonParser jsonParser = new JsonParser();
+		JsonObject json = jsonParser.parse("{\n" +
+			"    \"type\": \"match\",\n" +
+			"    \"trade_id\": 10,\n" +
+			"    \"sequence\": 50,\n" +
+			"    \"maker_order_id\": \"" + orderId + "\",\n" +
+			"    \"taker_order_id\": \"132fb6ae-456b-4654-b4e0-d681ac05cea1\",\n" +
+			"    \"time\": \"2014-11-07T08:19:27.028459Z\",\n" +
+			"    \"product_id\": \"ETH-USD\",\n" +
+			"    \"size\": \"2.0\",\n" +
+			"    \"price\": \"50.0\",\n" +
+			"    \"side\": \"buy\"\n" +
+			"}").getAsJsonObject();
+		dbRecorder.recordPostOnlyFillWithSlippage(new Match(json), clientOid, 49.9);
+		dbRecorder.updatePostWithSlippage(clientOid, 2.0, 50.0, 0.10);
+
+		Connection con = dataSource.getConnection();
+		PreparedStatement statement = con.prepareStatement("SELECT * FROM crypto_trades WHERE order_id=?");
+		statement.setString(1, orderId.toString());
+		ResultSet results = statement.executeQuery();
+		assertTrue(results.next());
+		assertEquals(clientOid.toString(), results.getString("client_oid"));
+		final long jsonTimeNanos = 1415348367028459000L;
+		assertEquals(jsonTimeNanos / 1000000000L, results.getTimestamp("time").getTime() / 1000L, 1);
+		assertEquals("ETH-USD", results.getString("product"));
+		assertEquals("BUY", results.getString("side"));
+		assertEquals(2.0, results.getDouble("amount"), EPSILON);
+		assertEquals(50.0, results.getDouble("price"), EPSILON);
+		assertEquals(100.0, results.getDouble("executed_value"), EPSILON);
+		assertEquals(0.0, results.getDouble("fees_usd"), EPSILON);
+		assertEquals(49.9, results.getDouble("orig_price"), EPSILON);
+		assertEquals(0.1, results.getDouble("slippage"), EPSILON);
+		assertFalse(results.next());
+		statement.close();
+		statement = con.prepareStatement("SELECT * FROM crypto_posts WHERE client_oid=?");
+		statement.setString(1, clientOid.toString());
+		results = statement.executeQuery();
+		assertTrue(results.next());
+		// IMPORTANT NOTE
+		// Mysql does not resolve milliseconds; it will round to the nearest second. So we have no need to check nanos here
+		// and need to put a second tolerance
+		assertEquals(timeKeeper.epochNanos() / 1000000000L, results.getTimestamp("time").getTime() / 1000L, 1);
+		assertEquals("ETH-USD", results.getString("product"));
+		assertEquals("BUY", results.getString("side"));
+		assertEquals(3.14, results.getDouble("amount"), EPSILON);
+		assertEquals(50.0, results.getDouble("price"), EPSILON);
+		assertEquals(0.005, results.getDouble("forecast"), EPSILON);
+		assertEquals(2.0, results.getDouble("filled_amount"), EPSILON);
+		assertEquals(50.0, results.getDouble("filled_price"), EPSILON);
+		assertEquals(0.1, results.getDouble("slippage"), EPSILON);
+		assertFalse(results.next());
+		statement.close();
+		con.close();
+	}
 }

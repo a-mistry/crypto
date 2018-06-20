@@ -287,4 +287,63 @@ public class DBRecorder {
 		con.close();
 		return map;
 	}
+
+	/**
+	 * Records trade to the database for a post-only fill with possible slippage
+	 */
+	public void recordPostOnlyFillWithSlippage(Match msg, UUID clientOid, double origPrice) {
+		try {
+			Connection con = dataSource.getConnection();
+			con.setAutoCommit(false);
+			con.commit();
+			PreparedStatement statement = con.prepareStatement("INSERT INTO crypto_trades"
+				+ " (time,client_oid,order_id,product,side,amount,price,executed_value,fees_usd,orig_price,slippage)"
+				+ " VALUES (?,?,?,?,?,?,?,?,?,?,?)");
+			final long nanos = msg.getTimeMicros() * 1000;
+			Timestamp timestamp = new Timestamp((nanos / 1000000000L) * 1000);
+			timestamp.setNanos((int) (nanos % 1000000000L));
+			statement.setTimestamp(1, timestamp);
+			statement.setString(2, clientOid.toString());
+			statement.setString(3, msg.getMakerOrderId().toString());
+			statement.setString(4, msg.getProduct().toString());
+			statement.setString(5, msg.getOrderSide().toString());
+			statement.setDouble(6, msg.getSize());
+			statement.setDouble(7, msg.getPrice());
+			statement.setDouble(8, msg.getSize() * msg.getPrice());
+			statement.setDouble(9, 0.0);
+			statement.setDouble(10, origPrice);
+			statement.setDouble(11, Math.abs(origPrice - msg.getPrice()));
+			statement.executeUpdate();
+			statement.close();
+			con.commit();
+			con.close();
+		} catch(Exception e) {
+			log.error("Could not record post-only fill with slippage to database " + msg.getOrderSide() + " "
+				+ msg.getSize() + " of " + msg.getProduct() + " at " + msg.getPrice(), e);
+		}
+	}
+
+	/**
+	 * After a chasing post is done, updates with the filled amount, price, and slippage
+	 */
+	public void updatePostWithSlippage(UUID clientOid, double filledAmount, double filledPrice, double slippage) {
+		try {
+			Connection con = dataSource.getConnection();
+			con.setAutoCommit(false);
+			con.commit();
+			PreparedStatement statement = con.prepareStatement("UPDATE crypto_posts"
+				+ " SET filled_amount=?, filled_price=?, slippage=? WHERE client_oid=?");
+			statement.setDouble(1, filledAmount);
+			statement.setDouble(2, filledPrice);
+			statement.setDouble(3, slippage);
+			statement.setString(4, clientOid.toString());
+			statement.executeUpdate();
+			statement.close();
+			con.commit();
+			con.close();
+		} catch(Exception e) {
+			log.error("Could not record done post fill and slippage to database client oid " + clientOid + " "
+				+ filledAmount + " at " + filledPrice + " slippage " + slippage, e);
+		}
+	}
 }

@@ -104,7 +104,6 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 				JsonArray jsonArray = json.getAsJsonArray();
 				for(JsonElement element : jsonArray) {
 					log.info("On execution engine restart canceled order " + element.getAsString());
-					// TODO: should log this to db
 				}
 			});
 	}
@@ -222,10 +221,6 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 
 				log.info("Canceled, now reposting order to " + workingOrder.instruction + " at " + newPostedPrice
 					+ " with 1 day GTT, client_oid " + workingOrder.clientOid);
-				runInBackground(() ->
-					twilioSender.sendMessage("Reposting order to " + workingOrder.instruction + " from "
-						+ gdaxDecimalFormat.format(oldPostedPrice) + " to " +
-						gdaxDecimalFormat.format(newPostedPrice)));
 
 				final TradeInstruction instruction = workingOrder.instruction;
 				return gdaxClient.placePostOnlyLimitOrder(instruction.getProduct(), instruction.getOrderSide(),
@@ -234,8 +229,6 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 
 		try {
 			future.get();
-			// TODO: record cancel/repost to db
-
 		} catch(ExecutionException | InterruptedException e) {
 			if(e.getCause().getClass().isAssignableFrom(GdaxClient.GdaxException.class)) {
 				log.error("Could not cancel/repost order to " + workingOrder.instruction, e);
@@ -244,7 +237,7 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 					workingOrdersById.remove(workingOrder.orderId);
 				}
 				tactic.notifyReject(workingOrder.instruction);
-				// TODO: should log this to db
+				// TODO: should probably log this cancel to db
 			} else {
 				throw new RuntimeException(e);
 			}
@@ -280,7 +273,7 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 			workingOrder.status = POSTED;
 			log.debug("Got RECEIVED message for post order to " + workingOrder.instruction + " client_oid " + clientOid
 				+ " maps to gdax order_id: " + workingOrder.orderId);
-			runInBackground(() -> dbRecorder.updatePostOnlyId(clientOid, workingOrder.orderId));
+			// No need to save in database here because we keep track of the client oid through fills
 		}
 	}
 
@@ -338,7 +331,7 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 				if(msg.getRemainingSize() > 0)
 					dbRecorder.recordPostOnlyCancel(msg, originalSize);
 
-				//TODO: record post finished, slippage amount
+				dbRecorder.updatePostWithSlippage(workingOrder.clientOid, filledAmount, filledAvgPrice, slippage);
 
 				final String text = (msg.getOrderSide() == OrderSide.BUY ? "Bot " : "Sold ")
 					+ filledAmountStr + " " + msg.getProduct() + " at " + filledAvgPriceStr
@@ -371,7 +364,8 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 			accountant.recordTrade(Currency.USD, -buySign * size * price,
 				msg.getProduct().getCryptoCurrency(), buySign * size);
 
-			runInBackground(() -> dbRecorder.recordPostOnlyFill(msg));
+			runInBackground(() ->
+				dbRecorder.recordPostOnlyFillWithSlippage(msg, workingOrder.clientOid, workingOrder.origPrice));
 		}
 	}
 
