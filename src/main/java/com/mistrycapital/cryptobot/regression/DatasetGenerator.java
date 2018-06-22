@@ -20,6 +20,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -87,30 +88,37 @@ public class DatasetGenerator {
 		var table = new Table<TimeProduct>();
 		try {
 			table.add("fut_ret_2h", new Column<TimeProduct>());
-			table.add("fut_ret_6h", new Column<TimeProduct>());
 		} catch(DuplicateColumnException e) {
 			throw new RuntimeException(e);
 		}
 
-		// TODO: Convert to a generic CSV to Table reader
 		for(Path returnFile : getReturnFiles()) {
 
 			try(
 				Reader in = Files.newBufferedReader(returnFile);
 				CSVParser parser = CSVFormat.EXCEL.withFirstRecordAsHeader().parse(in);
 			) {
+				// convert list of columns to indices
+				List<String> columnNames = Arrays.asList(
+					"fut_ret_2h"
+				);
+				List<Column<TimeProduct>> columns = columnNames.stream()
+					.map(table::column)
+					.collect(Collectors.toList());
+				Map<String,Integer> headerMap = parser.getHeaderMap();
+				List<Integer> columnIndices = columnNames.stream()
+					.map(headerMap::get)
+					.collect(Collectors.toList());
+
 				// read each row and add to columns
 				for(CSVRecord record : parser) {
 					var timeNanos = Long.parseLong(record.get("unix_timestamp")) * 1000000L;
 					var product = Product.parse(record.get("product"));
 					var key = new TimeProduct(timeNanos, product);
-					for(String columnName : Arrays.asList(
-						"fut_ret_2h",
-						"fut_ret_6h"
-					)) {
-						String value = record.get(columnName);
+					for(int i=0; i<columnNames.size(); i++) {
+						String value = record.get(columnIndices.get(i));
 						if(value != null && !value.isEmpty())
-							table.column(columnName).add(key, Double.parseDouble(value));
+							columns.get(i).add(key, Double.parseDouble(value));
 					}
 				}
 			}

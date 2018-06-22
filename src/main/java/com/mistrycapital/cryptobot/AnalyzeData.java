@@ -109,14 +109,14 @@ public class AnalyzeData {
 		System.out.println("Dependent var:  \t" + yCol);
 		System.out.println("N:              \t" + results.getN());
 		System.out.println("R^2:            \t" + String.format("%6.4f", results.getRSquared()));
-		System.out.println("       Variable     Coefficient       Std Error     T-stat");
-		System.out.println("---------------  --------------  --------------  ---------");
+		System.out.println("            Variable     Coefficient       Std Error     T-stat");
+		System.out.println("--------------------  --------------  --------------  ---------");
 		final var coeffs = results.getParameterEstimates();
 		final var stdErrs = results.getStdErrorOfEstimates();
 		for(int i = 0; i < coeffs.length; i++) {
 			final var variableName = i == 0 ? "Constant" : xCols[i - 1];
-			System.out.println(String.format("%15s %15.8f %15.8f %10.4f",
-				variableName.substring(0, Math.min(variableName.length(), 15)),
+			System.out.println(String.format("%20s %15.8f %15.8f %10.4f",
+				variableName.substring(0, Math.min(variableName.length(), 20)),
 				coeffs[i], stdErrs[i], coeffs[i] / stdErrs[i]));
 		}
 		return results;
