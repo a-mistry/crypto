@@ -5,6 +5,7 @@ import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.regression.*;
+import com.mistrycapital.cryptobot.sim.SampleTesting;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
 import org.apache.commons.math3.stat.regression.RegressionResults;
@@ -40,8 +41,13 @@ public class AnalyzeData {
 		Table<TimeProduct> futureReturns = datasetGenerator.getReturnDataset();
 		log.info("Loading returns took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
 		startNanos = System.nanoTime();
+
+		SampleTesting sampleTesting = new SampleTesting(properties);
 		var joined = forecastInputs.join(futureReturns)
-			.filter(key -> key.timeInNanos > 1517448021000000000L); // discard Jan since it is spotty
+			.filter(key ->
+				key.timeInNanos > 1517448021000000000L 				// discard Jan since it is spotty
+				&& sampleTesting.isSampleValid(key.timeInNanos)		// filter in/out/full sample
+			);
 		log.info("Joining data took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
 		startNanos = System.nanoTime();
 
@@ -49,7 +55,8 @@ public class AnalyzeData {
 		if(writeOut) {
 			try(
 				BufferedWriter out = Files.newBufferedWriter(dataDir.resolve("temp.csv"), StandardCharsets.UTF_8);
-			) {
+			)
+			{
 				boolean first = true;
 				for(Row<TimeProduct> row : joined) {
 					if(first) {
@@ -72,7 +79,7 @@ public class AnalyzeData {
 				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6"});
 		runRegressionPrintResults(joined, "fut_ret_2h",
 			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
-				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6","weightedMidRet100"});
+				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100"});
 		runRegressionPrintResults(joined, "fut_ret_2h",
 			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
 				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100", "weightedMidRet12h100"});
