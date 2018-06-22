@@ -7,6 +7,7 @@ import com.mistrycapital.cryptobot.appender.*;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
 import com.mistrycapital.cryptobot.database.DBRecorder;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
+import com.mistrycapital.cryptobot.execution.ChasingGdaxExecutionEngine;
 import com.mistrycapital.cryptobot.execution.ExecutionEngine;
 import com.mistrycapital.cryptobot.execution.GdaxExecutionEngine;
 import com.mistrycapital.cryptobot.execution.TradeInstruction;
@@ -95,7 +96,7 @@ public class TradeCrypto {
 			new TwilioSender(credentials.getProperty("TwilioAccountSid"), credentials.getProperty("TwilioAuthToken"));
 		DBRecorder dbRecorder = new DBRecorder(timeKeeper, accountant, orderBookManager, "mistrycapital",
 			credentials.getProperty("MysqlUser"), credentials.getProperty("MysqlPassword"));
-		ExecutionEngine executionEngine = new GdaxExecutionEngine(timeKeeper, accountant, orderBookManager,
+		ExecutionEngine executionEngine = new ChasingGdaxExecutionEngine(accountant, orderBookManager,
 			dbRecorder, twilioSender, tactic, gdaxClient);
 		// use this if we want to test without sending orders
 		//ExecutionEngine executionEngine = instructions -> {};

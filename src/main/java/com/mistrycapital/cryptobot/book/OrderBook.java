@@ -362,6 +362,7 @@ public class OrderBook {
 			insertNonSynchronized(bookOrder.orderId, bookOrder.price, bookOrder.size, book.getTimeMicros(),
 				OrderSide.SELL, orderLine);
 		}
+		orderLineMap = null;
 	}
 
 	@Override
