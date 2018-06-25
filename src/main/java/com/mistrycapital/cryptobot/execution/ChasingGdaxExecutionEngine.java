@@ -6,6 +6,7 @@ import com.mistrycapital.cryptobot.accounting.Accountant;
 import com.mistrycapital.cryptobot.book.BBO;
 import com.mistrycapital.cryptobot.book.OrderBook;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
+import com.mistrycapital.cryptobot.book.TopOfBookSubscriber;
 import com.mistrycapital.cryptobot.database.DBRecorder;
 import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
 import com.mistrycapital.cryptobot.gdax.client.OrderInfo;
@@ -32,7 +33,7 @@ import static com.mistrycapital.cryptobot.gdax.client.GdaxClient.gdaxDecimalForm
 /**
  * Execution algo that posts at the current BBO, then cancels/reposts on each tick
  */
-public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcessor {
+public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcessor, TopOfBookSubscriber {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
 	private final OrderBookManager orderBookManager;
@@ -140,7 +141,7 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 
 		final CompletableFuture<OrderInfo> orderInfoFuture;
 		orderInfoFuture = gdaxClient.placePostOnlyLimitOrder(product, instruction.getOrderSide(),
-			instruction.getAmount(), postedPrice, clientOid, TimeUnit.DAYS);
+			instruction.getAmount(), postedPrice, clientOid, TimeUnit.HOURS);
 		log.info("Placed post-only order to " + instruction + " at " + postedPrice + " with 1 day GTT, client_oid "
 			+ clientOid);
 
@@ -224,7 +225,7 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 
 				final TradeInstruction instruction = workingOrder.instruction;
 				return gdaxClient.placePostOnlyLimitOrder(instruction.getProduct(), instruction.getOrderSide(),
-					instruction.getAmount(), newPostedPrice, workingOrder.clientOid, TimeUnit.DAYS);
+					instruction.getAmount(), newPostedPrice, workingOrder.clientOid, TimeUnit.HOURS);
 			});
 
 		try {
@@ -247,6 +248,16 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 	/** Run task in the background - used to run DB queries / twilio calls outside of this thread */
 	private void runInBackground(Runnable runnable) {
 		executorService.submit(runnable);
+	}
+
+	@Override
+	public void onBidChanged(final Product product, final double bidPrice) {
+
+	}
+
+	@Override
+	public void onAskChanged(final Product product, final double askPrice) {
+
 	}
 
 	@Override

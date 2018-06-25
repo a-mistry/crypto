@@ -22,6 +22,12 @@ public class OrderBookManager implements GdaxMessageProcessor {
 		return orderBooks[product.getIndex()];
 	}
 
+	/** Adds a subscriber that listens to top of book updates */
+	public void subscribe(TopOfBookSubscriber topOfBookSubscriber) {
+		for(OrderBook orderBook : orderBooks)
+			orderBook.subscribe(topOfBookSubscriber);
+	}
+
 	@Override
 	public void process(Book msg) {
 		bookProcessors[msg.getProduct().getIndex()].process(msg);

@@ -5,6 +5,7 @@ import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.appender.*;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
+import com.mistrycapital.cryptobot.book.TopOfBookSubscriber;
 import com.mistrycapital.cryptobot.database.DBRecorder;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
 import com.mistrycapital.cryptobot.execution.ChasingGdaxExecutionEngine;
@@ -115,6 +116,8 @@ public class TradeCrypto {
 		gdaxWebSocket.subscribe(dynamicTracker);
 		if(executionEngine instanceof GdaxMessageProcessor)
 			gdaxWebSocket.subscribe((GdaxMessageProcessor) executionEngine);
+		if(executionEngine instanceof TopOfBookSubscriber)
+			orderBookManager.subscribe((TopOfBookSubscriber) executionEngine);
 
 		URI gdaxWebSocketURI = new URI("wss://ws-feed.gdax.com");
 		WebSocketClient socketClient = new WebSocketClient(new SslContextFactory());

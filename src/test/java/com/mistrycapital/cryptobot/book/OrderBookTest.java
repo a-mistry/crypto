@@ -1,6 +1,8 @@
 package com.mistrycapital.cryptobot.book;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.gdax.websocket.*;
@@ -164,6 +166,8 @@ class OrderBookTest {
 		TimeKeeper timeKeeper = new FakeTimeKeeper();
 		OrderBook book = new OrderBook(timeKeeper, Product.BTC_USD);
 		GdaxMessageProcessor processor = book.getBookProcessor();
+		TopOfBookSubscriber topOfBookSubscriber = mock(TopOfBookSubscriber.class);
+		book.subscribe(topOfBookSubscriber);
 
 		UUID orderId1 = UUID.randomUUID();
 		UUID orderId2 = UUID.randomUUID();
@@ -179,12 +183,14 @@ class OrderBookTest {
 		msgJson.addProperty("price", 20.0);
 		msgJson.addProperty("remaining_size", 1.0);
 		processor.process(new Open(msgJson));
+		verify(topOfBookSubscriber).onBidChanged(Product.BTC_USD, 20.0);
 
 		msgJson.addProperty("side", "sell");
 		msgJson.addProperty("order_id", orderId2.toString());
 		msgJson.addProperty("price", 22.0);
 		msgJson.addProperty("remaining_size", 2.0);
 		processor.process(new Open(msgJson));
+		verify(topOfBookSubscriber).onAskChanged(Product.BTC_USD, 22.0);
 		msgJson.addProperty("order_id", orderId3.toString());
 		msgJson.addProperty("price", 22.0);
 		msgJson.addProperty("remaining_size", 0.5);
@@ -246,6 +252,7 @@ class OrderBookTest {
 		msgJson.addProperty("remaining_size", 0.5);
 		msgJson.addProperty("reason", "canceled");
 		processor.process(new Done(msgJson));
+		verify(topOfBookSubscriber).onAskChanged(Product.BTC_USD, 23.0);
 
 		book.recordBBO(bbo);
 		assertEquals(20.0, bbo.bidPrice, EPSILON);

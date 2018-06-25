@@ -23,6 +23,7 @@ public class OrderBook {
 	private final OrderLineList asks;
 	private final Queue<Order> orderPool;
 	private final BookProcessor bookProcessor;
+	private TopOfBookSubscriber[] topOfBookSubscribers;
 
 	private final Queue<UUID> recentlyDoneQueue;
 	private final Set<UUID> recentlyDoneSet;
@@ -33,6 +34,7 @@ public class OrderBook {
 	public OrderBook(final TimeKeeper timeKeeper, final Product product) {
 		this.timeKeeper = timeKeeper;
 		this.product = product;
+		topOfBookSubscribers = new TopOfBookSubscriber[0];
 		bids = new OrderLineList(false);
 		asks = new OrderLineList(true);
 		activeOrders = new HashMap<>(10000);
@@ -48,6 +50,14 @@ public class OrderBook {
 
 	public GdaxMessageProcessor getBookProcessor() {
 		return bookProcessor;
+	}
+
+	/** Adds a subscriber that will listen for top of book updates */
+	public void subscribe(TopOfBookSubscriber topOfBookSubscriber) {
+		TopOfBookSubscriber[] newSubscribers = new TopOfBookSubscriber[topOfBookSubscribers.length + 1];
+		System.arraycopy(topOfBookSubscribers, 0, newSubscribers, 0, topOfBookSubscribers.length);
+		newSubscribers[newSubscribers.length - 1] = topOfBookSubscriber;
+		topOfBookSubscribers = newSubscribers;
 	}
 
 	//////////////////////////////////////////////////////
@@ -229,15 +239,36 @@ public class OrderBook {
 	/**
 	 * Inserts a new order into the book from the given Open message
 	 */
-	private synchronized void insert(final Open msg) {
+	private void insert(final Open msg) {
 		final OrderLine orderLine;
-		if(msg.getOrderSide() == OrderSide.BUY) {
-			orderLine = bids.findOrCreate(msg.getPrice());
-		} else {
-			orderLine = asks.findOrCreate(msg.getPrice());
+		final double topPrice; // top of book price before this insert
+		final double msgPrice = msg.getPrice();
+
+		synchronized(this) {
+			if(msg.getOrderSide() == OrderSide.BUY) {
+				topPrice = bids.getFirstPrice();
+				orderLine = bids.findOrCreate(msgPrice);
+			} else {
+				topPrice = asks.getFirstPrice();
+				orderLine = asks.findOrCreate(msgPrice);
+			}
+			insertNonSynchronized(msg.getOrderId(), msgPrice, msg.getRemainingSize(), msg.getTimeMicros(),
+				msg.getOrderSide(), orderLine);
 		}
-		insertNonSynchronized(msg.getOrderId(), msg.getPrice(), msg.getRemainingSize(), msg.getTimeMicros(),
-			msg.getOrderSide(), orderLine);
+
+		// check if insert caused new top of book and fire subscribers
+		// this is done outside of synchronization
+		if(msg.getOrderSide() == OrderSide.BUY) {
+			if(Double.isNaN(topPrice) || msgPrice > topPrice + PRICE_EPSILON) {
+				for(TopOfBookSubscriber subscriber : topOfBookSubscribers)
+					subscriber.onBidChanged(product, msgPrice);
+			}
+		} else {
+			if(Double.isNaN(topPrice) || msgPrice < topPrice - PRICE_EPSILON) {
+				for(TopOfBookSubscriber subscriber : topOfBookSubscribers)
+					subscriber.onAskChanged(product, msgPrice);
+			}
+		}
 	}
 
 	/**
@@ -315,20 +346,44 @@ public class OrderBook {
 	/**
 	 * Removes a given order from the book
 	 */
-	private synchronized void remove(final UUID orderId) {
-		// make sure we don't add this order anytime soon (for example if we rebuild the book from stale data)
-		while(recentlyDoneQueue.size() >= recentlyDoneTracked) {
-			UUID oldestId = recentlyDoneQueue.poll();
-			recentlyDoneSet.remove(oldestId);
-		}
-		recentlyDoneSet.add(orderId);
-		recentlyDoneQueue.offer(orderId);
+	private void remove(final UUID orderId) {
+		final double prevTopPrice;
+		final double newTopPrice;
+		final boolean isBuy;
 
-		final Order order = activeOrders.get(orderId);
-		if(order != null) {
-			activeOrders.remove(orderId);
-			order.destroy();
-			orderPool.add(order);
+		synchronized(this) {
+			// make sure we don't add this order anytime soon (for example if we rebuild the book from stale data)
+			while(recentlyDoneQueue.size() >= recentlyDoneTracked) {
+				UUID oldestId = recentlyDoneQueue.poll();
+				recentlyDoneSet.remove(oldestId);
+			}
+			recentlyDoneSet.add(orderId);
+			recentlyDoneQueue.offer(orderId);
+
+			final Order order = activeOrders.get(orderId);
+			if(order == null) {
+				prevTopPrice = newTopPrice = 0.0; // these must be the same
+				isBuy = true; // doesn't matter what this is
+			} else {
+				// need to check if removing this order will change the top of book and fire subscriptions if so
+				isBuy = order.getSide() == OrderSide.BUY;
+				prevTopPrice = isBuy ? bids.getFirstPrice() : asks.getFirstPrice();
+
+				activeOrders.remove(orderId);
+				order.destroy();
+				orderPool.add(order);
+
+				newTopPrice = isBuy ? bids.getFirstPrice() : asks.getFirstPrice();
+			}
+		}
+
+		// trigger subscriptions outside of synchronized block
+		if(Math.abs(newTopPrice - prevTopPrice) > PRICE_EPSILON) {
+			for(TopOfBookSubscriber subscriber : topOfBookSubscribers)
+				if(isBuy)
+					subscriber.onBidChanged(product, newTopPrice);
+				else
+					subscriber.onAskChanged(product, newTopPrice);
 		}
 	}
 
@@ -362,7 +417,7 @@ public class OrderBook {
 			insertNonSynchronized(bookOrder.orderId, bookOrder.price, bookOrder.size, book.getTimeMicros(),
 				OrderSide.SELL, orderLine);
 		}
-		orderLineMap = null;
+		orderLineMap = null; // mark for GC
 	}
 
 	@Override
