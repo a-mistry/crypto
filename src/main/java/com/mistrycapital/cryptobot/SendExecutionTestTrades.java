@@ -72,8 +72,9 @@ public class SendExecutionTestTrades {
 			new TwilioSender(credentials.getProperty("TwilioAccountSid"), credentials.getProperty("TwilioAuthToken"));
 		DBRecorder dbRecorder = new DBRecorder(timeKeeper, accountant, orderBookManager, "mistrycapital",
 			credentials.getProperty("MysqlUser"), credentials.getProperty("MysqlPassword"));
-		ChasingGdaxExecutionEngine executionEngine = new ChasingGdaxExecutionEngine(accountant, orderBookManager,
-			dbRecorder, twilioSender, tactic, gdaxClient);
+		ChasingGdaxExecutionEngine executionEngine =
+			new ChasingGdaxExecutionEngine(timeKeeper, accountant, orderBookManager, dbRecorder, twilioSender, tactic,
+				gdaxClient);
 
 		gdaxWebSocket.subscribe(orderBookManager);
 		gdaxWebSocket.subscribe(executionEngine);

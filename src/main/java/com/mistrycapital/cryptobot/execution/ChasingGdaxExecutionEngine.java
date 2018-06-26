@@ -15,6 +15,7 @@ import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.gdax.websocket.*;
 import com.mistrycapital.cryptobot.tactic.Tactic;
+import com.mistrycapital.cryptobot.time.TimeKeeper;
 import com.mistrycapital.cryptobot.twilio.TwilioSender;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import org.slf4j.Logger;
@@ -36,6 +37,9 @@ import static com.mistrycapital.cryptobot.gdax.client.GdaxClient.gdaxDecimalForm
 public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageProcessor, TopOfBookSubscriber {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
+	private static final long ONE_HOUR_NANOS = 60 * 60 * 1000000000L;
+
+	private final TimeKeeper timeKeeper;
 	private final OrderBookManager orderBookManager;
 	private final Accountant accountant;
 	private final Tactic tactic;
@@ -44,14 +48,12 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 	private final GdaxClient gdaxClient;
 	private final ExecutorService executorService;
 	private final Object lockObj;
-	/** Client oids and orders that have been sent to gdax but we do not have an order id yet */
-	private final Map<UUID,WorkingOrder> postedClientOids;
-	/** All working orders by product */
-	private final List<List<WorkingOrder>> workingOrdersByProduct;
+	/** All working orders by client oid */
+	private final Map<UUID,WorkingOrder> workingOrdersByClientOid;
+	/** All working orders */
+	private final List<WorkingOrder> workingOrders;
 	/** Working orders that have been received by gdax and have an order id */
-	private final Map<UUID,WorkingOrder> workingOrdersById;
-	/** Current view of prices. May be stale to the outside, not inside */
-	private final BBO[] workingPricesByProduct;
+	private final Map<UUID,WorkingOrder> workingOrdersByOrderId;
 
 	enum WorkingOrderStatus {
 		POSTING,
@@ -59,6 +61,7 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 	}
 
 	class WorkingOrder {
+		final long origTimeNanos;
 		final TradeInstruction instruction;
 		final UUID clientOid;
 		final double origPrice;
@@ -72,14 +75,16 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 			this.instruction = instruction;
 			this.clientOid = clientOid;
 			this.postedPrice = postedPrice;
+			origTimeNanos = timeKeeper.epochNanos();
 			origPrice = postedPrice;
 			status = POSTING;
 		}
 	}
 
-	public ChasingGdaxExecutionEngine(Accountant accountant, OrderBookManager orderBookManager, DBRecorder dbRecorder,
-		TwilioSender twilioSender, Tactic tactic, GdaxClient gdaxClient)
+	public ChasingGdaxExecutionEngine(TimeKeeper timeKeeper, Accountant accountant, OrderBookManager orderBookManager,
+		DBRecorder dbRecorder, TwilioSender twilioSender, Tactic tactic, GdaxClient gdaxClient)
 	{
+		this.timeKeeper = timeKeeper;
 		this.orderBookManager = orderBookManager;
 		this.accountant = accountant;
 		this.tactic = tactic;
@@ -88,16 +93,9 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 		this.gdaxClient = gdaxClient;
 		executorService = Executors.newSingleThreadExecutor();
 		lockObj = new Object();
-		workingOrdersByProduct = new ArrayList<>(Product.count);
-		for(int i = 0; i < Product.count; i++)
-			workingOrdersByProduct.add(new ArrayList<>());
-		postedClientOids = new HashMap<>();
-		workingOrdersById = new HashMap<>();
-		workingPricesByProduct = new BBO[Product.count];
-		for(int i = 0; i < workingPricesByProduct.length; i++) {
-			workingPricesByProduct[i] = new BBO();
-			workingPricesByProduct[i].bidPrice = workingPricesByProduct[i].askPrice = Double.NaN;
-		}
+		workingOrders = new ArrayList<>();
+		workingOrdersByClientOid = new HashMap<>();
+		workingOrdersByOrderId = new HashMap<>();
 
 		// cancel any outstanding orders on reset
 		gdaxClient.cancelAll()
@@ -118,31 +116,32 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 		}
 	}
 
+	/** Run task in the background - used to run DB queries / twilio calls outside of this thread */
+	private void runInBackground(Runnable runnable) {
+		executorService.submit(runnable);
+	}
+
 	private void post(TradeInstruction instruction) {
 		log.debug("Posting instruction " + instruction);
 		final Product product = instruction.getProduct();
 		final UUID clientOid = UUID.randomUUID();
-		// Need to refresh quotes here since they may have moved since we last had a working order
-		final BBO bbo = workingPricesByProduct[product.getIndex()];
-		orderBookManager.getBook(product).recordBBO(bbo);
+		final BBO bbo = orderBookManager.getBook(product).getBBO();
 		final double postedPrice = instruction.getOrderSide() == OrderSide.BUY ? bbo.bidPrice : bbo.askPrice;
 		if(Double.isNaN(postedPrice)) {
 			log.error("Tried to post order to " + instruction + " but top of book is NaN so we can't determine price");
 			tactic.notifyReject(instruction);
 			return;
 		}
-		final List<WorkingOrder> workingOrderList = workingOrdersByProduct.get(product.getIndex());
-		final WorkingOrder workingOrder;
+		final WorkingOrder workingOrder = new WorkingOrder(instruction, clientOid, postedPrice);
 		synchronized(lockObj) {
-			workingOrder = new WorkingOrder(instruction, clientOid, postedPrice);
-			workingOrderList.add(workingOrder);
-			postedClientOids.put(clientOid, workingOrder);
+			workingOrders.add(workingOrder);
+			workingOrdersByClientOid.put(clientOid, workingOrder);
 		}
 
 		final CompletableFuture<OrderInfo> orderInfoFuture;
 		orderInfoFuture = gdaxClient.placePostOnlyLimitOrder(product, instruction.getOrderSide(),
 			instruction.getAmount(), postedPrice, clientOid, TimeUnit.HOURS);
-		log.info("Placed post-only order to " + instruction + " at " + postedPrice + " with 1 day GTT, client_oid "
+		log.info("Placed post-only order to " + instruction + " at " + postedPrice + " with 1 hour GTT, client_oid "
 			+ clientOid);
 
 		runInBackground(() -> dbRecorder.recordPostOnlyAttempt(instruction, clientOid, postedPrice));
@@ -152,10 +151,10 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 			orderInfoFuture.get();
 		} catch(ExecutionException | InterruptedException e) {
 			if(e.getCause().getClass().isAssignableFrom(GdaxClient.GdaxException.class)) {
-				log.error("Could not post order to " + instruction, e);
+				log.error("Could not post order to " + instruction, e.getCause());
 				synchronized(lockObj) {
-					workingOrderList.remove(workingOrder);
-					postedClientOids.remove(clientOid);
+					workingOrders.remove(workingOrder);
+					workingOrdersByClientOid.remove(clientOid);
 				}
 				tactic.notifyReject(instruction);
 			} else {
@@ -165,67 +164,23 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 
 	}
 
-	/**
-	 * Runs through working orders for the product and for any order where the price has moved away from the posted
-	 * price, cancels the order and reposts it at the new top of book
-	 */
-	private void cancelRepostOrders(Product product, BBO bbo) {
-		List<WorkingOrder> workingOrderList = workingOrdersByProduct.get(product.getIndex());
-		List<WorkingOrder> cancelRepostList = null;
-		synchronized(lockObj) {
-			if(workingOrderList.isEmpty()) return;
-
-			log.debug("Price ticked away while we have working orders, verifying " + product
-				+ " (" + bbo.bidPrice + "-" + bbo.askPrice + ")");
-
-			for(WorkingOrder workingOrder : workingOrderList) {
-				final OrderSide orderSide = workingOrder.instruction.getOrderSide();
-				boolean repriceOnBid =
-					orderSide == OrderSide.BUY && workingOrder.postedPrice < bbo.bidPrice - OrderBook.PRICE_EPSILON;
-				boolean repriceOnAsk =
-					orderSide == OrderSide.SELL && workingOrder.postedPrice > bbo.askPrice + OrderBook.PRICE_EPSILON;
-				if(repriceOnBid || repriceOnAsk) {
-					if(cancelRepostList == null) cancelRepostList = new LinkedList<>();
-					cancelRepostList.add(workingOrder);
-				}
-			}
-		}
-		if(cancelRepostList != null) {
-			for(WorkingOrder workingOrder : cancelRepostList)
-				if(workingOrder.status != POSTING)
-					cancelRepost(workingOrder, bbo);
-		}
-	}
-
-	private void cancelRepost(final WorkingOrder workingOrder, final BBO bbo) {
-		if(workingOrder.orderId == null) {
-			log.error("Supposed to reprice order for " + workingOrder.instruction + " but working order has no id");
-			return;
-		}
-
-		workingOrder.status = POSTING;
-		final double oldPostedPrice = workingOrder.postedPrice;
-
-		log.info("Cancel/reposting order to " + workingOrder.instruction + " old price " + oldPostedPrice + " line "
-			+ bbo.bidPrice + "-" + bbo.askPrice + " with 1 day GTT, client_oid " + workingOrder.clientOid);
-
+	private void cancelRepost(final WorkingOrder workingOrder) {
+		// TODO: Simultaneously cancel and repost if we have the funds to do so
 		CompletableFuture<OrderInfo> future = gdaxClient.cancelOrder(workingOrder.orderId)
 			.thenCompose(json -> {
-				synchronized(lockObj) {
-					postedClientOids.put(workingOrder.clientOid, workingOrder);
-				}
-
 				// refresh prices here, just before we send the order
+				final BBO bbo = orderBookManager.getBook(workingOrder.instruction.getProduct()).getBBO();
 				final double newPostedPrice = workingOrder.instruction.getOrderSide() == OrderSide.BUY
 					? bbo.bidPrice : bbo.askPrice;
 				workingOrder.postedPrice = newPostedPrice;
 
 				log.info("Canceled, now reposting order to " + workingOrder.instruction + " at " + newPostedPrice
-					+ " with 1 day GTT, client_oid " + workingOrder.clientOid);
+					+ " with 1 hour GTT, client_oid " + workingOrder.clientOid);
 
 				final TradeInstruction instruction = workingOrder.instruction;
 				return gdaxClient.placePostOnlyLimitOrder(instruction.getProduct(), instruction.getOrderSide(),
-					instruction.getAmount(), newPostedPrice, workingOrder.clientOid, TimeUnit.HOURS);
+					instruction.getAmount() - workingOrder.filledAmount, newPostedPrice, workingOrder.clientOid,
+					TimeUnit.HOURS);
 			});
 
 		try {
@@ -234,38 +189,96 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 			if(e.getCause().getClass().isAssignableFrom(GdaxClient.GdaxException.class)) {
 				log.error("Could not cancel/repost order to " + workingOrder.instruction, e);
 				synchronized(lockObj) {
-					workingOrdersByProduct.get(workingOrder.instruction.getProduct().getIndex()).remove(workingOrder);
-					workingOrdersById.remove(workingOrder.orderId);
+					workingOrders.remove(workingOrder);
+					workingOrdersByClientOid.remove(workingOrder.clientOid);
 				}
 				tactic.notifyReject(workingOrder.instruction);
-				// TODO: should probably log this cancel to db
 			} else {
 				throw new RuntimeException(e);
 			}
 		}
 	}
 
-	/** Run task in the background - used to run DB queries / twilio calls outside of this thread */
-	private void runInBackground(Runnable runnable) {
-		executorService.submit(runnable);
+	private void onPriceChanged(final Product product, final double newPrice, final OrderSide side) {
+		List<WorkingOrder> ordersToRepost = null;
+		List<WorkingOrder> markCanceled = null;
+		synchronized(lockObj) {
+			if(workingOrders.isEmpty()) return;
+
+			log.debug("Price ticked away while we have working orders, verifying " + product + " for new top "
+				+ newPrice);
+
+			// search working orders for any that need to be repriced or removed
+			final long timeNanos = timeKeeper.epochNanos();
+			for(WorkingOrder workingOrder : workingOrders) {
+				// remove any orders that should have been canceled but for some reason were not marked as such
+				if(workingOrder.origTimeNanos - timeNanos > ONE_HOUR_NANOS) {
+					if(markCanceled == null) markCanceled = new LinkedList<>();
+					markCanceled.add(workingOrder);
+					continue;
+				}
+
+				final OrderSide workingOrderSide = workingOrder.instruction.getOrderSide();
+
+				if(workingOrder.status == POSTED &&
+					workingOrder.instruction.getProduct() == product &&
+					workingOrderSide == side)
+				{
+					final boolean bidMovedAway = workingOrderSide == OrderSide.BUY
+						&& workingOrder.postedPrice < newPrice - OrderBook.PRICE_EPSILON;
+					final boolean askMovedAway = workingOrderSide == OrderSide.SELL
+						&& workingOrder.postedPrice > newPrice + OrderBook.PRICE_EPSILON;
+
+					if(bidMovedAway || askMovedAway) {
+						if(ordersToRepost == null) ordersToRepost = new LinkedList<>();
+						ordersToRepost.add(workingOrder);
+					}
+				}
+			}
+
+			// remove any orders that should have been canceled but we did not have a record
+			if(markCanceled != null)
+				for(WorkingOrder workingOrder : markCanceled) {
+					workingOrders.remove(workingOrder);
+					workingOrdersByClientOid.remove(workingOrder.clientOid);
+					if(workingOrder.orderId != null) workingOrdersByOrderId.remove(workingOrder.orderId);
+					workingOrder = null; // mark for GC
+				}
+
+			// reset maps and working order status inside synchronized block
+			if(ordersToRepost != null)
+				for(WorkingOrder workingOrder : ordersToRepost) {
+					log.info("Cancel/reposting order to " + workingOrder.instruction + " old price "
+						+ workingOrder.postedPrice + " new price " + newPrice + " with 1 hour GTT, client_oid " +
+						workingOrder.clientOid);
+
+					workingOrdersByOrderId.remove(workingOrder.orderId);
+					workingOrder.orderId = null;
+					workingOrder.status = POSTING;
+					workingOrder.postedPrice = newPrice;
+				}
+		}
+
+		// cancel/repost any relevant working orders
+		if(ordersToRepost != null)
+			for(WorkingOrder workingOrder : ordersToRepost) {
+				cancelRepost(workingOrder);
+			}
 	}
 
 	@Override
 	public void onBidChanged(final Product product, final double bidPrice) {
-
+		onPriceChanged(product, bidPrice, OrderSide.BUY);
 	}
 
 	@Override
 	public void onAskChanged(final Product product, final double askPrice) {
-
+		onPriceChanged(product, askPrice, OrderSide.SELL);
 	}
 
 	@Override
 	public void process(final Book msg) {
-		// when we first start, prices are NaN, but this message means the order book should have the info
-		final OrderBook orderBook = orderBookManager.getBook(msg.getProduct());
-		final BBO bbo = workingPricesByProduct[msg.getProduct().getIndex()];
-		orderBook.recordBBO(bbo);
+		// nothing to do
 	}
 
 	@Override
@@ -273,10 +286,9 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 		final UUID clientOid = msg.getClientOid();
 		final WorkingOrder workingOrder;
 		synchronized(lockObj) {
-			workingOrder = postedClientOids.get(clientOid);
+			workingOrder = workingOrdersByClientOid.get(clientOid);
 			if(workingOrder != null) {
-				postedClientOids.remove(clientOid);
-				workingOrdersById.put(msg.getOrderId(), workingOrder);
+				workingOrdersByOrderId.put(msg.getOrderId(), workingOrder);
 			}
 		}
 		if(workingOrder != null) {
@@ -290,29 +302,19 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 
 	@Override
 	public void process(final Open msg) {
-		final Product product = msg.getProduct();
-		final BBO bbo = workingPricesByProduct[product.getIndex()];
-		if(msg.getOrderSide() == OrderSide.BUY && msg.getPrice() > bbo.bidPrice + OrderBook.PRICE_EPSILON) {
-			bbo.bidPrice = msg.getPrice();
-			cancelRepostOrders(product, bbo);
-		} else if(msg.getOrderSide() == OrderSide.SELL && msg.getPrice() < bbo.askPrice - OrderBook.PRICE_EPSILON) {
-			bbo.askPrice = msg.getPrice();
-			cancelRepostOrders(product, bbo);
-		}
+		// nothing to do
 	}
 
 	@Override
 	public void process(final Done msg) {
 		final UUID orderId = msg.getOrderId();
-		final Product product = msg.getProduct();
 		final WorkingOrder workingOrder;
 		synchronized(lockObj) {
-			// don't consider "done" if we are cancel/reposting
-			WorkingOrder temp = workingOrdersById.get(orderId);
-			workingOrder = temp != null && temp.status == POSTED ? temp : null;
+			workingOrder = workingOrdersByOrderId.get(orderId);
 			if(workingOrder != null) {
-				workingOrdersById.remove(orderId);
-				workingOrdersByProduct.get(product.getIndex()).remove(workingOrder);
+				workingOrdersByOrderId.remove(orderId);
+				workingOrders.remove(workingOrder);
+				workingOrdersByClientOid.remove(workingOrder.clientOid);
 			}
 		}
 		if(workingOrder != null) {
@@ -358,7 +360,7 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 		final UUID orderId = msg.getMakerOrderId();
 		final WorkingOrder workingOrder;
 		synchronized(lockObj) {
-			workingOrder = workingOrdersById.get(orderId);
+			workingOrder = workingOrdersByOrderId.get(orderId);
 		}
 		if(workingOrder != null) {
 			final double size = msg.getSize();

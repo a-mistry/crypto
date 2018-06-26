@@ -97,7 +97,7 @@ public class TradeCrypto {
 			new TwilioSender(credentials.getProperty("TwilioAccountSid"), credentials.getProperty("TwilioAuthToken"));
 		DBRecorder dbRecorder = new DBRecorder(timeKeeper, accountant, orderBookManager, "mistrycapital",
 			credentials.getProperty("MysqlUser"), credentials.getProperty("MysqlPassword"));
-		ExecutionEngine executionEngine = new ChasingGdaxExecutionEngine(accountant, orderBookManager,
+		ExecutionEngine executionEngine = new ChasingGdaxExecutionEngine(timeKeeper, accountant, orderBookManager,
 			dbRecorder, twilioSender, tactic, gdaxClient);
 		// use this if we want to test without sending orders
 		//ExecutionEngine executionEngine = instructions -> {};
