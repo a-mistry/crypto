@@ -167,23 +167,42 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 	}
 
 	private void cancelRepost(final WorkingOrder workingOrder, final UUID oldOrderId) {
-		// TODO: Simultaneously cancel and repost if we have the funds to do so
-		CompletableFuture<?> future = gdaxClient.cancelOrder(oldOrderId)
-			.thenCompose(json -> {
-				// refresh prices here, just before we send the order
-				final BBO bbo = orderBookManager.getBook(workingOrder.instruction.getProduct()).getBBO();
-				final double newPostedPrice = workingOrder.instruction.getOrderSide() == OrderSide.BUY
-					? bbo.bidPrice : bbo.askPrice;
-				workingOrder.postedPrice = newPostedPrice;
+		// Simultaneously cancel and repost if we have the funds to do so; otherwise, cancel first
+		final TradeInstruction instruction = workingOrder.instruction;
+		final var amount = instruction.getAmount() - workingOrder.filledAmount;
+		final var isBuy = instruction.getOrderSide() == OrderSide.BUY;
+		final var available = isBuy ? accountant.getAvailable(Currency.USD)
+			: accountant.getAvailable(instruction.getProduct().getCryptoCurrency());
+		final var needed = isBuy ? amount * workingOrder.postedPrice : amount;
+		final boolean simultaneous = available >= needed;
 
-				log.info("Canceled, now reposting order to " + workingOrder.instruction + " at " + newPostedPrice
-					+ " with 1 hour GTT, client_oid " + workingOrder.clientOid);
+		final CompletableFuture<?> future;
+		if(simultaneous) {
+			log.info("Simultaneous cancel/reposting " + workingOrder.instruction + " at " + workingOrder.postedPrice
+				+ " with 1 hour GTT, client_oid " + workingOrder.clientOid);
 
-				final TradeInstruction instruction = workingOrder.instruction;
-				return gdaxClient.placePostOnlyLimitOrder(instruction.getProduct(), instruction.getOrderSide(),
-					instruction.getAmount() - workingOrder.filledAmount, newPostedPrice, workingOrder.clientOid,
-					TimeUnit.HOURS);
-			});
+			future = CompletableFuture.allOf(
+				gdaxClient.cancelOrder(oldOrderId),
+				gdaxClient.placePostOnlyLimitOrder(instruction.getProduct(), instruction.getOrderSide(), amount,
+					workingOrder.postedPrice, workingOrder.clientOid, TimeUnit.HOURS)
+			);
+		} else {
+			future = gdaxClient.cancelOrder(oldOrderId)
+				.thenCompose(json -> {
+					// refresh prices here, just before we send the order
+					final BBO bbo = orderBookManager.getBook(workingOrder.instruction.getProduct()).getBBO();
+					final double newPostedPrice = workingOrder.instruction.getOrderSide() == OrderSide.BUY
+						? bbo.bidPrice : bbo.askPrice;
+					workingOrder.postedPrice = newPostedPrice;
+
+					log.info("Canceled, now reposting order to " + workingOrder.instruction + " at " + newPostedPrice
+						+ " with 1 hour GTT, client_oid " + workingOrder.clientOid);
+
+					return gdaxClient
+						.placePostOnlyLimitOrder(instruction.getProduct(), instruction.getOrderSide(), amount,
+							workingOrder.postedPrice, workingOrder.clientOid, TimeUnit.HOURS);
+				});
+		}
 
 		runInBackground(() -> {
 			try {
@@ -207,10 +226,12 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 		List<WorkingOrder> ordersToRepost = null;
 		List<WorkingOrder> markCanceled = null;
 		synchronized(lockObj) {
-			// check if any working orders for product
+			// check if any relevant working orders for product/side
 			boolean noWorkingOrders = true;
 			for(WorkingOrder workingOrder : workingOrders)
-				if(workingOrder.instruction.getProduct() == product) {
+				if(workingOrder.instruction.getProduct() == product &&
+					workingOrder.instruction.getOrderSide() == side)
+				{
 					noWorkingOrders = false;
 					break;
 				}
