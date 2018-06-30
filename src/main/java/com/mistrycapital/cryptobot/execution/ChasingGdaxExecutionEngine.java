@@ -144,11 +144,10 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 		log.info("Placed post-only order to " + instruction + " at " + postedPrice + " with 1 hour GTT, client_oid "
 			+ clientOid);
 
-		runInBackground(() -> dbRecorder.recordPostOnlyAttempt(instruction, clientOid, postedPrice));
-
-		// check for client errors
+		// check for client errors and record to db
 		try {
 			orderInfoFuture.get();
+			runInBackground(() -> dbRecorder.recordPostOnlyAttempt(instruction, clientOid, postedPrice));
 		} catch(ExecutionException | InterruptedException e) {
 			if(e.getCause().getClass().isAssignableFrom(GdaxClient.GdaxException.class)) {
 				log.error("Could not post order to " + instruction, e.getCause());
@@ -164,9 +163,9 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 
 	}
 
-	private void cancelRepost(final WorkingOrder workingOrder) {
+	private void cancelRepost(final WorkingOrder workingOrder, final UUID oldOrderId) {
 		// TODO: Simultaneously cancel and repost if we have the funds to do so
-		CompletableFuture<OrderInfo> future = gdaxClient.cancelOrder(workingOrder.orderId)
+		CompletableFuture<?> future = gdaxClient.cancelOrder(oldOrderId)
 			.thenCompose(json -> {
 				// refresh prices here, just before we send the order
 				final BBO bbo = orderBookManager.getBook(workingOrder.instruction.getProduct()).getBBO();
@@ -183,20 +182,22 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 					TimeUnit.HOURS);
 			});
 
-		try {
-			future.get();
-		} catch(ExecutionException | InterruptedException e) {
-			if(e.getCause().getClass().isAssignableFrom(GdaxClient.GdaxException.class)) {
-				log.error("Could not cancel/repost order to " + workingOrder.instruction, e);
-				synchronized(lockObj) {
-					workingOrders.remove(workingOrder);
-					workingOrdersByClientOid.remove(workingOrder.clientOid);
+		runInBackground(() -> {
+			try {
+				future.get();
+			} catch(ExecutionException | InterruptedException e) {
+				if(e.getCause().getClass().isAssignableFrom(GdaxClient.GdaxException.class)) {
+					log.error("Could not cancel/repost order to " + workingOrder.instruction, e);
+					synchronized(lockObj) {
+						workingOrders.remove(workingOrder);
+						workingOrdersByClientOid.remove(workingOrder.clientOid);
+					}
+					tactic.notifyReject(workingOrder.instruction);
+				} else {
+					throw new RuntimeException(e);
 				}
-				tactic.notifyReject(workingOrder.instruction);
-			} else {
-				throw new RuntimeException(e);
 			}
-		}
+		});
 	}
 
 	private void onPriceChanged(final Product product, final double newPrice, final OrderSide side) {
@@ -205,8 +206,8 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 		synchronized(lockObj) {
 			if(workingOrders.isEmpty()) return;
 
-			log.debug("Price ticked away while we have working orders, verifying " + product + " for new top "
-				+ newPrice);
+			log.debug("Price ticked away while we have working orders, verifying " + product + " side " + side
+				+ " for new top " + newPrice);
 
 			// search working orders for any that need to be repriced or removed
 			final long timeNanos = timeKeeper.epochNanos();
@@ -250,10 +251,9 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 				for(WorkingOrder workingOrder : ordersToRepost) {
 					log.info("Cancel/reposting order to " + workingOrder.instruction + " old price "
 						+ workingOrder.postedPrice + " new price " + newPrice + " with 1 hour GTT, client_oid " +
-						workingOrder.clientOid);
+						workingOrder.clientOid + " gdax order id " + workingOrder.orderId);
 
 					workingOrdersByOrderId.remove(workingOrder.orderId);
-					workingOrder.orderId = null;
 					workingOrder.status = POSTING;
 					workingOrder.postedPrice = newPrice;
 				}
@@ -262,7 +262,9 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 		// cancel/repost any relevant working orders
 		if(ordersToRepost != null)
 			for(WorkingOrder workingOrder : ordersToRepost) {
-				cancelRepost(workingOrder);
+				UUID oldOrderId = workingOrder.orderId;
+				workingOrder.orderId = null;
+				cancelRepost(workingOrder, oldOrderId);
 			}
 	}
 
