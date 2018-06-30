@@ -10,7 +10,7 @@ import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 
-public class OrderBook {
+public class OrderBook implements BBOProvider {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
 	/** Tolerance for equating two prices */
@@ -64,17 +64,9 @@ public class OrderBook {
 	// READ BOOK
 
 	/**
-	 * @return Top of book
-	 */
-	public synchronized BBO getBBO() {
-		BBO bbo = new BBO();
-		recordBBO(bbo);
-		return bbo;
-	}
-
-	/**
 	 * Records top of book to the given object
 	 */
+	@Override
 	public synchronized void recordBBO(BBO bbo) {
 		bbo.reset(
 			bids.getFirstPrice(),

@@ -147,7 +147,10 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 		// check for client errors and record to db
 		try {
 			orderInfoFuture.get();
-			runInBackground(() -> dbRecorder.recordPostOnlyAttempt(instruction, clientOid, postedPrice));
+			runInBackground(() -> {
+				dbRecorder.recordPostOnlyAttempt(instruction, clientOid, postedPrice);
+				accountant.refreshPositions(); // note the available balance change
+			});
 		} catch(ExecutionException | InterruptedException e) {
 			if(e.getCause().getClass().isAssignableFrom(GdaxClient.GdaxException.class)) {
 				log.error("Could not post order to " + instruction, e.getCause());
@@ -386,8 +389,10 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 			accountant.recordTrade(Currency.USD, -buySign * size * price,
 				msg.getProduct().getCryptoCurrency(), buySign * size);
 
-			runInBackground(() ->
-				dbRecorder.recordPostOnlyFillWithSlippage(msg, workingOrder.clientOid, workingOrder.origPrice));
+			runInBackground(() -> {
+				dbRecorder.recordPostOnlyFillWithSlippage(msg, workingOrder.clientOid, workingOrder.origPrice);
+				accountant.refreshPositions(); // be very accurate on positions by updating after a fill
+			});
 		}
 	}
 

@@ -4,6 +4,7 @@ import com.mistrycapital.cryptobot.accounting.Accountant;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
 import com.mistrycapital.cryptobot.execution.Aggression;
 import com.mistrycapital.cryptobot.execution.TradeInstruction;
+import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
@@ -107,8 +108,20 @@ public class TwoHourTactic implements Tactic {
 			final var currentPosition = accountant.getBalance(product.getCryptoCurrency());
 			final var outstandingPurchases = calcOutstandingPurchases(product);
 
-			final var deltaPosition = goalPosition - currentPosition - outstandingPurchases;
-			final var deltaPositionUsd = deltaPosition * askPrice;
+			final var deltaToGoalPosition = goalPosition - currentPosition - outstandingPurchases;
+			final var deltaToGoalPositionUsd = deltaToGoalPosition * askPrice;
+
+			// We may want to buy more than we have dollars for. In that case, scale back trade to amount we can buy
+			final double deltaPosition;
+			final double deltaPositionUsd;
+			final var dollarsAvailable = accountant.getAvailable(Currency.USD);
+			if(deltaToGoalPositionUsd>dollarsAvailable) {
+				deltaPositionUsd = dollarsAvailable;
+				deltaPosition = deltaPositionUsd / askPrice;
+			} else {
+				deltaPosition = deltaToGoalPosition;
+				deltaPositionUsd = deltaToGoalPositionUsd;
+			}
 
 			// This is to handle the situation where the tactic wanted to buy in the past but because of
 			// bugs or rejected trades it was unable to do so, now it wants to catch up. But if the

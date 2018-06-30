@@ -92,7 +92,8 @@ public class TradeCrypto {
 		ForecastCalculator forecastCalculator = new Snowbird(properties);
 
 		Tactic tactic = new TwoHourTactic(properties, timeKeeper, accountant);
-		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(properties, timeKeeper, accountant);
+		TradeRiskValidator tradeRiskValidator =
+			new TradeRiskValidator(properties, timeKeeper, accountant, orderBookManager);
 		TwilioSender twilioSender =
 			new TwilioSender(credentials.getProperty("TwilioAccountSid"), credentials.getProperty("TwilioAuthToken"));
 		DBRecorder dbRecorder = new DBRecorder(timeKeeper, accountant, orderBookManager, "mistrycapital",

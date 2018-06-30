@@ -1,7 +1,11 @@
 package com.mistrycapital.cryptobot.risk;
 
 import com.mistrycapital.cryptobot.accounting.Accountant;
+import com.mistrycapital.cryptobot.book.BBO;
+import com.mistrycapital.cryptobot.book.OrderBookManager;
 import com.mistrycapital.cryptobot.execution.TradeInstruction;
+import com.mistrycapital.cryptobot.gdax.common.Currency;
+import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.time.TimeKeeper;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
@@ -18,12 +22,16 @@ public class TradeRiskValidator {
 
 	private final TimeKeeper timeKeeper;
 	private final Accountant accountant;
+	private final OrderBookManager orderBookManager;
 	private final int max24HourTrades;
 	private final Queue<Long> lastDayTradeTimesInNanos;
 
-	public TradeRiskValidator(MCProperties properties, TimeKeeper timeKeeper, Accountant accountant) {
+	public TradeRiskValidator(MCProperties properties, TimeKeeper timeKeeper, Accountant accountant,
+		OrderBookManager orderBookManager)
+	{
 		this.timeKeeper = timeKeeper;
 		this.accountant = accountant;
+		this.orderBookManager = orderBookManager;
 		max24HourTrades = properties.getIntProperty("risk.max24hourTrades", 20);
 		lastDayTradeTimesInNanos = new ArrayDeque<>();
 	}
@@ -40,9 +48,9 @@ public class TradeRiskValidator {
 
 		log.debug("Checking risk on " + instructions.size() + " trades");
 
-		instructions = validateTradeCount(instructions);
 		instructions = validatePosition(instructions);
 		instructions = validateSize(instructions);
+		instructions = validateTradeCount(instructions);
 
 		return instructions;
 	}
@@ -68,10 +76,43 @@ public class TradeRiskValidator {
 		return validated;
 	}
 
-	/** Validate that we have the position we are trying to sell */
+	/** Validate that we have the positions we are trying to trade */
 	List<TradeInstruction> validatePosition(List<TradeInstruction> instructions) {
-		// TODO: implement this
-		return instructions;
+		List<TradeInstruction> validated = new ArrayList<>(instructions.size());
+		BBO bbo = new BBO();
+		for(final TradeInstruction instruction : instructions) {
+			orderBookManager.getBook(instruction.getProduct()).recordBBO(bbo);
+
+			boolean resized = false;
+			double resizedAmount = 0.0;
+
+			if(instruction.getOrderSide() == OrderSide.BUY &&
+				instruction.getAmount() * bbo.askPrice > accountant.getAvailable(Currency.USD))
+			{
+				final var availableUsd = accountant.getAvailable(Currency.USD);
+				resizedAmount = availableUsd / bbo.askPrice;
+				resized = true;
+			}
+
+			if(instruction.getOrderSide() == OrderSide.SELL &&
+				instruction.getAmount() > accountant.getAvailable(instruction.getProduct().getCryptoCurrency()))
+			{
+				resizedAmount = accountant.getAvailable(instruction.getProduct().getCryptoCurrency());
+				resized = true;
+			}
+
+			if(!resized) {
+				validated.add(instruction);
+			} else {
+				log.debug("Resizing " + instruction + " down to " + resizedAmount + " due to funds");
+				if(resizedAmount <= 0)
+					continue;
+				validated.add(new TradeInstruction(instruction.getProduct(), resizedAmount, instruction.getOrderSide(),
+					instruction.getAggression(), instruction.getForecast()));
+			}
+
+		}
+		return validated;
 	}
 
 	/** Validate the size is sufficiently large (0.001) */

@@ -5,9 +5,13 @@ import com.mistrycapital.cryptobot.accounting.EmptyPositionsProvider;
 import com.mistrycapital.cryptobot.accounting.PositionsProvider;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedHistory;
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
+import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
 import com.mistrycapital.cryptobot.appender.DailyAppender;
 import com.mistrycapital.cryptobot.appender.DecisionAppender;
 import com.mistrycapital.cryptobot.appender.ForecastAppender;
+import com.mistrycapital.cryptobot.book.BBO;
+import com.mistrycapital.cryptobot.book.BBOProvider;
+import com.mistrycapital.cryptobot.book.OrderBookManager;
 import com.mistrycapital.cryptobot.forecasts.*;
 import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
@@ -17,6 +21,7 @@ import com.mistrycapital.cryptobot.tactic.Tactic;
 import com.mistrycapital.cryptobot.tactic.TradeEvaluator;
 import com.mistrycapital.cryptobot.tactic.TwoHourTactic;
 import com.mistrycapital.cryptobot.time.Intervalizer;
+import com.mistrycapital.cryptobot.time.TimeKeeper;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import com.mistrycapital.cryptobot.util.MCProperties;
 import org.slf4j.Logger;
@@ -183,11 +188,13 @@ public class SimRunner implements Runnable {
 
 		ConsolidatedHistory history = new ConsolidatedHistory(intervalizer);
 		SimTimeKeeper timeKeeper = new SimTimeKeeper();
+		SimOrderBookManager orderBookManager = new SimOrderBookManager(timeKeeper);
 		PositionsProvider positionsProvider = new EmptyPositionsProvider(startingUsd);
 		Accountant accountant = new Accountant(positionsProvider);
 		ForecastCalculator forecastCalculator = new CachedForecastCalculator(forecastCache);
 		Tactic tactic = new TwoHourTactic(simProperties, timeKeeper, accountant);
-		TradeRiskValidator tradeRiskValidator = new TradeRiskValidator(simProperties, timeKeeper, accountant);
+		TradeRiskValidator tradeRiskValidator =
+			new TradeRiskValidator(simProperties, timeKeeper, accountant, orderBookManager);
 		SimExecutionEngine executionEngine = new SimExecutionEngine(simProperties, accountant, tactic, history);
 		DecisionAppender decisionAppender = null;
 		DailyAppender dailyAppender = null;
@@ -208,6 +215,7 @@ public class SimRunner implements Runnable {
 				continue; // spotty/strange data before 2/8, just skip
 
 			timeKeeper.advanceTime(consolidatedSnapshot.getTimeNanos());
+			orderBookManager.update(consolidatedSnapshot);
 			if(timeKeeper.epochMs() >= nextDay) {
 				nextDay = intervalizer.calcNextDayMillis(timeKeeper.epochMs());
 				dailyPositionValuesUsd.add(accountant.getPositionValueUsd(consolidatedSnapshot));
@@ -258,6 +266,44 @@ public class SimRunner implements Runnable {
 			final Product product)
 		{
 			throw new UnsupportedOperationException();
+		}
+	}
+
+	class SimOrderBook implements BBOProvider {
+		private ProductSnapshot latest;
+
+		void update(ProductSnapshot snapshot) {
+			latest = snapshot;
+		}
+
+		@Override
+		public void recordBBO(final BBO bbo) {
+			bbo.bidPrice = latest.bidPrice;
+			bbo.askPrice = latest.askPrice;
+			bbo.bidSize = latest.bidSize;
+			bbo.askSize = latest.askSize;
+		}
+	}
+
+	class SimOrderBookManager extends OrderBookManager {
+		SimOrderBook[] simOrderBooks;
+
+		public SimOrderBookManager(final TimeKeeper timeKeeper) {
+			super(timeKeeper);
+			simOrderBooks = new SimOrderBook[Product.count];
+			for(int i = 0; i < simOrderBooks.length; i++)
+				simOrderBooks[i] = new SimOrderBook();
+		}
+
+		void update(ConsolidatedSnapshot snapshot) {
+			for(Product product : Product.FAST_VALUES) {
+				simOrderBooks[product.getIndex()].update(snapshot.getProductSnapshot(product));
+			}
+		}
+
+		@Override
+		public BBOProvider getBBOProvider(Product product) {
+			return simOrderBooks[product.getIndex()];
 		}
 	}
 }
