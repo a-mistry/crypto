@@ -204,7 +204,14 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 		List<WorkingOrder> ordersToRepost = null;
 		List<WorkingOrder> markCanceled = null;
 		synchronized(lockObj) {
-			if(workingOrders.isEmpty()) return;
+			// check if any working orders for product
+			boolean noWorkingOrders = true;
+			for(WorkingOrder workingOrder : workingOrders)
+				if(workingOrder.instruction.getProduct() == product) {
+					noWorkingOrders = false;
+					break;
+				}
+			if(noWorkingOrders) return;
 
 			log.debug("Price ticked away while we have working orders, verifying " + product + " side " + side
 				+ " for new top " + newPrice);
@@ -350,7 +357,7 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 
 				final String text = (msg.getOrderSide() == OrderSide.BUY ? "Bot " : "Sold ")
 					+ filledAmountStr + " " + msg.getProduct() + " at " + filledAvgPriceStr
-					+ " with " + slippage + " slippage & " + remainingSizeStr + " remaining";
+					+ " with " + slippageStr + " slippage & " + remainingSizeStr + " remaining";
 				twilioSender.sendMessage(text);
 			});
 
