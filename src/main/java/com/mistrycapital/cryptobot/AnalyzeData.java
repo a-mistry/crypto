@@ -16,8 +16,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.sql.Time;
 import java.util.Arrays;
 import java.util.stream.Collectors;
+
+import static com.mistrycapital.cryptobot.sim.SampleTesting.SamplingType.IN_SAMPLE;
 
 public class AnalyzeData {
 	private static final Logger log = MCLoggerFactory.getLogger();
@@ -45,8 +48,8 @@ public class AnalyzeData {
 		SampleTesting sampleTesting = new SampleTesting(properties);
 		var joined = forecastInputs.join(futureReturns)
 			.filter(key ->
-				key.timeInNanos > 1517448021000000000L 				// discard Jan since it is spotty
-				&& sampleTesting.isSampleValid(key.timeInNanos)		// filter in/out/full sample
+				key.timeInNanos > 1519862400L*1000000000L                  // discard pre-Mar since it is spotty
+					&& sampleTesting.isSampleValid(key.timeInNanos)        // filter in/out/full sample
 			);
 		log.info("Joining data took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
 		startNanos = System.nanoTime();
@@ -80,13 +83,33 @@ public class AnalyzeData {
 		runRegressionPrintResults(joined, "fut_ret_2h",
 			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
 				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100"});
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
-				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100", "weightedMidRet12h100"});
 
 		String[] finalXs =
 			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
 				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100", "weightedMidRet12h100"};
+		RegressionResults finalResults = runRegressionPrintResults(joined, "fut_ret_2h", finalXs);
+
+		if(sampleTesting.getSamplingType() == IN_SAMPLE) {
+			// compare with out of sample
+			final var outSample = forecastInputs.join(futureReturns)
+				.filter(key ->
+					key.timeInNanos > 1519862400L*1000000000L                   // discard pre-Mar since it is spotty
+						&& !sampleTesting.isSampleValid(key.timeInNanos)        // filter out sample
+				);
+
+			System.out.println("In/out sample testing:");
+			System.out.println("R^2 in  = " +
+				calcRsq("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), joined, joined));
+			System.out.println("R^2 out = " +
+				calcRsq("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), outSample, joined));
+			System.out.println("MSE in  = " +
+				calcMSE("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), joined));
+			System.out.println("MSE out = " +
+				calcMSE("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), outSample));
+
+			System.out.println("Out of sample product coeffs:");
+			printProductCoeffs(outSample, "fut_ret_2h", finalXs);
+		}
 
 		printProductCoeffs(joined, "fut_ret_2h", finalXs);
 	}
@@ -127,5 +150,60 @@ public class AnalyzeData {
 				coeffs[i], stdErrs[i], coeffs[i] / stdErrs[i]));
 		}
 		return results;
+	}
+
+	static double calcRsq(String yCol, String[] xCols, double[] coeffs, Table<TimeProduct> table,
+		Table<TimeProduct> trainingTable)
+	{
+		double yMean = 0.0;
+		int trainingN = 0;
+		for(Row<TimeProduct> row : trainingTable) {
+			final double y = row.getColumn(yCol);
+			if(Double.isNaN(y)) continue;
+			for(int i = 0; i < xCols.length; i++) {
+				if(Double.isNaN(row.getColumn(xCols[i])))
+					continue;
+			}
+			yMean += y;
+			trainingN++;
+		}
+		yMean /= trainingN;
+
+		double totalSumSq = 0.0;
+		double residSumSq = 0.0;
+		int n = 0;
+		for(Row<TimeProduct> row : table) {
+			final double y = row.getColumn(yCol);
+			double yFitted = coeffs[0];
+			for(int i = 0; i < xCols.length; i++) {
+				yFitted += row.getColumn(xCols[i]) * coeffs[i + 1];
+			}
+			final double total = y - yMean;
+			final double resid = y - yFitted;
+			if(!Double.isNaN(resid)) {
+				totalSumSq += total * total;
+				residSumSq += resid * resid;
+				n++;
+			}
+		}
+		return 1.0 - residSumSq / totalSumSq;
+	}
+
+	static double calcMSE(String yCol, String[] xCols, double[] coeffs, Table<TimeProduct> table) {
+		double sqErr = 0.0;
+		int n = 0;
+		for(Row<TimeProduct> row : table) {
+			final double y = row.getColumn(yCol);
+			double yFitted = coeffs[0];
+			for(int i = 0; i < xCols.length; i++) {
+				yFitted += row.getColumn(xCols[i]) * coeffs[i + 1];
+			}
+			final double resid = y - yFitted;
+			if(!Double.isNaN(resid)) {
+				sqErr += resid * resid;
+				n++;
+			}
+		}
+		return sqErr / n;
 	}
 }

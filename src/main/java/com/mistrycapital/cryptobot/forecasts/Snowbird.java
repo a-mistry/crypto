@@ -31,7 +31,7 @@ public class Snowbird implements ForecastCalculator {
 
 	private static final String[] signalsToUse =
 		new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
-			"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6"};
+			"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100", "weightedMidRet12h100"};
 
 	public Snowbird(MCProperties properties) {
 		final int intervalSeconds = properties.getIntProperty("history.intervalSeconds");

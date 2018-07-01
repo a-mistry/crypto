@@ -7,16 +7,17 @@ import java.util.Set;
 
 /** Used to do in/out sample testing. In sample is defined in consecutive day segments */
 public class SampleTesting {
-	enum SamplingType {
+	public enum SamplingType {
 		IN_SAMPLE,
 		OUT_SAMPLE,
 		FULL_SAMPLE
 	}
 
+	private final SamplingType samplingType;
 	private final Set<Integer> validSet;
 
 	public SampleTesting(MCProperties properties) {
-		final SamplingType samplingType =
+		samplingType =
 			SamplingType.valueOf(properties.getProperty("sim.sampling.type", "IN_SAMPLE"));
 		final int segmentLength = properties.getIntProperty("sim.sampling.segmentDays", 3);
 
@@ -43,5 +44,9 @@ public class SampleTesting {
 	public boolean isSampleValid(long nanos) {
 		int utcDay = (int) (nanos / (24 * 60 * 60 * 1000000000L));
 		return validSet.contains(utcDay);
+	}
+
+	public SamplingType getSamplingType() {
+		return samplingType;
 	}
 }
