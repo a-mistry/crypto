@@ -87,6 +87,18 @@ public class Snowbird implements ForecastCalculator {
 		final int book5PctCount = latest.bidCount5Pct + latest.askCount5Pct;
 		final double bookRatio = ((double) latest.bidCount5Pct) / book5PctCount;
 
+		// MA book
+		int points6h = 0;
+		for(ConsolidatedSnapshot snapshot : consolidatedHistory.inOrder(60 * 60 * 6))
+			points6h++;
+		double bookMA = 0.0;
+		double emaMult6h = 2.0 / (points6h + 1);
+		for(ConsolidatedSnapshot snapshot : consolidatedHistory.inOrder(60 * 60 * 6)) {
+			final ProductSnapshot data = snapshot.getProductSnapshot(product);
+			final double periodBookRatio = ((double) data.bidCount5Pct) / (data.bidCount5Pct + data.askCount5Pct);
+			bookMA = bookMA == 0.0 ? periodBookRatio : (emaMult6h * periodBookRatio + (1 - emaMult6h) * bookMA);
+		}
+
 		// weighted mid and 2h ago
 		final double weightedMidRet100 = latest.weightedMid100 / latest.midPrice - 1;
 		double weightedMid12h100 = Double.NaN;
@@ -252,9 +264,10 @@ public class Snowbird implements ForecastCalculator {
 		variableMap.put("timeToMaxMin", timeToMaxMin);
 		variableMap.put("RSIRatioxRet", RSIRatio * lagRet);
 		variableMap.put("lagBTCRet6", lagBTCRet6);
-
 		variableMap.put("weightedMidRet100", weightedMidRet100);
 		variableMap.put("weightedMidRet12h100", weightedMid12h100 / mid12h - 1);
+
+		variableMap.put("bookMA", bookMA);
 
 		// These don't contribute much (0.1% R^2, low t-stats) but may be justified
 //		variableMap.put("bookRatio", bookRatio);

@@ -1,8 +1,8 @@
 package com.mistrycapital.cryptobot;
 
 import ch.qos.logback.classic.Level;
+import com.mistrycapital.cryptobot.forecasts.Alta;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
-import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.regression.*;
 import com.mistrycapital.cryptobot.sim.SampleTesting;
@@ -16,7 +16,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.sql.Time;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
@@ -32,7 +31,7 @@ public class AnalyzeData {
 		Path dataDir = Paths.get(properties.getProperty("dataDir"));
 		log.debug("Read data from " + dataDir);
 
-		ForecastCalculator forecastCalculator = new Snowbird(properties);
+		ForecastCalculator forecastCalculator = new Alta(properties);
 		log.debug("Forecast calculator is " + forecastCalculator.getClass().getName());
 
 		MCLoggerFactory.resetLogLevel(Level.INFO);
@@ -77,16 +76,26 @@ public class AnalyzeData {
 		}
 		log.info("Writing data took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
 
-		runRegressionPrintResults(joined, "fut_ret_2h",
+/*		runRegressionPrintResults(joined, "fut_ret_2h",
 			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
 				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6"});
 		runRegressionPrintResults(joined, "fut_ret_2h",
 			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
-				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100"});
+				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100", "weightedMidRet12h100"});
 
 		String[] finalXs =
 			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
-				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100", "weightedMidRet12h100"};
+				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100", "weightedMidRet12h100", "bookMA"};*/
+
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet6"});
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet6","bookRatioxRet"});
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet6","bookRatioxRet","bookSMA6"});
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet6","bookRatioxRet","bookEMA6"});
+		String[] finalXs = new String[] {"bookRatio","bookEMA6"};
 		RegressionResults finalResults = runRegressionPrintResults(joined, "fut_ret_2h", finalXs);
 
 		if(sampleTesting.getSamplingType() == IN_SAMPLE) {

@@ -49,16 +49,34 @@ public class ConsolidatedHistory {
 	 */
 	public synchronized Iterable<ConsolidatedSnapshot> values() {
 		modified = false;
-		return () -> new BufferIterator(this);
+		return () -> new BufferIterator(this, tail, true);
+	}
+
+	public synchronized Iterable<ConsolidatedSnapshot> inOrder(int lookbackSeconds) {
+		modified = false;
+		if(buffer[tail] == null) {
+			return () -> new BufferIterator(this, tail, true);
+		} else {
+			long latestNanos = buffer[tail].getTimeNanos();
+			long lookbackNanos = lookbackSeconds * 1000000000L;
+			int first = head;
+			while(latestNanos - buffer[first].getTimeNanos() > lookbackNanos && first!=tail) {
+				first = (first + 1) % maxIntervals;
+			}
+			final int firstFinal = first;
+			return () -> new BufferIterator(this, firstFinal, false);
+		}
 	}
 
 	private class BufferIterator implements Iterator<ConsolidatedSnapshot> {
 		private final ConsolidatedHistory history;
 		private int cur;
+		private boolean backward;
 
-		BufferIterator(ConsolidatedHistory history) {
+		BufferIterator(ConsolidatedHistory history, int startPos, boolean backward) {
 			this.history = history;
-			cur = tail;
+			cur = startPos;
+			this.backward = backward;
 		}
 
 		@Override
@@ -77,10 +95,17 @@ public class ConsolidatedHistory {
 					return null;
 				} else {
 					ConsolidatedSnapshot retVal = buffer[cur];
-					if(cur == head)
-						cur = -1;
-					else
-						cur = (cur - 1 + maxIntervals) % maxIntervals;
+					if(backward) {
+						if(cur == head)
+							cur = -1;
+						else
+							cur = (cur - 1 + maxIntervals) % maxIntervals;
+					} else {
+						if(cur == tail)
+							cur = -1;
+						else
+							cur = (cur + 1) % maxIntervals;
+					}
 					return retVal;
 				}
 			}
