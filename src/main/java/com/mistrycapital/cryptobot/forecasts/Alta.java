@@ -66,15 +66,21 @@ public class Alta implements ForecastCalculator {
 	 * computeDerivedCalcs(). The rest of the code merely calculates based on these definitions
 	 */
 	private void initSignalCalcs() {
+		// return calcs
+		signalCalcs.add(new SignalCalculation("lastPrice", 0, STATIC, data -> data.lastPrice));
+		signalCalcs.add(new SignalCalculation("price5h", 5, STATIC, data -> data.lastPrice));
+
+		// book calcs
 		signalCalcs.add(new SignalCalculation("bookRatio", 0, STATIC, data ->
 			((double) data.bidCount5Pct) / (data.bidCount5Pct + data.askCount5Pct)));
 		signalCalcs.add(new SignalCalculation("bookEMA6", 6, EMA, data ->
 			((double) data.bidCount5Pct) / (data.bidCount5Pct + data.askCount5Pct)));
-		signalCalcs.add(new SignalCalculation("bookSMA6", 6, SMA, data ->
-			((double) data.bidCount5Pct) / (data.bidCount5Pct + data.askCount5Pct)));
-		signalCalcs.add(new SignalCalculation("lastPrice", 0, STATIC, data -> data.lastPrice));
-		signalCalcs.add(new SignalCalculation("price2h", 2, STATIC, data -> data.lastPrice));
-		signalCalcs.add(new SignalCalculation("price6h", 6, STATIC, data -> data.lastPrice));
+
+		// up/down ratio
+		signalCalcs.add(new SignalCalculation("upEMA6", 6, EMA, data -> data.ret >= 0 ? 1 : 0));
+
+		// we need a 12 hour calc to get the other calcs right. TODO: Figure out this bug
+		signalCalcs.add(new SignalCalculation("upRatio12", 12, SMA, data -> data.ret >= 0 ? 1 : 0));
 	}
 
 	/**
@@ -83,12 +89,9 @@ public class Alta implements ForecastCalculator {
 	 * in initSignalCalcs() and here.
 	 */
 	private void computeDerivedCalcs() {
-		final double lagRet2 = variableMap.get("lastPrice") / variableMap.get("price6h") - 1.0;
-		variableMap.put("lagRet2", lagRet2);
-		variableMap.put("lagRet6", variableMap.get("lastPrice") / variableMap.get("price6h") - 1.0);
-		variableMap.put("bookRatioxRet", variableMap.get("bookRatio") * lagRet2);
-		variableMap.put("bookSMAxRet", variableMap.get("bookSMA6") * lagRet2);
-		variableMap.put("bookEMAxRet", variableMap.get("bookEMA6") * lagRet2);
+		variableMap.put("lagRet5", variableMap.get("lastPrice") / variableMap.get("price5h") - 1.0);
+		variableMap.put("bookRatioxRet5", variableMap.get("bookRatio") * variableMap.get("lagRet5"));
+		variableMap.put("bookEMA6xRet5", variableMap.get("bookEMA6") * variableMap.get("lagRet5"));
 	}
 
 	@Override

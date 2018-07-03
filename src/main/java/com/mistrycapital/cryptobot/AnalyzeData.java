@@ -47,7 +47,7 @@ public class AnalyzeData {
 		SampleTesting sampleTesting = new SampleTesting(properties);
 		var joined = forecastInputs.join(futureReturns)
 			.filter(key ->
-				key.timeInNanos > 1519862400L*1000000000L                  // discard pre-Mar since it is spotty
+				key.timeInNanos > 1519862400L * 1000000000L                  // discard pre-Mar since it is spotty
 					&& sampleTesting.isSampleValid(key.timeInNanos)        // filter in/out/full sample
 			);
 		log.info("Joining data took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
@@ -87,22 +87,30 @@ public class AnalyzeData {
 			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
 				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100", "weightedMidRet12h100", "bookMA"};*/
 
+		// This was the best out of all regressions using n-hour lag returns
+		//runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"lagRet1", "lagRet5"});
+
+		// I don't fully believe that 1 and 5 hour lags matter due to instability of coeffs
+		//runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"lagRet1", "lagRet5", "bookRatioxRet1", "bookRatioxRet5"});
+
+		// 5 hour showed better in/out sample stability than 1 hour
+		runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"lagRet5", "bookRatioxRet5"});
+
+		// 6 hour EMA was best, but putting this on the back burner because of instability across products and samples
+		runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"lagRet5", "bookRatioxRet5", "bookEMA6xRet5"});
+
+		// EMA was slightly better than SMA for upRatio
 		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet6"});
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet6","bookRatioxRet"});
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet6","bookRatioxRet","bookSMA6"});
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet6","bookRatioxRet","bookEMA6"});
-		String[] finalXs = new String[] {"bookRatio","bookEMA6"};
+			new String[] {"lagRet5", "bookRatioxRet5", "bookEMA6xRet5", "upEMA6"});
+
+		String[] finalXs = new String[] {"lagRet5", "bookRatioxRet5", "bookEMA6xRet5", "upEMA6"};
 		RegressionResults finalResults = runRegressionPrintResults(joined, "fut_ret_2h", finalXs);
 
 		if(sampleTesting.getSamplingType() == IN_SAMPLE) {
 			// compare with out of sample
 			final var outSample = forecastInputs.join(futureReturns)
 				.filter(key ->
-					key.timeInNanos > 1519862400L*1000000000L                   // discard pre-Mar since it is spotty
+					key.timeInNanos > 1519862400L * 1000000000L                 // discard pre-Mar since it is spotty
 						&& !sampleTesting.isSampleValid(key.timeInNanos)        // filter out sample
 				);
 
@@ -115,6 +123,16 @@ public class AnalyzeData {
 				calcMSE("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), joined));
 			System.out.println("MSE out = " +
 				calcMSE("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), outSample));
+
+			System.out.println("Product MSEs:");
+			for(Product product : Product.FAST_VALUES) {
+				System.out.println("MSE " + product + " in  = " +
+					calcMSE("fut_ret_2h", finalXs, finalResults.getParameterEstimates(),
+						joined.filter(key -> key.product == product)));
+				System.out.println("MSE " + product + " out = " +
+					calcMSE("fut_ret_2h", finalXs, finalResults.getParameterEstimates(),
+						outSample.filter(key -> key.product == product)));
+			}
 
 			System.out.println("Out of sample product coeffs:");
 			printProductCoeffs(outSample, "fut_ret_2h", finalXs);
