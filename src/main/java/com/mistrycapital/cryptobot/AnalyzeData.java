@@ -17,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 import static com.mistrycapital.cryptobot.sim.SampleTesting.SamplingType.IN_SAMPLE;
@@ -32,6 +33,7 @@ public class AnalyzeData {
 		log.debug("Read data from " + dataDir);
 
 		ForecastCalculator forecastCalculator = new Alta(properties);
+		String fcName = forecastCalculator.getClass().getSimpleName().toLowerCase(Locale.US);
 		log.debug("Forecast calculator is " + forecastCalculator.getClass().getName());
 
 		MCLoggerFactory.resetLogLevel(Level.INFO);
@@ -53,7 +55,7 @@ public class AnalyzeData {
 		log.info("Joining data took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
 		startNanos = System.nanoTime();
 
-		boolean writeOut = false;
+		boolean writeOut = true;
 		if(writeOut) {
 			try(
 				BufferedWriter out = Files.newBufferedWriter(dataDir.resolve("temp.csv"), StandardCharsets.UTF_8);
@@ -93,17 +95,26 @@ public class AnalyzeData {
 		// I don't fully believe that 1 and 5 hour lags matter due to instability of coeffs
 		//runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"lagRet1", "lagRet5", "bookRatioxRet1", "bookRatioxRet5"});
 
+		//runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"lagRet5"});
+
 		// 5 hour showed better in/out sample stability than 1 hour
-		runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"lagRet5", "bookRatioxRet5"});
+		//runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"lagRet5", "bookRatioxRet5"});
 
-		// 6 hour EMA was best, but putting this on the back burner because of instability across products and samples
-		runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"lagRet5", "bookRatioxRet5", "bookEMA6xRet5"});
+		// Book SMA was better than EMA, 9h a little better than 6h (but could go back to 6h), xRet didn't help
+		//runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9"});
 
-		// EMA was slightly better than SMA for upRatio
+		// Up ratio SMA better than EMA, but neither provided a ton of lift. Consider taking out
+		//runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2"});
+
+		// 10h OBV value was much better than 3h but I don't believe it based on out of sample MSE
 		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet5", "bookRatioxRet5", "bookEMA6xRet5", "upEMA6"});
+			new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3"});
 
-		String[] finalXs = new String[] {"lagRet5", "bookRatioxRet5", "bookEMA6xRet5", "upEMA6"};
+		// RSI ratio did nothing without multiplying by return but with return out of sample MSE was horrible
+		//runRegressionPrintResults(joined, "fut_ret_2h",
+		//	new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "RSIRatio7xRet5"});
+
+		String[] finalXs = new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3"};
 		RegressionResults finalResults = runRegressionPrintResults(joined, "fut_ret_2h", finalXs);
 
 		if(sampleTesting.getSamplingType() == IN_SAMPLE) {
@@ -135,13 +146,13 @@ public class AnalyzeData {
 			}
 
 			System.out.println("Out of sample product coeffs:");
-			printProductCoeffs(outSample, "fut_ret_2h", finalXs);
+			printProductCoeffs(outSample, "fut_ret_2h", finalXs, fcName);
 		}
 
-		printProductCoeffs(joined, "fut_ret_2h", finalXs);
+		printProductCoeffs(joined, "fut_ret_2h", finalXs, fcName);
 	}
 
-	static void printProductCoeffs(Table<TimeProduct> table, String y, String[] xs)
+	static void printProductCoeffs(Table<TimeProduct> table, String y, String[] xs, String fcName)
 		throws ColumnNotFoundException
 	{
 		String coeffsStr = "";
@@ -153,7 +164,7 @@ public class AnalyzeData {
 				.map(x -> Double.isNaN(x) ? 0.0 : x)
 				.mapToObj(Double::toString)
 				.collect(Collectors.joining(","));
-			coeffsStr += "forecast.snowbird.coeffs." + product + "=" + coeffString + "\n";
+			coeffsStr += "forecast." + fcName + ".coeffs." + product + "=" + coeffString + "\n";
 		}
 		System.out.println(coeffsStr);
 	}

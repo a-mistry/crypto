@@ -16,9 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.ToDoubleFunction;
 
-import static com.mistrycapital.cryptobot.forecasts.Alta.SignalType.EMA;
-import static com.mistrycapital.cryptobot.forecasts.Alta.SignalType.SMA;
-import static com.mistrycapital.cryptobot.forecasts.Alta.SignalType.STATIC;
+import static com.mistrycapital.cryptobot.forecasts.Alta.SignalType.*;
 
 /**
  * Forecast using optimized moving averages and other lag metrics
@@ -32,7 +30,7 @@ public class Alta implements ForecastCalculator {
 	private final int maxLookbackHours;
 	private final List<SignalCalculation> signalCalcs;
 	private static final String[] signalsToUse =
-		new String[] {"bookRatio"};
+		new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3"};
 
 	public Alta(MCProperties properties) {
 		coeffs = new double[Product.count][signalsToUse.length + 1];
@@ -58,7 +56,8 @@ public class Alta implements ForecastCalculator {
 		int maxLookbackHours = 0;
 		for(SignalCalculation signalCalc : signalCalcs)
 			maxLookbackHours = Math.max(maxLookbackHours, signalCalc.lookbackHours);
-		this.maxLookbackHours = maxLookbackHours;
+		// TODO: Figure out why adding 1 here helps
+		this.maxLookbackHours = maxLookbackHours + 1;
 	}
 
 	/**
@@ -71,16 +70,24 @@ public class Alta implements ForecastCalculator {
 		signalCalcs.add(new SignalCalculation("price5h", 5, STATIC, data -> data.lastPrice));
 
 		// book calcs
-		signalCalcs.add(new SignalCalculation("bookRatio", 0, STATIC, data ->
-			((double) data.bidCount5Pct) / (data.bidCount5Pct + data.askCount5Pct)));
-		signalCalcs.add(new SignalCalculation("bookEMA6", 6, EMA, data ->
-			((double) data.bidCount5Pct) / (data.bidCount5Pct + data.askCount5Pct)));
+		ToDoubleFunction<ProductSnapshot> bookRatioFunction = data ->
+			((double) data.bidCount5Pct) / (data.bidCount5Pct + data.askCount5Pct);
+		signalCalcs.add(new SignalCalculation("bookRatio", 0, STATIC, bookRatioFunction));
+		signalCalcs.add(new SignalCalculation("bookSMA9", 9, SMA, bookRatioFunction));
 
 		// up/down ratio
-		signalCalcs.add(new SignalCalculation("upEMA6", 6, EMA, data -> data.ret >= 0 ? 1 : 0));
+		signalCalcs.add(new SignalCalculation("upRatio2", 2, SMA, data -> data.ret >= 0 ? 1 : 0));
 
-		// we need a 12 hour calc to get the other calcs right. TODO: Figure out this bug
-		signalCalcs.add(new SignalCalculation("upRatio12", 12, SMA, data -> data.ret >= 0 ? 1 : 0));
+		// on balance volume calcs
+		signalCalcs.add(new SignalCalculation("sumVolxRet3", 3, SUM,
+			data -> Math.log(1 + data.ret) * data.volume));
+		signalCalcs.add(new SignalCalculation("volume3", 3, SUM, data -> data.volume));
+
+		// RSI
+		signalCalcs.add(new SignalCalculation("sumUpChange7", 7, SUM, data ->
+			data.ret < 0 ? 0 : data.lastPrice - data.lastPrice / (1 + data.ret)));
+		signalCalcs.add(new SignalCalculation("sumDownChange7", 7, SUM, data ->
+			data.ret >= 0 ? 0 : data.lastPrice / (1 + data.ret) - data.lastPrice));
 	}
 
 	/**
@@ -91,7 +98,12 @@ public class Alta implements ForecastCalculator {
 	private void computeDerivedCalcs() {
 		variableMap.put("lagRet5", variableMap.get("lastPrice") / variableMap.get("price5h") - 1.0);
 		variableMap.put("bookRatioxRet5", variableMap.get("bookRatio") * variableMap.get("lagRet5"));
-		variableMap.put("bookEMA6xRet5", variableMap.get("bookEMA6") * variableMap.get("lagRet5"));
+		variableMap.put("onBalVol3", variableMap.get("sumVolxRet3") / variableMap.get("volume3"));
+		if(variableMap.get("sumDownChange7") == 0)
+			variableMap.put("RSIRatio7", Double.NaN);
+		else
+			variableMap.put("RSIRatio7", variableMap.get("sumUpChange7") / variableMap.get("sumDownChange7"));
+		variableMap.put("RSIRatio7xRet5", variableMap.get("RSIRatio7") * variableMap.get("lagRet5"));
 	}
 
 	@Override
@@ -144,6 +156,7 @@ public class Alta implements ForecastCalculator {
 
 					case SMA:
 					case EMA:
+					case SUM:
 						if(timeCompare >= 0)
 							signalCalc.numDatapoints++;
 						break;
@@ -160,12 +173,15 @@ public class Alta implements ForecastCalculator {
 					break;
 
 				case SMA:
-					signalCalc.value = 1.0 / signalCalc.numDatapoints;
+					signalCalc.multiplier = 1.0 / signalCalc.numDatapoints;
 					break;
 
 				case EMA:
-					signalCalc.value = 2.0 / (signalCalc.numDatapoints + 1);
+					signalCalc.multiplier = 2.0 / (signalCalc.numDatapoints + 1);
 					break;
+
+				case SUM:
+					// nothing to do
 			}
 		}
 
@@ -190,6 +206,10 @@ public class Alta implements ForecastCalculator {
 							(1 - signalCalc.multiplier) * signalCalc.value + signalCalc.multiplier * curValue;
 						break;
 
+					case SUM:
+						if(Double.isNaN(signalCalc.value)) signalCalc.value = 0.0;
+						signalCalc.value += signalCalc.calculate.applyAsDouble(snapshot);
+
 					case STATIC:
 						// nothing to do here
 				}
@@ -213,7 +233,9 @@ public class Alta implements ForecastCalculator {
 		/** Simple moving average */
 		SMA,
 		/** Exponential moving average */
-		EMA
+		EMA,
+		/** Moving sum */
+		SUM
 	}
 
 	class SignalCalculation {
