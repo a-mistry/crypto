@@ -3,6 +3,7 @@ package com.mistrycapital.cryptobot;
 import ch.qos.logback.classic.Level;
 import com.mistrycapital.cryptobot.forecasts.Alta;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
+import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.regression.*;
 import com.mistrycapital.cryptobot.sim.SampleTesting;
@@ -77,8 +78,8 @@ public class AnalyzeData {
 			}
 		}
 		log.info("Writing data took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
-
-/*		runRegressionPrintResults(joined, "fut_ret_2h",
+/*
+		runRegressionPrintResults(joined, "fut_ret_2h",
 			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
 				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6"});
 		runRegressionPrintResults(joined, "fut_ret_2h",
@@ -87,8 +88,8 @@ public class AnalyzeData {
 
 		String[] finalXs =
 			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
-				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100", "weightedMidRet12h100", "bookMA"};*/
-
+				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100", "weightedMidRet12h100", "bookMA"};
+*/
 		// This was the best out of all regressions using n-hour lag returns
 		//runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"lagRet1", "lagRet5"});
 
@@ -107,14 +108,22 @@ public class AnalyzeData {
 		//runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2"});
 
 		// 10h OBV value was much better than 3h but I don't believe it based on out of sample MSE
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3"});
+		//runRegressionPrintResults(joined, "fut_ret_2h",
+		//	new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3"});
 
 		// RSI ratio did nothing without multiplying by return but with return out of sample MSE was horrible
 		//runRegressionPrintResults(joined, "fut_ret_2h",
 		//	new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "RSIRatio7xRet5"});
 
-		String[] finalXs = new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3"};
+		// simple moving sum was better than EMA on trade ratio, multiplying by return didn't matter
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "tradeRatio10"});
+
+		// new ratio and cancel ratio has the exact same effect, so we can only include one
+		runRegressionPrintResults(joined, "fut_ret_2h",
+			new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "tradeRatio10", "newRatio10"});
+
+		String[] finalXs = new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "tradeRatio10", "newRatio10"};
 		RegressionResults finalResults = runRegressionPrintResults(joined, "fut_ret_2h", finalXs);
 
 		if(sampleTesting.getSamplingType() == IN_SAMPLE) {
