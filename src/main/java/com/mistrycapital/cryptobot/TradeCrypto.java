@@ -10,10 +10,7 @@ import com.mistrycapital.cryptobot.database.DBRecorder;
 import com.mistrycapital.cryptobot.dynamic.DynamicTracker;
 import com.mistrycapital.cryptobot.execution.ChasingGdaxExecutionEngine;
 import com.mistrycapital.cryptobot.execution.ExecutionEngine;
-import com.mistrycapital.cryptobot.execution.GdaxExecutionEngine;
-import com.mistrycapital.cryptobot.execution.TradeInstruction;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
-import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.GdaxPositionsProvider;
 import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
 import com.mistrycapital.cryptobot.gdax.common.Product;
@@ -37,6 +34,7 @@ import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -89,7 +87,17 @@ public class TradeCrypto {
 		DailyAppender dailyAppender = new DailyAppender(accountant, timeKeeper, intervalizer, dataDir, DAILY_FILE_NAME);
 		dailyAppender.open();
 		ForecastAppender forecastAppender = new ForecastAppender(dataDir, FORECAST_FILE_NAME, timeKeeper);
-		ForecastCalculator forecastCalculator = new Snowbird(properties);
+
+		final ForecastCalculator forecastCalculator;
+		try {
+			String fcName = properties.getProperty("forecast.calculator");
+			@SuppressWarnings("unchecked")
+			Class<ForecastCalculator> fcClazz =
+				(Class<ForecastCalculator>) Class.forName("com.mistrycapital.cryptobot.forecasts." + fcName);
+			forecastCalculator = fcClazz.getConstructor(MCProperties.class).newInstance(properties);
+		} catch(ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InstantiationException | InvocationTargetException e) {
+			throw new RuntimeException(e);
+		}
 
 		Tactic tactic = new TwoHourTactic(properties, timeKeeper, accountant);
 		TradeRiskValidator tradeRiskValidator =

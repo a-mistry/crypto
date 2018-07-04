@@ -13,7 +13,6 @@ import com.mistrycapital.cryptobot.book.BBO;
 import com.mistrycapital.cryptobot.book.BBOProvider;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
-import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.client.GdaxClient;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.Product;
@@ -29,6 +28,7 @@ import org.slf4j.Logger;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -145,7 +145,15 @@ public class SimRunner implements Runnable {
 		throws IOException
 	{
 		ConsolidatedHistory history = new ConsolidatedHistory(intervalizer);
-		ForecastCalculator forecastCalculator = new Snowbird(simProperties);
+		final ForecastCalculator forecastCalculator;
+		try {
+			String fcName = simProperties.getProperty("forecast.calculator");
+			Class<ForecastCalculator> fcClazz =
+				(Class<ForecastCalculator>) Class.forName("com.mistrycapital.cryptobot.forecasts." + fcName);
+			forecastCalculator = fcClazz.getConstructor(MCProperties.class).newInstance(simProperties);
+		} catch(ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InstantiationException | InvocationTargetException e) {
+			throw new RuntimeException(e);
+		}
 		SimTimeKeeper simTimeKeeper = new SimTimeKeeper();
 		ForecastAppender forecastAppender = null;
 		if(simProperties.getBooleanProperty("sim.logForecasts", false)) {

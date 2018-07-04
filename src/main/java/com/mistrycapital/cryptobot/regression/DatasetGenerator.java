@@ -85,6 +85,7 @@ public class DatasetGenerator {
 	public Table<TimeProduct> getReturnDataset()
 		throws IOException
 	{
+		// TODO: get returns from consolidated history
 		var table = new Table<TimeProduct>();
 		try {
 			table.add("fut_ret_2h", new Column<TimeProduct>());

@@ -33,7 +33,9 @@ public class AnalyzeData {
 		Path dataDir = Paths.get(properties.getProperty("dataDir"));
 		log.debug("Read data from " + dataDir);
 
-		ForecastCalculator forecastCalculator = new Alta(properties);
+		final boolean useAlta = properties.getProperty("forecast.calculator").equalsIgnoreCase("Alta");
+		final ForecastCalculator forecastCalculator;
+		forecastCalculator = useAlta ? new Alta(properties) : new Snowbird(properties);
 		String fcName = forecastCalculator.getClass().getSimpleName().toLowerCase(Locale.US);
 		log.debug("Forecast calculator is " + forecastCalculator.getClass().getName());
 
@@ -56,7 +58,7 @@ public class AnalyzeData {
 		log.info("Joining data took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
 		startNanos = System.nanoTime();
 
-		boolean writeOut = true;
+		boolean writeOut = false;
 		if(writeOut) {
 			try(
 				BufferedWriter out = Files.newBufferedWriter(dataDir.resolve("temp.csv"), StandardCharsets.UTF_8);
@@ -78,18 +80,14 @@ public class AnalyzeData {
 			}
 		}
 		log.info("Writing data took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
-/*
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
-				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6"});
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
-				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100", "weightedMidRet12h100"});
 
-		String[] finalXs =
-			new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
-				"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100", "weightedMidRet12h100", "bookMA"};
-*/
+		// previous version of Snowbird had no book MA
+		//runRegressionPrintResults(joined, "fut_ret_2h",
+		//	new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
+		//		"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100", "weightedMidRet12h100"});
+
+
+		// The below was work and info leading up to the Alta forecast signals
 		// This was the best out of all regressions using n-hour lag returns
 		//runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"lagRet1", "lagRet5"});
 
@@ -116,14 +114,32 @@ public class AnalyzeData {
 		//	new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "RSIRatio7xRet5"});
 
 		// simple moving sum was better than EMA on trade ratio, multiplying by return didn't matter
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "tradeRatio10"});
+		//runRegressionPrintResults(joined, "fut_ret_2h",
+		//	new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "tradeRatio10"});
 
 		// new ratio and cancel ratio has the exact same effect, so we can only include one
-		runRegressionPrintResults(joined, "fut_ret_2h",
-			new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "tradeRatio10", "newRatio10"});
+		//runRegressionPrintResults(joined, "fut_ret_2h",
+		//	new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "tradeRatio10",
+		//		"newRatio10"});
 
-		String[] finalXs = new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "tradeRatio10", "newRatio10"};
+		// SMA of weighted mid ret had best impact, but last value "worked" in combination with the SMA in terms of R^2 but not out sample MSE
+		//runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9",
+		//	"upRatio2", "onBalVol3", "tradeRatio10", "newRatio10", "weightedMidRetSMA3", "weightedMidRetLast"});
+
+		// Lag BTC return is questionable when looking at MSEs but very strong in R^2
+		//runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9",
+		//	"upRatio2", "onBalVol3", "tradeRatio10", "newRatio10", "weightedMidRetSMA3", "btcRet5"});
+
+		final String[] finalXs;
+		if(useAlta)
+			finalXs = new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "tradeRatio10",
+				"newRatio10", "weightedMidRetSMA3", "btcRet5", "timeToMaxMin8"};
+		else
+			finalXs =
+				new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
+					"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100",
+					"weightedMidRet12h100", "bookMA"};
+
 		RegressionResults finalResults = runRegressionPrintResults(joined, "fut_ret_2h", finalXs);
 
 		if(sampleTesting.getSamplingType() == IN_SAMPLE) {
@@ -139,19 +155,23 @@ public class AnalyzeData {
 				calcRsq("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), joined, joined));
 			System.out.println("R^2 out = " +
 				calcRsq("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), outSample, joined));
-			System.out.println("MSE in  = " +
-				calcMSE("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), joined));
-			System.out.println("MSE out = " +
-				calcMSE("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), outSample));
+			SampleFit inSampleFit = calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), joined);
+			SampleFit outSampleFit =
+				calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), outSample);
+			System.out.println("MSE in = " + inSampleFit.mse + "\tout = " + outSampleFit.mse);
+			System.out.println("MAE in = " + inSampleFit.mae + "\tout = " + outSampleFit.mae);
+			System.out.println("Win ratio in = " + inSampleFit.winRatio + "\tout = " + outSampleFit.winRatio);
 
 			System.out.println("Product MSEs:");
 			for(Product product : Product.FAST_VALUES) {
-				System.out.println("MSE " + product + " in  = " +
-					calcMSE("fut_ret_2h", finalXs, finalResults.getParameterEstimates(),
-						joined.filter(key -> key.product == product)));
-				System.out.println("MSE " + product + " out = " +
-					calcMSE("fut_ret_2h", finalXs, finalResults.getParameterEstimates(),
-						outSample.filter(key -> key.product == product)));
+				inSampleFit = calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(),
+					joined.filter(key -> key.product == product));
+				outSampleFit = calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(),
+					outSample.filter(key -> key.product == product));
+				System.out.println("MSE " + product + " in = " + inSampleFit.mse + "\tout = " + outSampleFit.mse);
+				System.out.println("MAE " + product + " in = " + inSampleFit.mae + "\tout = " + outSampleFit.mae);
+				System.out.println(
+					"Win ratio " + product + " in = " + inSampleFit.winRatio + "\tout = " + outSampleFit.winRatio);
 			}
 
 			System.out.println("Out of sample product coeffs:");
@@ -159,6 +179,13 @@ public class AnalyzeData {
 		}
 
 		printProductCoeffs(joined, "fut_ret_2h", finalXs, fcName);
+		System.out.println("Overall coeffs:");
+		System.out.println("forecast." + fcName + ".coeffs.all=" +
+			Arrays.stream(finalResults.getParameterEstimates())
+				.map(x -> Double.isNaN(x) ? 0.0 : x)
+				.mapToObj(Double::toString)
+				.collect(Collectors.joining(","))
+		);
 	}
 
 	static void printProductCoeffs(Table<TimeProduct> table, String y, String[] xs, String fcName)
@@ -236,8 +263,20 @@ public class AnalyzeData {
 		return 1.0 - residSumSq / totalSumSq;
 	}
 
-	static double calcMSE(String yCol, String[] xCols, double[] coeffs, Table<TimeProduct> table) {
+	static class SampleFit {
+		/** Mean squared error */
+		double mse;
+		/** Mean absolute error */
+		double mae;
+		/** Win ratio (% correct sign) */
+		double winRatio;
+	}
+
+	static SampleFit calcSampleFit(String yCol, String[] xCols, double[] coeffs, Table<TimeProduct> table) {
 		double sqErr = 0.0;
+		double absErr = 0.0;
+		int wins = 0;
+		int winDenom = 0;
 		int n = 0;
 		for(Row<TimeProduct> row : table) {
 			final double y = row.getColumn(yCol);
@@ -248,9 +287,18 @@ public class AnalyzeData {
 			final double resid = y - yFitted;
 			if(!Double.isNaN(resid)) {
 				sqErr += resid * resid;
+				absErr += Math.abs(resid);
+				if(yFitted > 0.00268) {
+					winDenom++;
+					if(y > 0) wins++;
+				}
 				n++;
 			}
 		}
-		return sqErr / n;
+		SampleFit sampleFit = new SampleFit();
+		sampleFit.mse = sqErr / n;
+		sampleFit.mae = absErr / n;
+		sampleFit.winRatio = ((double) wins) / winDenom;
+		return sampleFit;
 	}
 }

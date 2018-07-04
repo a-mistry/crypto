@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 import static java.util.Map.entry;
@@ -31,7 +32,8 @@ public class Snowbird implements ForecastCalculator {
 
 	private static final String[] signalsToUse =
 		new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
-			"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100", "weightedMidRet12h100"};
+			"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100", "weightedMidRet12h100",
+			"bookMA"};
 
 	public Snowbird(MCProperties properties) {
 		final int intervalSeconds = properties.getIntProperty("history.intervalSeconds");
@@ -39,13 +41,16 @@ public class Snowbird implements ForecastCalculator {
 		sixHourDatapoints = twoHourDatapoints * 3;
 		twelveHourDatapoints = sixHourDatapoints * 2;
 
+		String fcName = getClass().getSimpleName().toLowerCase(Locale.US);
 		coeffs = new double[Product.count][signalsToUse.length + 1];
 		for(Product product : Product.FAST_VALUES) {
 			int productIndex = product.getIndex();
-			final String coeffsString = properties.getProperty("forecast.snowbird.coeffs." + product);
-			log.debug(product + " coeffs " + coeffsString);
+			String coeffsString = properties.getProperty("forecast." + fcName + ".coeffs." + product);
+			if(coeffsString == null)
+				coeffsString = properties.getProperty("forecast." + fcName + ".coeffs.all");
 			if(coeffsString == null)
 				throw new RuntimeException("Could not find coeffs for product " + product);
+			log.debug(product + " coeffs " + coeffsString);
 			final String[] split = coeffsString.split(",");
 			if(split.length != coeffs[productIndex].length)
 				throw new RuntimeException(
@@ -89,15 +94,15 @@ public class Snowbird implements ForecastCalculator {
 
 		// MA book
 		int points6h = 0;
-		for(ConsolidatedSnapshot snapshot : consolidatedHistory.inOrder(60 * 60 * 6))
-			points6h++;
 		double bookMA = 0.0;
-		double emaMult6h = 2.0 / (points6h + 1);
 		for(ConsolidatedSnapshot snapshot : consolidatedHistory.inOrder(60 * 60 * 6)) {
 			final ProductSnapshot data = snapshot.getProductSnapshot(product);
 			final double periodBookRatio = ((double) data.bidCount5Pct) / (data.bidCount5Pct + data.askCount5Pct);
-			bookMA = bookMA == 0.0 ? periodBookRatio : (emaMult6h * periodBookRatio + (1 - emaMult6h) * bookMA);
+			// SMA was better than EMA
+			bookMA += periodBookRatio;
+			points6h++;
 		}
+		bookMA /= points6h;
 
 		// weighted mid and 2h ago
 		final double weightedMidRet100 = latest.weightedMid100 / latest.midPrice - 1;

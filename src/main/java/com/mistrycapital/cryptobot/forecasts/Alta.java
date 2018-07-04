@@ -10,10 +10,7 @@ import com.mistrycapital.cryptobot.util.MCProperties;
 import org.slf4j.Logger;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.ToDoubleFunction;
 
 import static com.mistrycapital.cryptobot.forecasts.Alta.SignalType.*;
@@ -30,16 +27,20 @@ public class Alta implements ForecastCalculator {
 	private final int maxLookbackHours;
 	private final List<SignalCalculation> signalCalcs;
 	private static final String[] signalsToUse =
-		new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3"};
+		new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "tradeRatio10",
+			"newRatio10", "weightedMidRetSMA3", "btcRet5", "timeToMaxMin8"};
 
 	public Alta(MCProperties properties) {
+		String fcName = getClass().getSimpleName().toLowerCase(Locale.US);
 		coeffs = new double[Product.count][signalsToUse.length + 1];
 		for(Product product : Product.FAST_VALUES) {
 			int productIndex = product.getIndex();
-			final String coeffsString = properties.getProperty("forecast.alta.coeffs." + product);
-			log.debug(product + " coeffs " + coeffsString);
+			String coeffsString = properties.getProperty("forecast." + fcName + ".coeffs." + product);
+			if(coeffsString == null)
+				coeffsString = properties.getProperty("forecast." + fcName + ".coeffs.all");
 			if(coeffsString == null)
 				throw new RuntimeException("Could not find coeffs for product " + product);
+			log.debug(product + " coeffs " + coeffsString);
 			final String[] split = coeffsString.split(",");
 			if(split.length != coeffs[productIndex].length)
 				throw new RuntimeException(
@@ -66,8 +67,9 @@ public class Alta implements ForecastCalculator {
 	 */
 	private void initSignalCalcs() {
 		// return calcs
-		signalCalcs.add(new SignalCalculation("lastPrice", 0, STATIC, data -> data.lastPrice));
-		signalCalcs.add(new SignalCalculation("price5h", 5, STATIC, data -> data.lastPrice));
+		ToDoubleFunction<ProductSnapshot> lastPriceFunction = data -> data.lastPrice;
+		signalCalcs.add(new SignalCalculation("lastPrice", 0, STATIC, lastPriceFunction));
+		signalCalcs.add(new SignalCalculation("price5h", 5, STATIC, lastPriceFunction));
 
 		// book calcs
 		ToDoubleFunction<ProductSnapshot> bookRatioFunction = data ->
@@ -98,12 +100,16 @@ public class Alta implements ForecastCalculator {
 		signalCalcs.add(new SignalCalculation("newAskCount10", 10, SUM, data -> data.newAskCount));
 //		signalCalcs.add(new SignalCalculation("bidCancelCount10", 10, SUM, data -> data.bidCancelCount));
 //		signalCalcs.add(new SignalCalculation("askCancelCount10", 10, SUM, data -> data.askCancelCount));
+
+		// mid price weighted by top 100 level sizes
+		signalCalcs.add(new SignalCalculation("weightedMidLast", 0, STATIC, data -> data.weightedMid100));
+		signalCalcs.add(new SignalCalculation("weightedMidSMA3", 3, SMA, data -> data.weightedMid100));
 	}
 
 	/**
 	 * Computes signals derived from calculations of static and moving average data. This method serves as
 	 * organizational convenience - there is no need to modify getInputVariables(); the calculation is
-	 * in initSignalCalcs() and here.
+	 * in initSignalCalcs() and here. Things that don't fit can be put in computeExtraCalcs()
 	 */
 	private void computeDerivedCalcs() {
 		variableMap.put("lagRet5", variableMap.get("lastPrice") / variableMap.get("price5h") - 1.0);
@@ -120,6 +126,51 @@ public class Alta implements ForecastCalculator {
 			variableMap.get("book5PctCount"));
 //		variableMap.put("cancelRatio10", (variableMap.get("bidCancelCount10") - variableMap.get("askCancelCount10")) /
 //			variableMap.get("book5PctCount"));
+
+		variableMap.put("weightedMidRetLast", variableMap.get("weightedMidLast") / variableMap.get("lastPrice") - 1);
+		variableMap.put("weightedMidRetSMA3", variableMap.get("weightedMidSMA3") / variableMap.get("lastPrice") - 1);
+	}
+
+	/**
+	 * Calculations that don't fit the framework
+	 */
+	private void computeExtraCalcs(final ConsolidatedHistory consolidatedHistory, final Product product) {
+		// lag BTC return
+		final ConsolidatedSnapshot latest = consolidatedHistory.latest();
+		final long latestTimeNanos = latest.getTimeNanos();
+		final double btcLastPrice = latest.getProductSnapshot(Product.BTC_USD).lastPrice;
+
+		double btcPrice5h = Double.NaN;
+		for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedHistory.inOrder((5 + 1) * 3600)) {
+			if(consolidatedSnapshot.getTimeNanos() > latestTimeNanos - 5 * 3600000000000L)
+				break;
+			btcPrice5h = consolidatedSnapshot.getProductSnapshot(Product.BTC_USD).lastPrice;
+		}
+		variableMap.put("btcRet5", btcPrice5h / btcLastPrice - 1);
+
+		// intervals since max/min
+		double minPrice = Double.MAX_VALUE;
+		double maxPrice = 0.0;
+		int intervalsToMin = 0;
+		int intervalsToMax = 0;
+		for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedHistory.inOrder(8 * 3600)) {
+			ProductSnapshot snapshot = consolidatedSnapshot.getProductSnapshot(product);
+
+			if(snapshot.vwap < minPrice) {
+				minPrice = snapshot.vwap;
+				intervalsToMin = 0;
+			} else {
+				intervalsToMin++;
+			}
+
+			if(snapshot.vwap > maxPrice) {
+				maxPrice = snapshot.vwap;
+				intervalsToMax = 0;
+			} else {
+				intervalsToMax++;
+			}
+		}
+		variableMap.put("timeToMaxMin8", (double) (intervalsToMax - intervalsToMin));
 	}
 
 	@Override
@@ -239,6 +290,9 @@ public class Alta implements ForecastCalculator {
 
 		// compute any signals derived from earlier calcs
 		computeDerivedCalcs();
+
+		// other calcs that don't fit the framework
+		computeExtraCalcs(consolidatedHistory, product);
 
 		return variableMap;
 	}
