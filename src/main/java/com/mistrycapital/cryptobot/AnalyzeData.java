@@ -160,7 +160,17 @@ public class AnalyzeData {
 				calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), outSample);
 			System.out.println("MSE in = " + inSampleFit.mse + "\tout = " + outSampleFit.mse);
 			System.out.println("MAE in = " + inSampleFit.mae + "\tout = " + outSampleFit.mae);
-			System.out.println("Win ratio in = " + inSampleFit.winRatio + "\tout = " + outSampleFit.winRatio);
+			System.out.println("Win ratio in = " + inSampleFit.winRatio + "\tout = " + outSampleFit.winRatio + " ret " +
+				outSampleFit.retPos);
+			System.out.println(
+				"Win ratio (>10bp pred) in = " + inSampleFit.winRatio10bp + "\tout = " + outSampleFit.winRatio10bp +
+					" ret " + outSampleFit.ret10bp);
+			System.out.println(
+				"Win ratio (>20bp pred) in = " + inSampleFit.winRatio20bp + "\tout = " + outSampleFit.winRatio20bp +
+					" ret " + outSampleFit.ret20bp);
+			System.out.println(
+				"Win ratio (>30bp pred) in = " + inSampleFit.winRatio30bp + "\tout = " + outSampleFit.winRatio30bp +
+					" ret " + outSampleFit.ret30bp);
 
 			System.out.println("Product MSEs:");
 			for(Product product : Product.FAST_VALUES) {
@@ -268,15 +278,31 @@ public class AnalyzeData {
 		double mse;
 		/** Mean absolute error */
 		double mae;
-		/** Win ratio (% correct sign) */
+		/** Win ratio (% correct of predicted gains) */
 		double winRatio;
+		/** Win ratio above 10bp threshold */
+		double winRatio10bp;
+		/** Win ratio above 20bp threshold */
+		double winRatio20bp;
+		/** Win ratio above 30bp threshold */
+		double winRatio30bp;
+		/** Average return when positive */
+		double retPos;
+		/** Average return when above 10bp threshold */
+		double ret10bp;
+		/** Average return when above 20bp threshold */
+		double ret20bp;
+		/** Average return when above 30bp threshold */
+		double ret30bp;
 	}
 
 	static SampleFit calcSampleFit(String yCol, String[] xCols, double[] coeffs, Table<TimeProduct> table) {
 		double sqErr = 0.0;
 		double absErr = 0.0;
-		int wins = 0;
-		int winDenom = 0;
+		double[] thresholds = new double[] {0, 0.0010, 0.0020, 0.0030};
+		int[] wins = new int[thresholds.length];
+		int[] numAboveThreshold = new int[thresholds.length];
+		double[] rets = new double[thresholds.length];
 		int n = 0;
 		for(Row<TimeProduct> row : table) {
 			final double y = row.getColumn(yCol);
@@ -288,9 +314,14 @@ public class AnalyzeData {
 			if(!Double.isNaN(resid)) {
 				sqErr += resid * resid;
 				absErr += Math.abs(resid);
-				if(yFitted > 0.00268) {
-					winDenom++;
-					if(y > 0) wins++;
+				for(int i = 0; i < thresholds.length; i++) {
+					if(yFitted > thresholds[i]) {
+						numAboveThreshold[i]++;
+						if(y > 0) {
+							wins[i]++;
+							rets[i] += y;
+						}
+					}
 				}
 				n++;
 			}
@@ -298,7 +329,14 @@ public class AnalyzeData {
 		SampleFit sampleFit = new SampleFit();
 		sampleFit.mse = sqErr / n;
 		sampleFit.mae = absErr / n;
-		sampleFit.winRatio = ((double) wins) / winDenom;
+		sampleFit.winRatio = ((double) wins[0]) / numAboveThreshold[0];
+		sampleFit.winRatio10bp = ((double) wins[1]) / numAboveThreshold[1];
+		sampleFit.winRatio20bp = ((double) wins[2]) / numAboveThreshold[2];
+		sampleFit.winRatio30bp = ((double) wins[3]) / numAboveThreshold[3];
+		sampleFit.retPos = rets[0] / numAboveThreshold[0];
+		sampleFit.ret10bp = rets[1] / numAboveThreshold[1];
+		sampleFit.ret20bp = rets[2] / numAboveThreshold[2];
+		sampleFit.ret30bp = rets[3] / numAboveThreshold[3];
 		return sampleFit;
 	}
 }
