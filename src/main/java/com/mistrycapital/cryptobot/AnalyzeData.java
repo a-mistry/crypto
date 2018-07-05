@@ -130,6 +130,14 @@ public class AnalyzeData {
 		//runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9",
 		//	"upRatio2", "onBalVol3", "tradeRatio10", "newRatio10", "weightedMidRetSMA3", "btcRet5"});
 
+		// This works about as well as the full set
+		runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"bookRatioxRet5", "bookSMA9",
+			"onBalVol3", "tradeRatio10", "weightedMidRetSMA3", "btcRet5"});
+		runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"bookRatioxRet5",
+			"onBalVol3", "tradeRatio10", "weightedMidRetSMA3", "weightedMidRetLast", "btcRet5"});
+		runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"bookRatioxRet5", "onBalVol3",
+			"tradeRatio10", "weightedMidRetSMA3", "weightedMidRetLast", "btcRet5", "cancelRatio10"});
+
 		final String[] finalXs;
 		if(useAlta)
 			finalXs = new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "tradeRatio10",

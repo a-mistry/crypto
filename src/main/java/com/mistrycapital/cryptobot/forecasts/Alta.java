@@ -85,11 +85,11 @@ public class Alta implements ForecastCalculator {
 			data -> Math.log(1 + data.ret) * data.volume));
 		signalCalcs.add(new SignalCalculation("volume3", 3, SUM, data -> data.volume));
 
-//		// RSI
-//		signalCalcs.add(new SignalCalculation("sumUpChange7", 7, SUM, data ->
-//			data.ret < 0 ? 0 : data.lastPrice - data.lastPrice / (1 + data.ret)));
-//		signalCalcs.add(new SignalCalculation("sumDownChange7", 7, SUM, data ->
-//			data.ret >= 0 ? 0 : data.lastPrice / (1 + data.ret) - data.lastPrice));
+		// RSI
+		signalCalcs.add(new SignalCalculation("sumUpChange7", 7, SUM, data ->
+			data.ret < 0 ? 0 : data.lastPrice - data.lastPrice / (1 + data.ret)));
+		signalCalcs.add(new SignalCalculation("sumDownChange7", 7, SUM, data ->
+			data.ret >= 0 ? 0 : data.lastPrice / (1 + data.ret) - data.lastPrice));
 
 		// trade ratio
 		signalCalcs.add(new SignalCalculation("bidTradeCount10", 10, SUM, data -> data.bidTradeCount));
@@ -98,8 +98,8 @@ public class Alta implements ForecastCalculator {
 			data.bidCount5Pct + data.askCount5Pct));
 		signalCalcs.add(new SignalCalculation("newBidCount10", 10, SUM, data -> data.newBidCount));
 		signalCalcs.add(new SignalCalculation("newAskCount10", 10, SUM, data -> data.newAskCount));
-//		signalCalcs.add(new SignalCalculation("bidCancelCount10", 10, SUM, data -> data.bidCancelCount));
-//		signalCalcs.add(new SignalCalculation("askCancelCount10", 10, SUM, data -> data.askCancelCount));
+		signalCalcs.add(new SignalCalculation("bidCancelCount10", 10, SUM, data -> data.bidCancelCount));
+		signalCalcs.add(new SignalCalculation("askCancelCount10", 10, SUM, data -> data.askCancelCount));
 
 		// mid price weighted by top 100 level sizes
 		signalCalcs.add(new SignalCalculation("weightedMidLast", 0, STATIC, data -> data.weightedMid100));
@@ -115,17 +115,17 @@ public class Alta implements ForecastCalculator {
 		variableMap.put("lagRet5", variableMap.get("lastPrice") / variableMap.get("price5h") - 1.0);
 		variableMap.put("bookRatioxRet5", variableMap.get("bookRatio") * variableMap.get("lagRet5"));
 		variableMap.put("onBalVol3", variableMap.get("sumVolxRet3") / variableMap.get("volume3"));
-//		if(variableMap.get("sumDownChange7") == 0)
-//			variableMap.put("RSIRatio7", Double.NaN);
-//		else
-//			variableMap.put("RSIRatio7", variableMap.get("sumUpChange7") / variableMap.get("sumDownChange7"));
-//		variableMap.put("RSIRatio7xRet5", variableMap.get("RSIRatio7") * variableMap.get("lagRet5"));
+		if(variableMap.get("sumDownChange7") == 0)
+			variableMap.put("RSIRatio7", Double.NaN);
+		else
+			variableMap.put("RSIRatio7", variableMap.get("sumUpChange7") / variableMap.get("sumDownChange7"));
+		variableMap.put("RSIRatio7xRet5", variableMap.get("RSIRatio7") * variableMap.get("lagRet5"));
 		variableMap.put("tradeRatio10", variableMap.get("bidTradeCount10") /
 			(variableMap.get("bidTradeCount10") + variableMap.get("askTradeCount10")));
 		variableMap.put("newRatio10", (variableMap.get("newBidCount10") - variableMap.get("newAskCount10")) /
 			variableMap.get("book5PctCount"));
-//		variableMap.put("cancelRatio10", (variableMap.get("bidCancelCount10") - variableMap.get("askCancelCount10")) /
-//			variableMap.get("book5PctCount"));
+		variableMap.put("cancelRatio10", (variableMap.get("bidCancelCount10") - variableMap.get("askCancelCount10")) /
+			variableMap.get("book5PctCount"));
 
 		variableMap.put("weightedMidRetLast", variableMap.get("weightedMidLast") / variableMap.get("lastPrice") - 1);
 		variableMap.put("weightedMidRetSMA3", variableMap.get("weightedMidSMA3") / variableMap.get("lastPrice") - 1);

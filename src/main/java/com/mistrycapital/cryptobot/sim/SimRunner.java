@@ -215,6 +215,7 @@ public class SimRunner implements Runnable {
 		}
 		TradeEvaluator tradeEvaluator = new TradeEvaluator(history, forecastCalculator, tactic, tradeRiskValidator,
 			executionEngine, decisionAppender, dailyAppender, null);
+		SampleTesting sampleTesting = new SampleTesting(simProperties);
 
 		long nextDay = intervalizer.calcNextDayMillis(0);
 		List<Double> dailyPositionValuesUsd = new ArrayList<>(365);
@@ -222,6 +223,8 @@ public class SimRunner implements Runnable {
 		for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedSnapshots) {
 			if(shouldSkipJan && consolidatedSnapshot.getTimeNanos() < 1518048000 * 1000000000L)
 				continue; // spotty/strange data before 2/8, just skip
+			if(!sampleTesting.isSampleValid(consolidatedSnapshot.getTimeNanos()))
+				continue; // allow in/out sample testing
 
 			timeKeeper.advanceTime(consolidatedSnapshot.getTimeNanos());
 			orderBookManager.update(consolidatedSnapshot);
