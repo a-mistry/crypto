@@ -113,7 +113,10 @@ public class Table<K extends Comparable<K>> implements Iterable<Row<K>> {
 
 		@Override
 		public boolean hasNext() {
-			return headValues.stream().anyMatch(Objects::nonNull);
+			for(int i = 0; i < headValues.size(); i++)
+				if(headValues.get(i) != null)
+					return true;
+			return false;
 		}
 
 		@Override
@@ -122,11 +125,14 @@ public class Table<K extends Comparable<K>> implements Iterable<Row<K>> {
 
 			// first first lowest key, then create a row with that key
 			// assumes all columns are sorted
-			Optional<Cell<K>> minKeyCellOpt = headValues.stream()
-				.filter(Objects::nonNull)
-				.min(Comparator.comparing(a -> a.key));
-			if(!minKeyCellOpt.isPresent()) return null;
-			K minKey = minKeyCellOpt.get().key;
+			K minKey = null;
+			for(int i = 0; i < headValues.size(); i++) {
+				Cell<K> headValue = headValues.get(i);
+				if(headValue != null && (minKey == null || headValue.key.compareTo(minKey) < 0)) {
+					minKey = headValue.key;
+				}
+			}
+			if(minKey == null) return null;
 
 			double[] values = new double[headValues.size()];
 			for(int i = 0; i < values.length; i++) {
