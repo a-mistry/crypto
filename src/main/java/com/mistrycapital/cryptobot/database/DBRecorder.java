@@ -1,5 +1,7 @@
 package com.mistrycapital.cryptobot.database;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.*;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -45,7 +47,9 @@ public class DBRecorder {
 			dataSource.setUser(user);
 			dataSource.setPassword(password);
 			dataSource.setRequireSSL(true);
+			dataSource.setUseSSL(true);
 			dataSource.setServerTimezone("UTC");
+			dataSource.setVerifyServerCertificate(false);
 		} catch(SQLException e) {
 			log.error("Error loading database recorder", e);
 			throw new RuntimeException(e);
