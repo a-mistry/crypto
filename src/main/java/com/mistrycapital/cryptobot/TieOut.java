@@ -18,6 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.time.Period;
 import java.time.ZoneOffset;
@@ -56,6 +57,11 @@ public class TieOut {
 		// produce position comparison
 		Path reportFile = dataDir.resolve(properties.getProperty("output.filenameBase.tieout", "tieout") + ".csv");
 		produceTieoutReport(reportFile, positions, simPositions);
+
+		// upload new values to db
+		final String tieOutDescription = properties.getProperty("sim.tieout.description");
+		System.out.println(tieOutDescription);
+		recordValuesToDB(reportFile, tieOutDescription, dbRecorder);
 
 		// calc correlations and RMSEs
 		calcMetrics(reportFile);
@@ -198,6 +204,26 @@ public class TieOut {
 		final double stdDevX = Math.sqrt(xsq - n * xMean * xMean);
 		final double stdDevY = Math.sqrt(ysq - n * yMean * yMean);
 		return covXY / (stdDevX * stdDevY);
+	}
+
+	private static void recordValuesToDB(Path reportFile, String tieOutDescription, DBRecorder dbRecorder)
+		throws IOException, SQLException
+	{
+		try(
+			Reader in = Files.newBufferedReader(reportFile);
+			CSVParser parser = CSVFormat.EXCEL.withFirstRecordAsHeader().parse(in)
+		)
+		{
+			for(CSVRecord record : parser) {
+				final String date = record.get(TieOutColumn.DATE.toString());
+				final Instant instant = Instant.parse(date + "T00:00:00Z");
+				final double position = Double.parseDouble(record.get(TieOutColumn.POSITION_USD.toString()));
+				final double simPosition = Double.parseDouble(record.get(TieOutColumn.SIM_POSITION_USD.toString()));
+				final double ret = Double.parseDouble(record.get(TieOutColumn.RETURN.toString()));
+				final double simRet = Double.parseDouble(record.get(TieOutColumn.SIM_RETURN.toString()));
+				dbRecorder.recordTieOutIfNew(instant, position, simPosition, ret, simRet, tieOutDescription);
+			}
+		}
 	}
 
 	enum TieOutColumn {

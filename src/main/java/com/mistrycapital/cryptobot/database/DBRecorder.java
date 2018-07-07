@@ -4,6 +4,7 @@ import java.sql.*;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -345,5 +346,39 @@ public class DBRecorder {
 			log.error("Could not record done post fill and slippage to database client oid " + clientOid + " "
 				+ filledAmount + " at " + filledPrice + " slippage " + slippage, e);
 		}
+	}
+
+	public void recordTieOutIfNew(Instant instant, double position, double simPosition, double ret, double simRet,
+		String description)
+		throws SQLException
+	{
+		Connection con = dataSource.getConnection();
+		con.setAutoCommit(false);
+		con.commit();
+		PreparedStatement statement = con.prepareStatement("SELECT time FROM crypto_tieout WHERE time=?");
+		Timestamp timestamp = new Timestamp(instant.toEpochMilli());
+		statement.setTimestamp(1, timestamp);
+		ResultSet results = statement.executeQuery();
+		String date = ZonedDateTime.ofInstant(instant, ZoneOffset.UTC).format(DateTimeFormatter.ISO_LOCAL_DATE);
+		if(results.next()) {
+			log.debug("Skipping date " + date);
+			statement.close();
+		} else {
+			log.info("Found new date " + date + ", inserting");
+			statement.close();
+
+			statement = con.prepareStatement("INSERT INTO crypto_tieout"
+				+ " (time,position_usd,sim_position_usd,ret,sim_ret,description) VALUES (?,?,?,?,?,?)");
+			statement.setTimestamp(1, timestamp);
+			statement.setDouble(2, position);
+			statement.setDouble(3, simPosition);
+			statement.setDouble(4, ret);
+			statement.setDouble(5, simRet);
+			statement.setString(6, description);
+			statement.executeUpdate();
+			statement.close();
+		}
+		con.commit();
+		con.close();
 	}
 }
