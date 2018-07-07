@@ -121,6 +121,7 @@ public class DatasetGenerator {
 		inputData.add("fut_ret_2h", retCol);
 	}
 
+	// TODO: Convert this into a reader that reads all the cached forecast variable data
 	/**
 	 * Reads return dataset from gdax files
 	 *

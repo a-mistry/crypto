@@ -45,16 +45,12 @@ public class AnalyzeData {
 		MCLoggerFactory.resetLogLevel(Level.INFO);
 		DatasetGenerator datasetGenerator = new DatasetGenerator(properties, dataDir, forecastCalculator);
 		long startNanos = System.nanoTime();
-		Table<TimeProduct> forecastInputs = datasetGenerator.getForecastDataset();
+		Table<TimeProduct> fullData = datasetGenerator.getForecastDataset();
 		log.info("Loading data/calculating forecasts/returns took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
 		startNanos = System.nanoTime();
-		// No longer needed since we calculate from data
-		//Table<TimeProduct> futureReturns = datasetGenerator.getReturnDataset();
-		//log.info("Loading returns took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
-		//startNanos = System.nanoTime();
 
 		SampleTesting sampleTesting = new SampleTesting(properties);
-		var joined = forecastInputs
+		var sampleData = fullData
 			.filter(key ->
 				key.timeInNanos > 1519862400L * 1000000000L                // discard pre-Mar since it is spotty
 					&& sampleTesting.isSampleValid(key.timeInNanos)        // filter in/out/full sample
@@ -69,7 +65,7 @@ public class AnalyzeData {
 			)
 			{
 				boolean first = true;
-				for(Row<TimeProduct> row : joined) {
+				for(Row<TimeProduct> row : sampleData) {
 					if(first) {
 						out.append("unixTimestamp,product," +
 							Arrays.stream(row.getColumnNames()).collect(Collectors.joining(",")) + "\n");
@@ -141,7 +137,7 @@ public class AnalyzeData {
 //		String[] best = new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "tradeRatio10",
 //				"newRatio10", "weightedMidRetSMA3", "btcRet5", "timeToMaxMin8"};
 //		if(sampleTesting.getSamplingType() == IN_SAMPLE) {
-//			final var outSample = joined
+//			final var outSample = fullData
 //				.filter(key ->
 //					key.timeInNanos > 1519862400L * 1000000000L                 // discard pre-Mar since it is spotty
 //						&& !sampleTesting.isSampleValid(key.timeInNanos)        // filter out sample
@@ -170,11 +166,11 @@ public class AnalyzeData {
 					"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100",
 					"weightedMidRet12h100", "bookMA"};
 
-		RegressionResults finalResults = runRegressionPrintResults(joined, "fut_ret_2h", finalXs);
+		RegressionResults finalResults = runRegressionPrintResults(sampleData, "fut_ret_2h", finalXs);
 
 		if(sampleTesting.getSamplingType() == IN_SAMPLE) {
 			// compare with out of sample
-			final var outSample = joined
+			final var outSample = fullData
 				.filter(key ->
 					key.timeInNanos > 1519862400L * 1000000000L                 // discard pre-Mar since it is spotty
 						&& !sampleTesting.isSampleValid(key.timeInNanos)        // filter out sample
@@ -182,10 +178,10 @@ public class AnalyzeData {
 
 			System.out.println("In/out sample testing:");
 			System.out.println("R^2 in  = " +
-				calcRsq("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), joined, joined));
+				calcRsq("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), sampleData, sampleData));
 			System.out.println("R^2 out = " +
-				calcRsq("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), outSample, joined));
-			SampleFit inSampleFit = calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), joined);
+				calcRsq("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), outSample, sampleData));
+			SampleFit inSampleFit = calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), sampleData);
 			SampleFit outSampleFit =
 				calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), outSample);
 			System.out.println("MSE in = " + inSampleFit.mse + "\tout = " + outSampleFit.mse);
@@ -205,7 +201,7 @@ public class AnalyzeData {
 			System.out.println("Product MSEs:");
 			for(Product product : Product.FAST_VALUES) {
 				inSampleFit = calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(),
-					joined.filter(key -> key.product == product));
+					sampleData.filter(key -> key.product == product));
 				outSampleFit = calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(),
 					outSample.filter(key -> key.product == product));
 				System.out.println("MSE " + product + " in = " + inSampleFit.mse + "\tout = " + outSampleFit.mse);
@@ -218,7 +214,7 @@ public class AnalyzeData {
 			printProductCoeffs(outSample, "fut_ret_2h", finalXs, fcName);
 		}
 
-		printProductCoeffs(joined, "fut_ret_2h", finalXs, fcName);
+		printProductCoeffs(sampleData, "fut_ret_2h", finalXs, fcName);
 		System.out.println("Overall coeffs:");
 		System.out.println("forecast." + fcName + ".coeffs.all=" +
 			Arrays.stream(finalResults.getParameterEstimates())
