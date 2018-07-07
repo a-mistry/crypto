@@ -2,7 +2,6 @@ package com.mistrycapital.cryptobot;
 
 import ch.qos.logback.classic.Level;
 import com.google.common.base.Joiner;
-import com.google.common.collect.Sets;
 import com.mistrycapital.cryptobot.forecasts.Alta;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.forecasts.Snowbird;
@@ -19,7 +18,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Locale;
+import java.util.Set;
 import java.util.function.ToDoubleFunction;
 import java.util.stream.Collectors;
 
@@ -45,19 +46,20 @@ public class AnalyzeData {
 		DatasetGenerator datasetGenerator = new DatasetGenerator(properties, dataDir, forecastCalculator);
 		long startNanos = System.nanoTime();
 		Table<TimeProduct> forecastInputs = datasetGenerator.getForecastDataset();
-		log.info("Loading data/calculating forecasts took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
+		log.info("Loading data/calculating forecasts/returns took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
 		startNanos = System.nanoTime();
-		Table<TimeProduct> futureReturns = datasetGenerator.getReturnDataset();
-		log.info("Loading returns took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
-		startNanos = System.nanoTime();
+		// No longer needed since we calculate from data
+		//Table<TimeProduct> futureReturns = datasetGenerator.getReturnDataset();
+		//log.info("Loading returns took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
+		//startNanos = System.nanoTime();
 
 		SampleTesting sampleTesting = new SampleTesting(properties);
-		var joined = forecastInputs.join(futureReturns)
+		var joined = forecastInputs
 			.filter(key ->
-				key.timeInNanos > 1519862400L * 1000000000L                  // discard pre-Mar since it is spotty
+				key.timeInNanos > 1519862400L * 1000000000L                // discard pre-Mar since it is spotty
 					&& sampleTesting.isSampleValid(key.timeInNanos)        // filter in/out/full sample
 			);
-		log.info("Joining data took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
+		log.info("Joining/filtering data took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
 		startNanos = System.nanoTime();
 
 		boolean writeOut = false;
@@ -139,7 +141,7 @@ public class AnalyzeData {
 //		String[] best = new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "tradeRatio10",
 //				"newRatio10", "weightedMidRetSMA3", "btcRet5", "timeToMaxMin8"};
 //		if(sampleTesting.getSamplingType() == IN_SAMPLE) {
-//			final var outSample = forecastInputs.join(futureReturns)
+//			final var outSample = joined
 //				.filter(key ->
 //					key.timeInNanos > 1519862400L * 1000000000L                 // discard pre-Mar since it is spotty
 //						&& !sampleTesting.isSampleValid(key.timeInNanos)        // filter out sample
@@ -172,7 +174,7 @@ public class AnalyzeData {
 
 		if(sampleTesting.getSamplingType() == IN_SAMPLE) {
 			// compare with out of sample
-			final var outSample = forecastInputs.join(futureReturns)
+			final var outSample = joined
 				.filter(key ->
 					key.timeInNanos > 1519862400L * 1000000000L                 // discard pre-Mar since it is spotty
 						&& !sampleTesting.isSampleValid(key.timeInNanos)        // filter out sample

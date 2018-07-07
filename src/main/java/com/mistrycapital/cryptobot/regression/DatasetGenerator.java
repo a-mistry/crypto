@@ -17,10 +17,7 @@ import java.io.IOException;
 import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -71,10 +68,57 @@ public class DatasetGenerator {
 		try {
 			for(var entry : columnMap.entrySet())
 				table.add(entry.getKey(), entry.getValue());
+			addReturns(table);
 		} catch(DuplicateColumnException e) {
 			throw new RuntimeException(e);
 		}
 		return table;
+	}
+
+	/**
+	 * Add fut_ret_2h column based on lastPrice column in input data
+	 */
+	private void addReturns(Table<TimeProduct> inputData) throws DuplicateColumnException {
+		Column<TimeProduct> retCol = new Column<>();
+		final long twoHourNanos = 2 * 60 * 60 * 1000000000L;
+		final long threeHourNanos = 3 * 60 * 60 * 1000000000L;
+
+		for(Product product : Product.FAST_VALUES) {
+
+			Table<TimeProduct> productTable = inputData.filter(key -> key.product == product);
+
+			Iterator<Row<TimeProduct>> futIter = productTable.iterator();
+			if(!futIter.hasNext()) continue; // no data
+			var futRow = futIter.next();
+
+			var futPrice = Double.NaN;
+
+			for(Row<TimeProduct> row : productTable) {
+
+				// Need to find the price just after row + 2h
+				final var rowNanos = row.getKey().timeInNanos;
+				final var plus2hNanos = rowNanos + twoHourNanos;
+				while(futRow.getKey().timeInNanos <= plus2hNanos && futIter.hasNext()) {
+					final var lastPriceCol = futRow.getColumn("lastPrice");
+					if(!Double.isNaN(lastPriceCol))
+						futPrice = lastPriceCol;
+					futRow = futIter.next();
+				}
+
+				final long futNanos = futRow.getKey().timeInNanos;
+				if(futNanos <= plus2hNanos)
+					break; // no more data
+				if(futNanos > rowNanos + threeHourNanos)
+					continue; // don't go too far into future
+
+				final var curPrice = row.getColumn("lastPrice");
+				final var ret = futPrice / curPrice - 1.0;
+				if(!Double.isNaN(ret))
+					retCol.add(row.getKey(), ret);
+			}
+
+		}
+		inputData.add("fut_ret_2h", retCol);
 	}
 
 	/**
@@ -85,7 +129,6 @@ public class DatasetGenerator {
 	public Table<TimeProduct> getReturnDataset()
 		throws IOException
 	{
-		// TODO: get returns from consolidated history
 		var table = new Table<TimeProduct>();
 		try {
 			table.add("fut_ret_2h", new Column<TimeProduct>());
