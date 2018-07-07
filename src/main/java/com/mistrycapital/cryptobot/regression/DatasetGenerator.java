@@ -13,8 +13,10 @@ import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.slf4j.Logger;
 
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -27,13 +29,9 @@ public class DatasetGenerator {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
 	private final MCProperties properties;
-	private final Path dataDir;
-	private final ForecastCalculator forecastCalculator;
 
-	public DatasetGenerator(MCProperties properties, Path dataDir, ForecastCalculator forecastCalculator) {
+	public DatasetGenerator(MCProperties properties) {
 		this.properties = properties;
-		this.dataDir = dataDir;
-		this.forecastCalculator = forecastCalculator;
 	}
 
 	/**
@@ -41,7 +39,7 @@ public class DatasetGenerator {
 	 *
 	 * @return Table of forecast inputs at each point
 	 */
-	public Table<TimeProduct> getForecastDataset()
+	public Table<TimeProduct> calcSignalDataset(Path dataDir, ForecastCalculator forecastCalculator)
 		throws IOException
 	{
 		final List<ConsolidatedSnapshot> snapshots =
@@ -78,7 +76,9 @@ public class DatasetGenerator {
 	/**
 	 * Add fut_ret_2h column based on lastPrice column in input data
 	 */
-	private void addReturns(Table<TimeProduct> inputData) throws DuplicateColumnException {
+	private void addReturns(Table<TimeProduct> inputData)
+		throws DuplicateColumnException
+	{
 		Column<TimeProduct> retCol = new Column<>();
 		final long twoHourNanos = 2 * 60 * 60 * 1000000000L;
 		final long threeHourNanos = 3 * 60 * 60 * 1000000000L;
@@ -122,62 +122,75 @@ public class DatasetGenerator {
 	}
 
 	// TODO: Convert this into a reader that reads all the cached forecast variable data
+
 	/**
-	 * Reads return dataset from gdax files
+	 * Reads table from csv file
 	 *
 	 * @return Table of future returns
 	 */
-	public Table<TimeProduct> getReturnDataset()
+	public Table<TimeProduct> readCSVDataset(Path dataFile)
 		throws IOException
 	{
-		var table = new Table<TimeProduct>();
-		try {
-			table.add("fut_ret_2h", new Column<TimeProduct>());
-		} catch(DuplicateColumnException e) {
-			throw new RuntimeException(e);
-		}
+		final var table = new Table<TimeProduct>();
 
-		for(Path returnFile : getReturnFiles()) {
+		try(
+			Reader in = Files.newBufferedReader(dataFile);
+			CSVParser parser = CSVFormat.EXCEL.withFirstRecordAsHeader().parse(in);
+		)
+		{
+			Map<String,Integer> headerMap = parser.getHeaderMap();
+			List<String> columnNames = new ArrayList<>(headerMap.keySet());
+			columnNames.remove("unixTimestamp");
+			columnNames.remove("product");
+			List<Column<TimeProduct>> columns = columnNames.stream()
+				.map(k -> new Column<TimeProduct>())
+				.collect(Collectors.toList());
+			List<Integer> columnIndices = columnNames.stream()
+				.map(headerMap::get)
+				.collect(Collectors.toList());
 
-			try(
-				Reader in = Files.newBufferedReader(returnFile);
-				CSVParser parser = CSVFormat.EXCEL.withFirstRecordAsHeader().parse(in);
-			) {
-				// convert list of columns to indices
-				List<String> columnNames = Arrays.asList(
-					"fut_ret_2h"
-				);
-				List<Column<TimeProduct>> columns = columnNames.stream()
-					.map(table::column)
-					.collect(Collectors.toList());
-				Map<String,Integer> headerMap = parser.getHeaderMap();
-				List<Integer> columnIndices = columnNames.stream()
-					.map(headerMap::get)
-					.collect(Collectors.toList());
-
-				// read each row and add to columns
-				for(CSVRecord record : parser) {
-					var timeNanos = Long.parseLong(record.get("unix_timestamp")) * 1000000L;
-					var product = Product.parse(record.get("product"));
-					var key = new TimeProduct(timeNanos, product);
-					for(int i=0; i<columnNames.size(); i++) {
-						String value = record.get(columnIndices.get(i));
-						if(value != null && !value.isEmpty())
-							columns.get(i).add(key, Double.parseDouble(value));
-					}
+			// read each row and add to columns
+			for(CSVRecord record : parser) {
+				var timeNanos = Long.parseLong(record.get("unixTimestamp")) * 1000000000L;
+				var product = Product.parse(record.get("product"));
+				var key = new TimeProduct(timeNanos, product);
+				for(int i = 0; i < columnNames.size(); i++) {
+					String value = record.get(columnIndices.get(i));
+					if(value != null && !value.isEmpty() && !value.equals("NaN"))
+						columns.get(i).add(key, Double.parseDouble(value));
 				}
 			}
+
+			for(int i = 0; i < columnNames.size(); i++)
+				table.add(columnNames.get(i), columns.get(i));
+
+		} catch(DuplicateColumnException e) {
+			throw new RuntimeException(e);
 		}
 
 		return table;
 	}
 
-	private List<Path> getReturnFiles()
+	public void writeOutDataset(Table<TimeProduct> data, Path dataFile)
 		throws IOException
 	{
-		return Files
-			.find(dataDir, 1,
-				(path, attr) -> path.getFileName().toString().matches("gdax-returns-[A-Z]{3}-USD.csv"))
-			.collect(Collectors.toList());
+		try(
+			BufferedWriter out = Files.newBufferedWriter(dataFile, StandardCharsets.UTF_8);
+		)
+		{
+			boolean first = true;
+			for(Row<TimeProduct> row : data) {
+				if(first) {
+					out.append("unixTimestamp,product," +
+						Arrays.stream(row.getColumnNames()).collect(Collectors.joining(",")) + "\n");
+					first = false;
+				}
+
+				out.append((row.getKey().timeInNanos / 1000000000L) + "," + row.getKey().product + "," +
+					Arrays.stream(row.getColumnValues()).mapToObj(Double::toString)
+						.collect(Collectors.joining(",")) +
+					"\n");
+			}
+		}
 	}
 }

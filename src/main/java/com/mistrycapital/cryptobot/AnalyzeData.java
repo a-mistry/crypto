@@ -4,6 +4,7 @@ import ch.qos.logback.classic.Level;
 import com.google.common.base.Joiner;
 import com.mistrycapital.cryptobot.forecasts.Alta;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
+import com.mistrycapital.cryptobot.forecasts.ForecastFactory;
 import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.regression.*;
@@ -14,6 +15,7 @@ import org.apache.commons.math3.stat.regression.RegressionResults;
 import org.slf4j.Logger;
 
 import java.io.BufferedWriter;
+import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,23 +34,37 @@ public class AnalyzeData {
 	public static void main(String[] args)
 		throws Exception
 	{
+		MCLoggerFactory.resetLogLevel(Level.INFO);
 		MCProperties properties = new MCProperties();
 		Path dataDir = Paths.get(properties.getProperty("dataDir"));
-		log.debug("Read data from " + dataDir);
+		log.info("Read data from " + dataDir);
 
-		final boolean useAlta = properties.getProperty("forecast.calculator").equalsIgnoreCase("Alta");
-		final ForecastCalculator forecastCalculator;
-		forecastCalculator = useAlta ? new Alta(properties) : new Snowbird(properties);
-		String fcName = forecastCalculator.getClass().getSimpleName().toLowerCase(Locale.US);
-		log.debug("Forecast calculator is " + forecastCalculator.getClass().getName());
-
-		MCLoggerFactory.resetLogLevel(Level.INFO);
-		DatasetGenerator datasetGenerator = new DatasetGenerator(properties, dataDir, forecastCalculator);
+		// calculate or read cached forecast inputs
+		final Table<TimeProduct> fullData;
 		long startNanos = System.nanoTime();
-		Table<TimeProduct> fullData = datasetGenerator.getForecastDataset();
-		log.info("Loading data/calculating forecasts/returns took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
-		startNanos = System.nanoTime();
+		DatasetGenerator datasetGenerator = new DatasetGenerator(properties);
+		final ForecastCalculator forecastCalculator = ForecastFactory.getCalculatorInstance(properties);
+		final String fcName = forecastCalculator.getClass().getSimpleName().toLowerCase(Locale.US);
+		Path dataCacheFile = dataDir.resolve("cached-inputs-" + fcName + ".csv");
+		final boolean readCachedForecasts = properties.getBooleanProperty("sim.readCachedForecasts", false);
+		if(readCachedForecasts) {
+			log.info("Reading cached forecast inputs from " + fcName);
+			fullData = datasetGenerator.readCSVDataset(dataCacheFile);
+		} else {
+			log.info("Calculating forecast inputs with " + fcName);
+			fullData = datasetGenerator.calcSignalDataset(dataDir, forecastCalculator);
+		}
+		log.info("Loading data/calculating forecasts/returns took " + (System.nanoTime() - startNanos) / 1000000000.0 +
+			"sec");
 
+		// save inputs for next time
+		if(!readCachedForecasts) {
+			startNanos = System.nanoTime();
+			datasetGenerator.writeOutDataset(fullData, dataCacheFile);
+			log.info("Writing cached data took " + (System.nanoTime() - startNanos) / 1000000000.0 + "sec");
+		}
+
+		startNanos = System.nanoTime();
 		SampleTesting sampleTesting = new SampleTesting(properties);
 		var sampleData = fullData
 			.filter(key ->
@@ -56,30 +72,6 @@ public class AnalyzeData {
 					&& sampleTesting.isSampleValid(key.timeInNanos)        // filter in/out/full sample
 			);
 		log.info("Joining/filtering data took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
-		startNanos = System.nanoTime();
-
-		boolean writeOut = false;
-		if(writeOut) {
-			try(
-				BufferedWriter out = Files.newBufferedWriter(dataDir.resolve("temp.csv"), StandardCharsets.UTF_8);
-			)
-			{
-				boolean first = true;
-				for(Row<TimeProduct> row : sampleData) {
-					if(first) {
-						out.append("unixTimestamp,product," +
-							Arrays.stream(row.getColumnNames()).collect(Collectors.joining(",")) + "\n");
-						first = false;
-					}
-
-					out.append(row.getKey().timeInNanos + "," + row.getKey().product + "," +
-						Arrays.stream(row.getColumnValues()).mapToObj(Double::toString)
-							.collect(Collectors.joining(",")) +
-						"\n");
-				}
-			}
-		}
-		log.info("Writing data took " + (System.nanoTime() - startNanos) / 1000000.0 + "ms");
 
 		// previous version of Snowbird had no book MA
 		//runRegressionPrintResults(joined, "fut_ret_2h",
@@ -155,9 +147,10 @@ public class AnalyzeData {
 //		}
 
 		final String[] finalXs;
-		if(useAlta)
-			finalXs = new String[] {"lagRet5", "bookRatioxRet1", "bookSMA9", "onBalVol2", "tradeRatio2", "newRatio6", "cancelRatio5",
-				"upRatio11", "weightedMidRetSMA1", "RSIRatio3", "RSIRatioxRet2","btcRet1","timeToMaxMin11"};
+		if(fcName.equals("alta"))
+			finalXs = new String[] {"lagRet5", "bookRatioxRet1", "bookSMA9", "onBalVol2", "tradeRatio2", "newRatio6",
+				"cancelRatio5",
+				"upRatio11", "weightedMidRetSMA1", "RSIRatio3", "RSIRatioxRet2", "btcRet1", "timeToMaxMin11"};
 //			finalXs = new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "tradeRatio10",
 //				"newRatio10", "weightedMidRetSMA3", "btcRet5", "timeToMaxMin8"};
 		else
@@ -181,7 +174,8 @@ public class AnalyzeData {
 				calcRsq("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), sampleData, sampleData));
 			System.out.println("R^2 out = " +
 				calcRsq("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), outSample, sampleData));
-			SampleFit inSampleFit = calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), sampleData);
+			SampleFit inSampleFit =
+				calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), sampleData);
 			SampleFit outSampleFit =
 				calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), outSample);
 			System.out.println("MSE in = " + inSampleFit.mse + "\tout = " + outSampleFit.mse);
