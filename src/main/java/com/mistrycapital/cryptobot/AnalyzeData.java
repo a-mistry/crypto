@@ -43,7 +43,7 @@ public class AnalyzeData {
 		final ForecastCalculator forecastCalculator = ForecastFactory.getCalculatorInstance(properties);
 		final String fcName = forecastCalculator.getClass().getSimpleName().toLowerCase(Locale.US);
 		Path dataCacheFile = dataDir.resolve("cached-inputs-" + fcName + ".mc");
-		final boolean readCachedForecasts = properties.getBooleanProperty("sim.readCachedForecasts", false);
+		final boolean readCachedForecasts = properties.getBooleanProperty("analysis.readCachedForecasts", false);
 		if(readCachedForecasts) {
 			log.info("Reading cached forecast inputs for " + fcName);
 			fullData = datasetGenerator.readBinaryDataset(dataCacheFile);
@@ -67,8 +67,8 @@ public class AnalyzeData {
 //		fitFullData(fullData, fcName);
 		compareInOut(fullData, fcName,
 			new String[] {"onBalVol2", "bookRatioxRet1", "bookSMA3", "weightedMidRetSMA1", "btcRet1", "cancelRatio4",
-				"upRatio12", "weightedMidRetLast", "newRatio6", "RSIRatioxRet2", "RSIRatio3", "timeToMaxMin10",
-				"lagRet5"});
+				"upRatio12", "weightedMidRetLast", "newRatio6", "RSIRatioxRet2", "RSIRatio3", "lagRet5"}
+		);
 	}
 
 	/** Used to explore various regressions in sample */
@@ -150,12 +150,16 @@ public class AnalyzeData {
 		String[] searched = searchVarsBestFit(inSample, outSample,
 			new String[] {"lagRet", "bookRatioxRet", "bookSMA", "onBalVol", "tradeRatio", "newRatio", "cancelRatio",
 				"upRatio", "weightedMidRetSMA", "RSIRatio", "RSIRatioxRet", "btcRet", "timeToMaxMin"});
-		runRegressionPrintResults(inSample, "fut_ret_2h", searched);
+//		String[] searched =
+//			new String[] {"onBalVol2", "bookRatioxRet1", "bookSMA3", "weightedMidRetSMA1", "btcRet1", "cancelRatio4",
+//				"upRatio12", "newRatio6", "RSIRatioxRet2", "RSIRatio3", "timeToMaxMin10",
+//				"lagRet5", "tradeRatio1"};
 		String[] additional = new String[searched.length + 1];
 		for(int i = 0; i < searched.length; i++)
 			additional[i] = searched[i];
 		additional[additional.length - 1] = "weightedMidRetLast";
-		String[] best = dropVarsBestFit(inSample, outSample, additional);
+		runRegressionPrintResults(outSample, "fut_ret_2h", additional);
+		String[] best = dropVarsBestFit(outSample, inSample, additional); // flip samples for this test
 		runRegressionPrintResults(inSample, "fut_ret_2h", best);
 		System.out.println("Java array is");
 		System.out.println(
@@ -236,8 +240,14 @@ public class AnalyzeData {
 				outSample.filter(key -> key.product == product));
 			System.out.println("MSE " + product + " in = " + inSampleFit.mse + "\tout = " + outSampleFit.mse);
 			System.out.println("MAE " + product + " in = " + inSampleFit.mae + "\tout = " + outSampleFit.mae);
-			System.out.println(
-				"Win ratio " + product + " in = " + inSampleFit.winRatio + "\tout = " + outSampleFit.winRatio);
+			System.out.println("Win ratio " + product + " in = " + inSampleFit.winRatio + "\tout = "
+				+ outSampleFit.winRatio + " ret " + outSampleFit.retPos);
+			System.out.println("Win ratio " + product + " (>10bp pred) in = " + inSampleFit.winRatio10bp + "\tout = " +
+				outSampleFit.winRatio10bp + " ret " + outSampleFit.ret10bp);
+			System.out.println("Win ratio " + product + " (>20bp pred) in = " + inSampleFit.winRatio20bp + "\tout = " +
+				outSampleFit.winRatio20bp + " ret " + outSampleFit.ret20bp);
+			System.out.println("Win ratio " + product + " (>30bp pred) in = " + inSampleFit.winRatio30bp + "\tout = " +
+				outSampleFit.winRatio30bp + " ret " + outSampleFit.ret30bp);
 		}
 
 		System.out.println("Out of sample product coeffs:");
@@ -327,7 +337,7 @@ public class AnalyzeData {
 		throws ColumnNotFoundException
 	{
 		// set base
-		final ToDoubleFunction<SampleFit> criterion = fit -> fit.retPos;
+		final ToDoubleFunction<SampleFit> criterion = fit -> fit.numPos * fit.retPos;
 		var maxCriterion = criterion.applyAsDouble(
 			calcSampleFit("fut_ret_2h", vars, inSample.regress("fut_ret_2h", vars).getParameterEstimates(), outSample));
 		log.info("Base objective is " + maxCriterion);
@@ -497,6 +507,7 @@ public class AnalyzeData {
 		sampleFit.ret10bp = rets[1] / numAboveThreshold[1];
 		sampleFit.ret20bp = rets[2] / numAboveThreshold[2];
 		sampleFit.ret30bp = rets[3] / numAboveThreshold[3];
+		sampleFit.numPos = numAboveThreshold[0];
 		return sampleFit;
 	}
 
@@ -521,5 +532,7 @@ public class AnalyzeData {
 		double ret20bp;
 		/** Average return when above 30bp threshold */
 		double ret30bp;
+		/** Num datapoints when positive */
+		int numPos;
 	}
 }
