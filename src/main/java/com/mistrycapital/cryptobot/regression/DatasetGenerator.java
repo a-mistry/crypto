@@ -13,12 +13,11 @@ import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.slf4j.Logger;
 
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.Reader;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -121,12 +120,10 @@ public class DatasetGenerator {
 		inputData.add("fut_ret_2h", retCol);
 	}
 
-	// TODO: Convert this into a reader that reads all the cached forecast variable data
-
 	/**
 	 * Reads table from csv file
 	 *
-	 * @return Table of future returns
+	 * @return Table of data with TimeProduct as key
 	 */
 	public Table<TimeProduct> readCSVDataset(Path dataFile)
 		throws IOException
@@ -171,7 +168,7 @@ public class DatasetGenerator {
 		return table;
 	}
 
-	public void writeOutDataset(Table<TimeProduct> data, Path dataFile)
+	public void writeCSVDataset(Table<TimeProduct> data, Path dataFile)
 		throws IOException
 	{
 		try(
@@ -191,6 +188,92 @@ public class DatasetGenerator {
 						.collect(Collectors.joining(",")) +
 					"\n");
 			}
+		}
+	}
+
+	/** Row of output (binary serializable format) */
+	private static class BinaryDatasetRow implements Serializable {
+		TimeProduct key;
+		double[] values;
+
+		BinaryDatasetRow(TimeProduct key, double[] values) {
+			this.key = key;
+			this.values = values;
+		}
+	}
+
+	/** Entire table output (binary serializable format) */
+	private static class BinaryDataset implements Serializable {
+		String[] columnNames;
+		List<DatasetGenerator.BinaryDatasetRow> rows;
+
+		BinaryDataset() {
+			rows = new ArrayList<>(1000000);
+		}
+	}
+
+	/**
+	 * Writes the table to the given file in binary using java serialization
+	 */
+	public void writeBinaryDataset(Table<TimeProduct> data, Path dataFile)
+		throws IOException
+	{
+		try(
+			OutputStream outputStream = Files
+				.newOutputStream(dataFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE)
+		)
+		{
+			BinaryDataset binaryDataset = new BinaryDataset();
+			boolean first = true;
+			for(Row<TimeProduct> row : data) {
+				if(first) {
+					binaryDataset.columnNames = row.getColumnNames();
+				}
+
+				BinaryDatasetRow binaryDatasetRow = new BinaryDatasetRow(row.getKey(), row.getColumnValues());
+				binaryDataset.rows.add(binaryDatasetRow);
+			}
+
+			ObjectOutputStream out = new ObjectOutputStream(outputStream);
+			out.writeObject(binaryDataset);
+		}
+	}
+
+	/**
+	 * Reads the table from the file written with java serialization
+	 */
+	public Table<TimeProduct> readBinaryDataset(Path dataFile)
+		throws IOException
+	{
+		try(
+			InputStream inputStream = Files.newInputStream(dataFile)
+		)
+		{
+			ObjectInputStream in = new ObjectInputStream(inputStream);
+			BinaryDataset binaryDataset = (BinaryDataset) in.readObject();
+
+			String[] columnNames = binaryDataset.columnNames;
+			@SuppressWarnings("unchecked")
+			Column<TimeProduct>[] columns = new Column[columnNames.length];
+			for(int i = 0; i < columns.length; i++)
+				columns[i] = new Column<>();
+
+			for(BinaryDatasetRow row : binaryDataset.rows) {
+				for(int i = 0; i < columns.length; i++)
+					if(!Double.isNaN(row.values[i]))
+						columns[i].add(row.key, row.values[i]);
+			}
+
+			Table<TimeProduct> table = new Table<>();
+			for(int i = 0; i < columns.length; i++)
+				table.add(columnNames[i], columns[i]);
+
+			return table;
+
+		} catch(ClassNotFoundException e) {
+			throw new IOException(e);
+		} catch(DuplicateColumnException e) {
+			throw new RuntimeException(e);
 		}
 	}
 }

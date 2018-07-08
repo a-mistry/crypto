@@ -2,7 +2,9 @@ package com.mistrycapital.cryptobot.regression;
 
 import com.mistrycapital.cryptobot.gdax.common.Product;
 
-public class TimeProduct implements Comparable<TimeProduct> {
+import java.io.Serializable;
+
+public class TimeProduct implements Comparable<TimeProduct>, Serializable {
 	public final long timeInNanos;
 	public final Product product;
 
