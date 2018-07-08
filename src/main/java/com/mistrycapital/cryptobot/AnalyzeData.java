@@ -37,13 +37,14 @@ public class AnalyzeData {
 		log.info("Read data from " + dataDir);
 
 		// calculate or read cached forecast inputs
+		final boolean readCachedForecasts = properties.getBooleanProperty("analysis.readCachedForecasts", false);
 		final Table<TimeProduct> fullData;
 		long startNanos = System.nanoTime();
 		DatasetGenerator datasetGenerator = new DatasetGenerator(properties);
+		if(!readCachedForecasts) properties.put("forecast.alta.calcAllSignals", "true");
 		final ForecastCalculator forecastCalculator = ForecastFactory.getCalculatorInstance(properties);
 		final String fcName = forecastCalculator.getClass().getSimpleName().toLowerCase(Locale.US);
 		Path dataCacheFile = dataDir.resolve("cached-inputs-" + fcName + ".mc");
-		final boolean readCachedForecasts = properties.getBooleanProperty("analysis.readCachedForecasts", false);
 		if(readCachedForecasts) {
 			log.info("Reading cached forecast inputs for " + fcName);
 			fullData = datasetGenerator.readBinaryDataset(dataCacheFile);

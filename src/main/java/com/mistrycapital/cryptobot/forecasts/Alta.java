@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.function.IntFunction;
 import java.util.function.ToDoubleFunction;
 
 import static com.mistrycapital.cryptobot.forecasts.Alta.SignalType.*;
@@ -24,16 +25,19 @@ public class Alta implements ForecastCalculator {
 	private final double[][] coeffs;
 	private Map<String,Double> variableMap;
 
+	private final boolean calcAllSignals;
 	private final int maxLookbackHours;
 	private final List<SignalCalculation> signalCalcs;
 	public static final String[] signalsToUse =
 		new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "tradeRatio10",
 			"newRatio10", "weightedMidRetSMA3", "btcRet5", "timeToMaxMin8"};
-//			new String[] {"onBalVol2", "bookRatioxRet1", "bookSMA3", "weightedMidRetSMA1", "btcRet1", "cancelRatio4",
-//		"upRatio12", "weightedMidRetLast", "newRatio6", "RSIRatioxRet2", "RSIRatio3", "lagRet5"};
+	//			new String[] {"onBalVol2", "bookRatioxRet1", "bookSMA3", "weightedMidRetSMA1", "btcRet1", "cancelRatio4",
+	//		"upRatio12", "weightedMidRetLast", "newRatio6", "RSIRatioxRet2", "RSIRatio3", "lagRet5"};
+	public static final Set<String> signalsToUseSet = Set.of(signalsToUse);
 
 	public Alta(MCProperties properties) {
 		String fcName = getClass().getSimpleName().toLowerCase(Locale.US);
+		calcAllSignals = properties.getBooleanProperty("forecast." + fcName + ".calcAllSignals", false);
 		coeffs = new double[Product.count][signalsToUse.length + 1];
 		for(Product product : Product.FAST_VALUES) {
 			int productIndex = product.getIndex();
@@ -64,53 +68,93 @@ public class Alta implements ForecastCalculator {
 	}
 
 	/**
+	 * Adds the given signal at the lookback needed if the final variable is used. For example,
+	 * addSignalCalc("tradeRatio", t -> new SignalCalculation(...)) will check if any of tradeRatio1, tradeRatio2, etc
+	 * are in the signalsToUse set and if so, it will construct the SignalCalculation at the same lookback
+	 * and add it if it is not already in signalCalcs. Note that multiple additions of the same named signal
+	 * will be ignored in favor of the first.
+	 */
+	private void addSignalCalc(String finalVarName, IntFunction<SignalCalculation> generateSignalCalcForLookback) {
+		for(int t = 1; t <= 12; t++)
+			if(calcAllSignals || signalsToUseSet.contains(finalVarName + t)) {
+				SignalCalculation signalCalc = generateSignalCalcForLookback.apply(t);
+				final boolean exists = signalCalcs.stream().anyMatch(x -> x.name.equals(signalCalc.name));
+				if(!exists) {
+					signalCalcs.add(signalCalc);
+				}
+			}
+	}
+
+	private void putDerivedCalc(String finalVarName, String thisVarName, IntFunction<Double> generateDerivedCalc) {
+		for(int t = 1; t <= 12; t++)
+			if(calcAllSignals || signalsToUseSet.contains(finalVarName + t))
+				variableMap.put(thisVarName + t, generateDerivedCalc.apply(t));
+	}
+
+	/**
 	 * This method serves as organizational convenience. All calculations of signals are defined here and in
 	 * computeDerivedCalcs(). The rest of the code merely calculates based on these definitions
 	 */
 	private void initSignalCalcs() {
 		// return calcs
 		ToDoubleFunction<ProductSnapshot> lastPriceFunction = data -> data.lastPrice;
-		signalCalcs.add(new SignalCalculation("lastPrice", 0, STATIC, lastPriceFunction));
+		addSignalCalc("lagRet", t -> new SignalCalculation("lastPrice", 0, STATIC, lastPriceFunction));
+		addSignalCalc("lagRet", t -> new SignalCalculation("price" + t + "h", t, STATIC, lastPriceFunction));
 
 		// book calcs
 		ToDoubleFunction<ProductSnapshot> bookRatioFunction = data ->
 			((double) data.bidCount5Pct) / (data.bidCount5Pct + data.askCount5Pct);
-		signalCalcs.add(new SignalCalculation("bookRatio", 0, STATIC, bookRatioFunction));
-		signalCalcs.add(new SignalCalculation("book5PctCount", 0, STATIC, data ->
-			data.bidCount5Pct + data.askCount5Pct));
+		IntFunction<SignalCalculation> bookRatioGenerator = t ->
+			new SignalCalculation("bookRatio", 0, STATIC, bookRatioFunction);
+		IntFunction<SignalCalculation> book5PctGenerator = t ->
+			new SignalCalculation("book5PctCount", 0, STATIC, data -> data.bidCount5Pct + data.askCount5Pct);
+		addSignalCalc("bookRatio", bookRatioGenerator);
+		addSignalCalc("bookRatioxRet", bookRatioGenerator);
+		addSignalCalc("bookRatio", book5PctGenerator);
+		addSignalCalc("bookRatioxRet", book5PctGenerator);
+		addSignalCalc("bookSMA", t -> new SignalCalculation("bookSMA" + t, t, SMA, bookRatioFunction));
 
 		// last weighted mid
 		signalCalcs.add(new SignalCalculation("weightedMidLast", 0, STATIC, data -> data.weightedMid100));
 
-		for(int i = 1; i <= 12; i++) {
-			signalCalcs.add(new SignalCalculation("price" + i + "h", i, STATIC, lastPriceFunction));
-			signalCalcs.add(new SignalCalculation("bookSMA" + i, i, SMA, bookRatioFunction));
+		// up/down ratio
+		addSignalCalc("upRatio", t -> new SignalCalculation("upRatio" + t, t, SMA, data -> data.ret >= 0 ? 1 : 0));
 
-			// up/down ratio
-			signalCalcs.add(new SignalCalculation("upRatio" + i, i, SMA, data -> data.ret >= 0 ? 1 : 0));
+		// on balance volume calcs
+		addSignalCalc("onBalVol", t ->
+			new SignalCalculation("sumVolxRet" + t, t, SUM, data -> Math.log(1 + data.ret) * data.volume));
+		addSignalCalc("onBalVol", t ->
+			new SignalCalculation("volume" + t, t, SUM, data -> data.volume));
 
-			// on balance volume calcs
-			signalCalcs.add(new SignalCalculation("sumVolxRet" + i, i, SUM,
-				data -> Math.log(1 + data.ret) * data.volume));
-			signalCalcs.add(new SignalCalculation("volume" + i, i, SUM, data -> data.volume));
+		// RSI
+		IntFunction<SignalCalculation> sumUpGenerator = t ->
+			new SignalCalculation("sumUpChange" + t, t, SUM, data ->
+				data.ret < 0 ? 0 : data.lastPrice - data.lastPrice / (1 + data.ret));
+		IntFunction<SignalCalculation> sumDownGenerator = t ->
+			new SignalCalculation("sumDownChange" + t, t, SUM, data ->
+				data.ret >= 0 ? 0 : data.lastPrice / (1 + data.ret) - data.lastPrice);
+		addSignalCalc("RSIRatio", sumUpGenerator);
+		addSignalCalc("RSIRatioxRet", sumUpGenerator);
+		addSignalCalc("RSIRatio", sumDownGenerator);
+		addSignalCalc("RSIRatioxRet", sumDownGenerator);
 
-			// RSI
-			signalCalcs.add(new SignalCalculation("sumUpChange" + i, i, SUM, data ->
-				data.ret < 0 ? 0 : data.lastPrice - data.lastPrice / (1 + data.ret)));
-			signalCalcs.add(new SignalCalculation("sumDownChange" + i, i, SUM, data ->
-				data.ret >= 0 ? 0 : data.lastPrice / (1 + data.ret) - data.lastPrice));
+		// trade ratio
+		addSignalCalc("tradeRatio", t ->
+			new SignalCalculation("bidTradeCount" + t, t, SUM, data -> data.bidTradeCount));
+		addSignalCalc("tradeRatio", t ->
+			new SignalCalculation("askTradeCount" + t, t, SUM, data -> data.askTradeCount));
+		addSignalCalc("newRatio", t ->
+			new SignalCalculation("newBidCount" + t, t, SUM, data -> data.newBidCount));
+		addSignalCalc("newRatio", t ->
+			new SignalCalculation("newAskCount" + t, t, SUM, data -> data.newAskCount));
+		addSignalCalc("cancelRatio", t ->
+			new SignalCalculation("bidCancelCount" + t, t, SUM, data -> data.bidCancelCount));
+		addSignalCalc("cancelRatio", t ->
+			new SignalCalculation("askCancelCount" + t, t, SUM, data -> data.askCancelCount));
 
-			// trade ratio
-			signalCalcs.add(new SignalCalculation("bidTradeCount" + i, i, SUM, data -> data.bidTradeCount));
-			signalCalcs.add(new SignalCalculation("askTradeCount" + i, i, SUM, data -> data.askTradeCount));
-			signalCalcs.add(new SignalCalculation("newBidCount" + i, i, SUM, data -> data.newBidCount));
-			signalCalcs.add(new SignalCalculation("newAskCount" + i, i, SUM, data -> data.newAskCount));
-			signalCalcs.add(new SignalCalculation("bidCancelCount" + i, i, SUM, data -> data.bidCancelCount));
-			signalCalcs.add(new SignalCalculation("askCancelCount" + i, i, SUM, data -> data.askCancelCount));
-
-			// mid price weighted by top 100 level sizes
-			signalCalcs.add(new SignalCalculation("weightedMidSMA" + i, i, SMA, data -> data.weightedMid100));
-		}
+		// mid price weighted by top 100 level sizes
+		addSignalCalc("weightedMidRetSMA", t ->
+			new SignalCalculation("weightedMidSMA" + t, t, SMA, data -> data.weightedMid100));
 	}
 
 	/**
@@ -121,27 +165,35 @@ public class Alta implements ForecastCalculator {
 	private void computeDerivedCalcs() {
 		variableMap.put("weightedMidRetLast", variableMap.get("weightedMidLast") / variableMap.get("lastPrice") - 1);
 
-		for(int i = 1; i <= 12; i++) {
-			variableMap.put("lagRet" + i, variableMap.get("lastPrice") / variableMap.get("price" + i + "h") - 1.0);
-			variableMap.put("bookRatioxRet" + i, variableMap.get("bookRatio") * variableMap.get("lagRet" + i));
+		putDerivedCalc("lagRet", "lagRet", t ->
+			variableMap.get("lastPrice") / variableMap.get("price" + t + "h") - 1.0);
 
-			variableMap.put("onBalVol" + i, variableMap.get("sumVolxRet" + i) / variableMap.get("volume" + i));
-			if(variableMap.get("sumDownChange" + i) == 0)
-				variableMap.put("RSIRatio" + i, Double.NaN);
-			else
-				variableMap
-					.put("RSIRatio" + i, variableMap.get("sumUpChange" + i) / variableMap.get("sumDownChange" + i));
-			variableMap.put("RSIRatioxRet" + i, variableMap.get("RSIRatio" + i) * variableMap.get("lagRet1"));
-			variableMap.put("tradeRatio" + i, variableMap.get("bidTradeCount" + i) /
-				(variableMap.get("bidTradeCount" + i) + variableMap.get("askTradeCount" + i)));
-			variableMap.put("newRatio" + i, (variableMap.get("newBidCount" + i) - variableMap.get("newAskCount" + i)) /
+		putDerivedCalc("bookRatioxRet", "bookRatioxRet", t ->
+			variableMap.get("bookRatio") * variableMap.get("lagRet" + t));
+
+		putDerivedCalc("onBalVol", "onBalVol", t ->
+			variableMap.get("sumVolxRet" + t) / variableMap.get("volume" + t));
+
+		IntFunction<Double> RSIRatioGenerator = t -> {
+			double sumDownChange = variableMap.get("sumDownChange" + t);
+			return sumDownChange == 0 ? Double.NaN :
+				variableMap.get("sumUpChange" + t) / variableMap.get("sumDownChange" + t);
+		};
+		putDerivedCalc("RSIRatio", "RSIRatio", RSIRatioGenerator);
+		putDerivedCalc("RSIRatioxRet", "RSIRatio", RSIRatioGenerator);
+		putDerivedCalc("RSIRatioxRet", "RSIRatioxRet", t ->
+			variableMap.get("RSIRatio" + t) * variableMap.get("lagRet" + t));
+
+		putDerivedCalc("tradeRatio", "tradeRatio", t -> variableMap.get("bidTradeCount" + t) /
+			(variableMap.get("bidTradeCount" + t) + variableMap.get("askTradeCount" + t)));
+		putDerivedCalc("newRatio", "newRatio", t ->
+			(variableMap.get("newBidCount" + t) - variableMap.get("newAskCount" + t)) /
 				variableMap.get("book5PctCount"));
-			variableMap.put("cancelRatio" + i, (variableMap.get("bidCancelCount" + i)
-				- variableMap.get("askCancelCount" + i)) / variableMap.get("book5PctCount"));
+		putDerivedCalc("cancelRatio", "cancelRatio", t -> (variableMap.get("bidCancelCount" + t)
+			- variableMap.get("askCancelCount" + t)) / variableMap.get("book5PctCount"));
 
-			variableMap.put("weightedMidRetSMA" + i, variableMap.get("weightedMidSMA" + i)
-				/ variableMap.get("lastPrice") - 1);
-		}
+		putDerivedCalc("weightedMidRetSMA", "weightedMidRetSMA", t ->
+			variableMap.get("weightedMidSMA" + t) / variableMap.get("lastPrice") - 1);
 	}
 
 	/**
@@ -153,41 +205,43 @@ public class Alta implements ForecastCalculator {
 		final long latestTimeNanos = latest.getTimeNanos();
 		final double btcLastPrice = latest.getProductSnapshot(Product.BTC_USD).lastPrice;
 
-		for(int i = 1; i <= 12; i++) {
-			double btcLagPrice = Double.NaN;
-			for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedHistory.inOrder((i + 1) * 3600)) {
-				if(consolidatedSnapshot.getTimeNanos() > latestTimeNanos - i * 3600000000000L)
-					break;
-				btcLagPrice = consolidatedSnapshot.getProductSnapshot(Product.BTC_USD).lastPrice;
+		for(int i = 1; i <= 12; i++)
+			if(signalsToUseSet.contains("btcRet" + i)) {
+				double btcLagPrice = Double.NaN;
+				for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedHistory.inOrder((i + 1) * 3600)) {
+					if(consolidatedSnapshot.getTimeNanos() > latestTimeNanos - i * 3600000000000L)
+						break;
+					btcLagPrice = consolidatedSnapshot.getProductSnapshot(Product.BTC_USD).lastPrice;
+				}
+				variableMap.put("btcRet" + i, btcLagPrice / btcLastPrice - 1);
 			}
-			variableMap.put("btcRet" + i, btcLagPrice / btcLastPrice - 1);
-		}
 
 		// intervals since max/min
-		for(int i = 1; i <= 12; i++) {
-			double minPrice = Double.MAX_VALUE;
-			double maxPrice = 0.0;
-			int intervalsToMin = 0;
-			int intervalsToMax = 0;
-			for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedHistory.inOrder(i * 3600)) {
-				ProductSnapshot snapshot = consolidatedSnapshot.getProductSnapshot(product);
+		for(int i = 1; i <= 12; i++)
+			if(signalsToUseSet.contains("timeToMaxMin" + i)) {
+				double minPrice = Double.MAX_VALUE;
+				double maxPrice = 0.0;
+				int intervalsToMin = 0;
+				int intervalsToMax = 0;
+				for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedHistory.inOrder(i * 3600)) {
+					ProductSnapshot snapshot = consolidatedSnapshot.getProductSnapshot(product);
 
-				if(snapshot.vwap < minPrice) {
-					minPrice = snapshot.vwap;
-					intervalsToMin = 0;
-				} else {
-					intervalsToMin++;
-				}
+					if(snapshot.vwap < minPrice) {
+						minPrice = snapshot.vwap;
+						intervalsToMin = 0;
+					} else {
+						intervalsToMin++;
+					}
 
-				if(snapshot.vwap > maxPrice) {
-					maxPrice = snapshot.vwap;
-					intervalsToMax = 0;
-				} else {
-					intervalsToMax++;
+					if(snapshot.vwap > maxPrice) {
+						maxPrice = snapshot.vwap;
+						intervalsToMax = 0;
+					} else {
+						intervalsToMax++;
+					}
 				}
+				variableMap.put("timeToMaxMin" + i, (double) (intervalsToMax - intervalsToMin));
 			}
-			variableMap.put("timeToMaxMin" + i, (double) (intervalsToMax - intervalsToMin));
-		}
 	}
 
 	@Override
@@ -212,8 +266,143 @@ public class Alta implements ForecastCalculator {
 		return fcVal;
 	}
 
+	private class SnapshotCalc {
+		double[][] values;
+
+		SnapshotCalc(ConsolidatedSnapshot snapshot) {
+			values = new double[Product.count][signalCalcs.size()];
+
+			for(Product product : Product.FAST_VALUES) {
+				double[] productValues = values[product.getIndex()];
+				ProductSnapshot productSnapshot = snapshot.getProductSnapshot(product);
+				for(int i = 0; i < signalCalcs.size(); i++) {
+					productValues[i] = signalCalcs.get(i).calculate.applyAsDouble(productSnapshot);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Contains the consolidated snapshot history we care about, along with all the product calculations for
+	 * each datapoint. Sorted by increasing time so it can be iterated to calculate MAs and such
+	 */
+	private SortedMap<ConsolidatedSnapshot,SnapshotCalc> snapshotCalcMap =
+		new TreeMap<>(Comparator.comparingLong(ConsolidatedSnapshot::getTimeNanos));
+
+	public Map<String,Double> getInputVariablesAttempt2(final ConsolidatedHistory consolidatedHistory,
+		final Product product)
+	{
+		final int productIndex = product.getIndex();
+		final long latestTimeNanos = consolidatedHistory.latest().getTimeNanos();
+
+		// Add any new snapshots
+		Set<ConsolidatedSnapshot> useOnlySet = new HashSet<>();
+		for(ConsolidatedSnapshot snapshot : consolidatedHistory.inOrder(13 * 3600)) {
+			useOnlySet.add(snapshot);
+			snapshotCalcMap.computeIfAbsent(snapshot, SnapshotCalc::new);
+		}
+
+		// Remove any snapshots not in history
+		snapshotCalcMap.entrySet().removeIf(entry -> !useOnlySet.contains(entry.getKey()));
+
+		// Initialize signals
+		for(SignalCalculation signalCalc : signalCalcs) {
+			signalCalc.numDatapoints = 0;
+			signalCalc.multiplier = 0.0;
+			signalCalc.snapshot = null;
+			signalCalc.value = Double.NaN;
+		}
+
+		// In first pass, get number of datapoints for MAs and calculate multipliers
+		for(final var entry : snapshotCalcMap.entrySet()) {
+			final var snapshot = entry.getKey();
+			final var snapshotTimeNanos = snapshot.getTimeNanos();
+
+			for(int i = 0; i < signalCalcs.size(); i++) {
+				final var signalCalc = signalCalcs.get(i);
+				final var timeCompare = Long.compare(
+					snapshotTimeNanos,
+					latestTimeNanos - signalCalc.lookbackHours * 3600000000000L
+				);
+				if(timeCompare >= 0)
+					signalCalc.numDatapoints++;
+			}
+		}
+		for(int i = 0; i < signalCalcs.size(); i++) {
+			final var signalCalc = signalCalcs.get(i);
+			switch(signalCalc.signalType) {
+				case SMA:
+					signalCalc.multiplier = 1.0 / signalCalc.numDatapoints;
+					break;
+				case EMA:
+					signalCalc.multiplier = 2.0 / (signalCalc.numDatapoints + 1);
+					break;
+			}
+		}
+
+		// In second pass, calculate values
+		for(final var entry : snapshotCalcMap.entrySet()) {
+			final var snapshot = entry.getKey();
+			final var snapshotTimeNanos = snapshot.getTimeNanos();
+			final var calcValues = entry.getValue().values[productIndex];
+
+			for(int i = 0; i < signalCalcs.size(); i++) {
+				final var curValue = calcValues[i];
+				if(Double.isNaN(curValue)) continue;
+
+				final var signalCalc = signalCalcs.get(i);
+				final var timeCompare = Long.compare(
+					snapshotTimeNanos,
+					latestTimeNanos - signalCalc.lookbackHours * 3600000000000L
+				);
+				switch(signalCalc.signalType) {
+					case SMA:
+						if(timeCompare >= 0) {
+							if(Double.isNaN(signalCalc.value)) signalCalc.value = 0.0;
+							signalCalc.value += signalCalc.multiplier * curValue;
+						}
+						break;
+
+					case EMA:
+						if(timeCompare >= 0) {
+							if(Double.isNaN(signalCalc.value)) signalCalc.value = curValue;
+							signalCalc.value =
+								(1 - signalCalc.multiplier) * signalCalc.value + signalCalc.multiplier * curValue;
+						}
+						break;
+
+					case SUM:
+						if(timeCompare >= 0) {
+							if(Double.isNaN(signalCalc.value)) signalCalc.value = 0.0;
+							signalCalc.value += curValue;
+						}
+
+					case STATIC:
+						if(timeCompare <= 0) {
+							signalCalc.value = curValue;
+						}
+				}
+			}
+		}
+
+		// put in map
+		for(final SignalCalculation signalCalc : signalCalcs) {
+			variableMap.put(signalCalc.name, signalCalc.value);
+		}
+
+		// compute any signals derived from earlier calcs
+		computeDerivedCalcs();
+
+		// other calcs that don't fit the framework
+		computeExtraCalcs(consolidatedHistory, product);
+
+		return variableMap;
+	}
+
 	@Override
-	public Map<String,Double> getInputVariables(final ConsolidatedHistory consolidatedHistory, final Product product) {
+	public Map<String,Double> getInputVariables(final ConsolidatedHistory consolidatedHistory,
+		final Product product)
+	{
 		long latestTimeNanos = consolidatedHistory.latest().getTimeNanos();
 
 		for(SignalCalculation signalCalc : signalCalcs) {
