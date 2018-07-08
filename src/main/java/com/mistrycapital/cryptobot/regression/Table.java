@@ -108,9 +108,9 @@ public class Table<K extends Comparable<K>> implements Iterable<Row<K>> {
 		private void advanceHeadValues() {
 			for(int i = 0; i < headValues.size(); i++)
 				if(headValues.get(i) == null) {
-					Cell<K> value = columnIterators.get(i).next();
-					if(value != null) {
-						headValues.set(i, value);
+					final var iter = columnIterators.get(i);
+					if(iter.hasNext()) {
+						headValues.set(i, iter.next());
 					}
 				}
 		}

@@ -63,9 +63,12 @@ public class AnalyzeData {
 
 
 //		exploreRegressions(fullData);
-		optimizeVars(fullData);
+//		optimizeVars(fullData);
 //		fitFullData(fullData, fcName);
-//		compareInOut(fullData, fcName, Alta.signalsToUse);
+		compareInOut(fullData, fcName,
+			new String[] {"onBalVol2", "bookRatioxRet1", "bookSMA3", "weightedMidRetSMA1", "btcRet1", "cancelRatio4",
+				"upRatio12", "weightedMidRetLast", "newRatio6", "RSIRatioxRet2", "RSIRatio3", "timeToMaxMin10",
+				"lagRet5"});
 	}
 
 	/** Used to explore various regressions in sample */
