@@ -236,6 +236,7 @@ public class DatasetGenerator {
 
 			ObjectOutputStream out = new ObjectOutputStream(outputStream);
 			out.writeObject(binaryDataset);
+			binaryDataset = null; // mark for GC
 		}
 	}
 
@@ -263,6 +264,8 @@ public class DatasetGenerator {
 					if(!Double.isNaN(row.values[i]))
 						columns[i].add(row.key, row.values[i]);
 			}
+
+			binaryDataset = null; // mark for GC
 
 			Table<TimeProduct> table = new Table<>();
 			for(int i = 0; i < columns.length; i++)

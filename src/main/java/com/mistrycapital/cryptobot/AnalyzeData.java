@@ -2,8 +2,10 @@ package com.mistrycapital.cryptobot;
 
 import ch.qos.logback.classic.Level;
 import com.google.common.base.Joiner;
+import com.mistrycapital.cryptobot.forecasts.Alta;
 import com.mistrycapital.cryptobot.forecasts.ForecastCalculator;
 import com.mistrycapital.cryptobot.forecasts.ForecastFactory;
+import com.mistrycapital.cryptobot.forecasts.Snowbird;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.regression.*;
 import com.mistrycapital.cryptobot.sim.SampleTesting;
@@ -19,6 +21,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.function.ToDoubleFunction;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.mistrycapital.cryptobot.sim.SampleTesting.SamplingType.IN_SAMPLE;
 
@@ -42,11 +45,12 @@ public class AnalyzeData {
 		Path dataCacheFile = dataDir.resolve("cached-inputs-" + fcName + ".mc");
 		final boolean readCachedForecasts = properties.getBooleanProperty("sim.readCachedForecasts", false);
 		if(readCachedForecasts) {
-			log.info("Reading cached forecast inputs from " + fcName);
+			log.info("Reading cached forecast inputs for " + fcName);
 			fullData = datasetGenerator.readBinaryDataset(dataCacheFile);
 		} else {
-			log.info("Calculating forecast inputs with " + fcName);
-			fullData = datasetGenerator.calcSignalDataset(dataDir, forecastCalculator);
+			log.info("Calculating forecast inputs from " + fcName);
+			fullData = datasetGenerator.calcSignalDataset(dataDir, forecastCalculator)
+				.filter(key -> key.timeInNanos > 1519862400L * 1000000000L); // discard pre-Mar since it is spotty
 		}
 		log.info("Loading data took " + (System.nanoTime() - startNanos) / 1000000000.0 + "sec");
 
@@ -57,20 +61,23 @@ public class AnalyzeData {
 			log.info("Writing cached data took " + (System.nanoTime() - startNanos) / 1000000000.0 + "sec");
 		}
 
-		startNanos = System.nanoTime();
+
+//		exploreRegressions(fullData);
+		optimizeVars(fullData);
+//		fitFullData(fullData, fcName);
+//		compareInOut(fullData, fcName, Alta.signalsToUse);
+	}
+
+	/** Used to explore various regressions in sample */
+	private static void exploreRegressions(Table<TimeProduct> data) {
+		// Always explore in sample
+		MCProperties properties = new MCProperties();
+		properties.setProperty("sim.sampling.type", "IN_SAMPLE");
 		SampleTesting sampleTesting = new SampleTesting(properties);
-		var sampleData = fullData
-			.filter(key ->
-				key.timeInNanos > 1519862400L * 1000000000L                // discard pre-Mar since it is spotty
-					&& sampleTesting.isSampleValid(key.timeInNanos)        // filter in/out/full sample
-			);
+
+		long startNanos = System.nanoTime();
+		final var sampleData = data.filter(key -> sampleTesting.isSampleValid(key.timeInNanos));
 		log.info("Sampling data took " + (System.nanoTime() - startNanos) / 1000000000.0 + "sec");
-
-		// previous version of Snowbird had no book MA
-		//runRegressionPrintResults(joined, "fut_ret_2h",
-		//	new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
-		//		"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100", "weightedMidRet12h100"});
-
 
 		// The below was work and info leading up to the Alta forecast signals
 		// This was the best out of all regressions using n-hour lag returns
@@ -119,89 +126,121 @@ public class AnalyzeData {
 		//runRegressionPrintResults(joined, "fut_ret_2h", new String[] {"bookRatioxRet5", "bookSMA9",
 		//	"onBalVol3", "tradeRatio10", "weightedMidRetSMA3", "btcRet5"});
 
-//		String[] best = new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "tradeRatio10",
-//				"newRatio10", "weightedMidRetSMA3", "btcRet5", "timeToMaxMin8"};
-//		if(sampleTesting.getSamplingType() == IN_SAMPLE) {
-//			final var outSample = fullData
-//				.filter(key ->
-//					key.timeInNanos > 1519862400L * 1000000000L                 // discard pre-Mar since it is spotty
-//						&& !sampleTesting.isSampleValid(key.timeInNanos)        // filter out sample
-//				);
-//			String[] searched = searchVarsBestFit(joined, outSample,
-//				new String[] {"lagRet", "bookRatioxRet", "bookSMA", "onBalVol", "tradeRatio", "newRatio", "cancelRatio",
-//					"upRatio", "weightedMidRetSMA", "RSIRatio", "RSIRatioxRet","btcRet","timeToMaxMin"});
-//			runRegressionPrintResults(joined, "fut_ret_2h", searched);
-//			String[] additional = new String[searched.length+1];
-//			for(int i=0; i<searched.length; i++)
-//				additional[i] = searched[i];
-//			additional[additional.length-1] = "weightedMidRetLast";
-//			best = dropVarsBestFit(joined, outSample, additional);
-//			runRegressionPrintResults(joined, "fut_ret_2h", best);
-//		}
-
-		final String[] finalXs;
-		if(fcName.equals("alta"))
-			finalXs = new String[] {"lagRet5", "bookRatioxRet1", "bookSMA9", "onBalVol2", "tradeRatio2", "newRatio6",
-				"cancelRatio5",
-				"upRatio11", "weightedMidRetSMA1", "RSIRatio3", "RSIRatioxRet2", "btcRet1", "timeToMaxMin11"};
+		// This is the best I came up with from own exploration
 //			finalXs = new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "tradeRatio10",
 //				"newRatio10", "weightedMidRetSMA3", "btcRet5", "timeToMaxMin8"};
-		else
-			finalXs =
-				new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
-					"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100",
-					"weightedMidRet12h100", "bookMA"};
+	}
 
-		RegressionResults finalResults = runRegressionPrintResults(sampleData, "fut_ret_2h", finalXs);
+	/** Optimizes the data over the set of variables we are considering */
+	private static void optimizeVars(Table<TimeProduct> fullData)
+		throws ColumnNotFoundException
+	{
+		MCProperties properties = new MCProperties();
+		properties.setProperty("sim.sampling.type", "IN_SAMPLE");
+		SampleTesting sampleTesting = new SampleTesting(properties);
 
-		if(sampleTesting.getSamplingType() == IN_SAMPLE) {
-			// compare with out of sample
-			final var outSample = fullData
-				.filter(key ->
-					key.timeInNanos > 1519862400L * 1000000000L                 // discard pre-Mar since it is spotty
-						&& !sampleTesting.isSampleValid(key.timeInNanos)        // filter out sample
-				);
+		long startNanos = System.nanoTime();
+		final var inSample = fullData.filter(key -> sampleTesting.isSampleValid(key.timeInNanos));
+		final var outSample = fullData.filter(key -> !sampleTesting.isSampleValid(key.timeInNanos));
+		log.info("Sampling data took " + (System.nanoTime() - startNanos) / 1000000000.0 + "sec");
 
-			System.out.println("In/out sample testing:");
-			System.out.println("R^2 in  = " +
-				calcRsq("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), sampleData, sampleData));
-			System.out.println("R^2 out = " +
-				calcRsq("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), outSample, sampleData));
-			SampleFit inSampleFit =
-				calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), sampleData);
-			SampleFit outSampleFit =
-				calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), outSample);
-			System.out.println("MSE in = " + inSampleFit.mse + "\tout = " + outSampleFit.mse);
-			System.out.println("MAE in = " + inSampleFit.mae + "\tout = " + outSampleFit.mae);
-			System.out.println("Win ratio in = " + inSampleFit.winRatio + "\tout = " + outSampleFit.winRatio + " ret " +
-				outSampleFit.retPos);
-			System.out.println(
-				"Win ratio (>10bp pred) in = " + inSampleFit.winRatio10bp + "\tout = " + outSampleFit.winRatio10bp +
-					" ret " + outSampleFit.ret10bp);
-			System.out.println(
-				"Win ratio (>20bp pred) in = " + inSampleFit.winRatio20bp + "\tout = " + outSampleFit.winRatio20bp +
-					" ret " + outSampleFit.ret20bp);
-			System.out.println(
-				"Win ratio (>30bp pred) in = " + inSampleFit.winRatio30bp + "\tout = " + outSampleFit.winRatio30bp +
-					" ret " + outSampleFit.ret30bp);
+		String[] searched = searchVarsBestFit(inSample, outSample,
+			new String[] {"lagRet", "bookRatioxRet", "bookSMA", "onBalVol", "tradeRatio", "newRatio", "cancelRatio",
+				"upRatio", "weightedMidRetSMA", "RSIRatio", "RSIRatioxRet", "btcRet", "timeToMaxMin"});
+		runRegressionPrintResults(inSample, "fut_ret_2h", searched);
+		String[] additional = new String[searched.length + 1];
+		for(int i = 0; i < searched.length; i++)
+			additional[i] = searched[i];
+		additional[additional.length - 1] = "weightedMidRetLast";
+		String[] best = dropVarsBestFit(inSample, outSample, additional);
+		runRegressionPrintResults(inSample, "fut_ret_2h", best);
+		System.out.println("Java array is");
+		System.out.println(
+			"new String[] {" + Stream.of(best).map(x -> "\"" + x + "\"").collect(Collectors.joining(",")) + "}");
+	}
 
-			System.out.println("Product MSEs:");
-			for(Product product : Product.FAST_VALUES) {
-				inSampleFit = calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(),
-					sampleData.filter(key -> key.product == product));
-				outSampleFit = calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(),
-					outSample.filter(key -> key.product == product));
-				System.out.println("MSE " + product + " in = " + inSampleFit.mse + "\tout = " + outSampleFit.mse);
-				System.out.println("MAE " + product + " in = " + inSampleFit.mae + "\tout = " + outSampleFit.mae);
-				System.out.println(
-					"Win ratio " + product + " in = " + inSampleFit.winRatio + "\tout = " + outSampleFit.winRatio);
-			}
+	/** Fit the full dataset for the given forecast */
+	private static void fitFullData(Table<TimeProduct> fullData, String fcName)
+		throws ColumnNotFoundException
+	{
+		final String[] finalXs;
+		switch(fcName) {
+			case "alta":
+				finalXs = Alta.signalsToUse;
+				break;
 
-			System.out.println("Out of sample product coeffs:");
-			printProductCoeffs(outSample, "fut_ret_2h", finalXs, fcName);
+			case "snowbird":
+				finalXs = Snowbird.signalsToUse;
+				break;
+
+			default:
+				throw new RuntimeException("Unrecognized forecast " + fcName);
 		}
 
-		printProductCoeffs(sampleData, "fut_ret_2h", finalXs, fcName);
+		RegressionResults finalResults = runRegressionPrintResults(fullData, "fut_ret_2h", finalXs);
+		System.out.println("Full sample fitted coeffs:");
+		System.out.print("forecast." + fcName + ".coeffs.all=");
+		System.out.println(Arrays.stream(finalResults.getParameterEstimates())
+			.map(x -> Double.isNaN(x) ? 0.0 : x)
+			.mapToObj(Double::toString)
+			.collect(Collectors.joining(","))
+		);
+	}
+
+	/** Compare in/out sample fit for the given signals */
+	private static void compareInOut(Table<TimeProduct> fullData, String fcName, String[] finalXs)
+		throws ColumnNotFoundException
+	{
+		MCProperties properties = new MCProperties();
+		properties.setProperty("sim.sampling.type", "IN_SAMPLE");
+		SampleTesting sampleTesting = new SampleTesting(properties);
+
+		long startNanos = System.nanoTime();
+		final var inSample = fullData.filter(key -> sampleTesting.isSampleValid(key.timeInNanos));
+		final var outSample = fullData.filter(key -> !sampleTesting.isSampleValid(key.timeInNanos));
+		log.info("Sampling data took " + (System.nanoTime() - startNanos) / 1000000000.0 + "sec");
+
+		final var finalResults = runRegressionPrintResults(inSample, "fut_ret_2h", finalXs);
+
+		System.out.println("In/out sample testing:");
+		System.out.println("R^2 in  = " +
+			calcRsq("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), inSample, inSample));
+		System.out.println("R^2 out = " +
+			calcRsq("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), outSample, inSample));
+		SampleFit inSampleFit =
+			calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), inSample);
+		SampleFit outSampleFit =
+			calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(), outSample);
+		System.out.println("MSE in = " + inSampleFit.mse + "\tout = " + outSampleFit.mse);
+		System.out.println("MAE in = " + inSampleFit.mae + "\tout = " + outSampleFit.mae);
+		System.out.println("Win ratio in = " + inSampleFit.winRatio + "\tout = " + outSampleFit.winRatio + " ret " +
+			outSampleFit.retPos);
+		System.out.println(
+			"Win ratio (>10bp pred) in = " + inSampleFit.winRatio10bp + "\tout = " + outSampleFit.winRatio10bp +
+				" ret " + outSampleFit.ret10bp);
+		System.out.println(
+			"Win ratio (>20bp pred) in = " + inSampleFit.winRatio20bp + "\tout = " + outSampleFit.winRatio20bp +
+				" ret " + outSampleFit.ret20bp);
+		System.out.println(
+			"Win ratio (>30bp pred) in = " + inSampleFit.winRatio30bp + "\tout = " + outSampleFit.winRatio30bp +
+				" ret " + outSampleFit.ret30bp);
+
+		System.out.println("Product MSEs:");
+		for(Product product : Product.FAST_VALUES) {
+			inSampleFit = calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(),
+				inSample.filter(key -> key.product == product));
+			outSampleFit = calcSampleFit("fut_ret_2h", finalXs, finalResults.getParameterEstimates(),
+				outSample.filter(key -> key.product == product));
+			System.out.println("MSE " + product + " in = " + inSampleFit.mse + "\tout = " + outSampleFit.mse);
+			System.out.println("MAE " + product + " in = " + inSampleFit.mae + "\tout = " + outSampleFit.mae);
+			System.out.println(
+				"Win ratio " + product + " in = " + inSampleFit.winRatio + "\tout = " + outSampleFit.winRatio);
+		}
+
+		System.out.println("Out of sample product coeffs:");
+		printProductCoeffs(outSample, "fut_ret_2h", finalXs, fcName);
+
+		printProductCoeffs(inSample, "fut_ret_2h", finalXs, fcName);
 		System.out.println("Overall coeffs:");
 		System.out.println("forecast." + fcName + ".coeffs.all=" +
 			Arrays.stream(finalResults.getParameterEstimates())
@@ -211,7 +250,8 @@ public class AnalyzeData {
 		);
 	}
 
-	static void printProductCoeffs(Table<TimeProduct> table, String y, String[] xs, String fcName)
+	/** Run regression for each product and output coeffs in property file format */
+	private static void printProductCoeffs(Table<TimeProduct> table, String y, String[] xs, String fcName)
 		throws ColumnNotFoundException
 	{
 		String coeffsStr = "";
@@ -228,7 +268,12 @@ public class AnalyzeData {
 		System.out.println(coeffsStr);
 	}
 
-	static String[] searchVarsBestFit(Table<TimeProduct> inSample, Table<TimeProduct> outSample, String[] searchVars)
+	/**
+	 * Searches correct period to use for each given variable. Method is to regress in sample and use out of sample fit
+	 * across regressions to pick best window for each variable.
+	 */
+	private static String[] searchVarsBestFit(Table<TimeProduct> inSample, Table<TimeProduct> outSample,
+		String[] searchVars)
 		throws ColumnNotFoundException
 	{
 		final int[] bestIdx = new int[searchVars.length];
@@ -271,7 +316,11 @@ public class AnalyzeData {
 		return outVars;
 	}
 
-	static String[] dropVarsBestFit(Table<TimeProduct> inSample, Table<TimeProduct> outSample, String[] vars)
+	/**
+	 * Drops variables that don't help out of sample fit. Method is to drop variables, regress in sample, and compare
+	 * out of sample fit to eliminate ones that do not contribute
+	 */
+	private static String[] dropVarsBestFit(Table<TimeProduct> inSample, Table<TimeProduct> outSample, String[] vars)
 		throws ColumnNotFoundException
 	{
 		// set base
@@ -318,7 +367,7 @@ public class AnalyzeData {
 	}
 
 	/** Returns the variable that yields best fit (max criterion) of the variables to test */
-	static String findBestFitVariable(Table<TimeProduct> inSample, Table<TimeProduct> outSample, String yCol,
+	private static String findBestFitVariable(Table<TimeProduct> inSample, Table<TimeProduct> outSample, String yCol,
 		String[] otherXCols, String[] varsToTest, ToDoubleFunction<SampleFit> criterion)
 		throws ColumnNotFoundException
 	{
@@ -346,7 +395,7 @@ public class AnalyzeData {
 		return best;
 	}
 
-	static RegressionResults runRegressionPrintResults(Table<?> table, String yCol, String[] xCols)
+	private static RegressionResults runRegressionPrintResults(Table<?> table, String yCol, String[] xCols)
 		throws ColumnNotFoundException
 	{
 		final var results = table.regress(yCol, xCols);
@@ -367,7 +416,7 @@ public class AnalyzeData {
 		return results;
 	}
 
-	static double calcRsq(String yCol, String[] xCols, double[] coeffs, Table<TimeProduct> table,
+	private static double calcRsq(String yCol, String[] xCols, double[] coeffs, Table<TimeProduct> table,
 		Table<TimeProduct> trainingTable)
 	{
 		double yMean = 0.0;
@@ -404,30 +453,7 @@ public class AnalyzeData {
 		return 1.0 - residSumSq / totalSumSq;
 	}
 
-	static class SampleFit {
-		/** Mean squared error */
-		double mse;
-		/** Mean absolute error */
-		double mae;
-		/** Win ratio (% correct of predicted gains) */
-		double winRatio;
-		/** Win ratio above 10bp threshold */
-		double winRatio10bp;
-		/** Win ratio above 20bp threshold */
-		double winRatio20bp;
-		/** Win ratio above 30bp threshold */
-		double winRatio30bp;
-		/** Average return when positive */
-		double retPos;
-		/** Average return when above 10bp threshold */
-		double ret10bp;
-		/** Average return when above 20bp threshold */
-		double ret20bp;
-		/** Average return when above 30bp threshold */
-		double ret30bp;
-	}
-
-	static SampleFit calcSampleFit(String yCol, String[] xCols, double[] coeffs, Table<TimeProduct> table) {
+	private static SampleFit calcSampleFit(String yCol, String[] xCols, double[] coeffs, Table<TimeProduct> table) {
 		double sqErr = 0.0;
 		double absErr = 0.0;
 		double[] thresholds = new double[] {0, 0.0010, 0.0020, 0.0030};
@@ -469,5 +495,28 @@ public class AnalyzeData {
 		sampleFit.ret20bp = rets[2] / numAboveThreshold[2];
 		sampleFit.ret30bp = rets[3] / numAboveThreshold[3];
 		return sampleFit;
+	}
+
+	private static class SampleFit {
+		/** Mean squared error */
+		double mse;
+		/** Mean absolute error */
+		double mae;
+		/** Win ratio (% correct of predicted gains) */
+		double winRatio;
+		/** Win ratio above 10bp threshold */
+		double winRatio10bp;
+		/** Win ratio above 20bp threshold */
+		double winRatio20bp;
+		/** Win ratio above 30bp threshold */
+		double winRatio30bp;
+		/** Average return when positive */
+		double retPos;
+		/** Average return when above 10bp threshold */
+		double ret10bp;
+		/** Average return when above 20bp threshold */
+		double ret20bp;
+		/** Average return when above 30bp threshold */
+		double ret30bp;
 	}
 }

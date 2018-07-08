@@ -30,7 +30,7 @@ public class Snowbird implements ForecastCalculator {
 	private final double[][] coeffs;
 	private Map<String,Double> variableMap;
 
-	private static final String[] signalsToUse =
+	public static final String[] signalsToUse =
 		new String[] {"lagRet6", "bookRatioxRet", "upRatioxRet", "normVolxRet", "RSIRatioxRet", "tradeRatio",
 			"newRatio", "cancelRatio", "timeToMaxMin", "lagBTCRet6", "weightedMidRet100", "weightedMidRet12h100",
 			"bookMA"};
