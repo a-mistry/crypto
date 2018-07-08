@@ -31,8 +31,9 @@ public class Alta implements ForecastCalculator {
 	public static final String[] signalsToUse =
 		new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "tradeRatio10",
 			"newRatio10", "weightedMidRetSMA3", "btcRet5", "timeToMaxMin8"};
-	//			new String[] {"onBalVol2", "bookRatioxRet1", "bookSMA3", "weightedMidRetSMA1", "btcRet1", "cancelRatio4",
-	//		"upRatio12", "weightedMidRetLast", "newRatio6", "RSIRatioxRet2", "RSIRatio3", "lagRet5"};
+//		new String[] {"bookSMA9", "onBalVol2", "RSIRatioxRet10", "btcRet2", "bookRatioxRet1", "newRatio9",
+//			"cancelRatio8", "tradeRatio12", "upRatio3", "RSIRatio3", "timeToMaxMin10", "lagRet5",
+//			"weightedMidRetLast"};
 	public static final Set<String> signalsToUseSet = Set.of(signalsToUse);
 
 	public Alta(MCProperties properties) {
@@ -99,7 +100,9 @@ public class Alta implements ForecastCalculator {
 		// return calcs
 		ToDoubleFunction<ProductSnapshot> lastPriceFunction = data -> data.lastPrice;
 		addSignalCalc("lagRet", t -> new SignalCalculation("lastPrice", 0, STATIC, lastPriceFunction));
-		addSignalCalc("lagRet", t -> new SignalCalculation("price" + t + "h", t, STATIC, lastPriceFunction));
+		IntFunction<SignalCalculation> lagPriceGenerator = t ->
+			new SignalCalculation("price" + t + "h", t, STATIC, lastPriceFunction);
+		addSignalCalc("lagRet", lagPriceGenerator);
 
 		// book calcs
 		ToDoubleFunction<ProductSnapshot> bookRatioFunction = data ->
@@ -109,6 +112,7 @@ public class Alta implements ForecastCalculator {
 		IntFunction<SignalCalculation> book5PctGenerator = t ->
 			new SignalCalculation("book5PctCount", 0, STATIC, data -> data.bidCount5Pct + data.askCount5Pct);
 		addSignalCalc("bookRatio", bookRatioGenerator);
+		addSignalCalc("bookRatioxRet", lagPriceGenerator);
 		addSignalCalc("bookRatioxRet", bookRatioGenerator);
 		addSignalCalc("bookRatio", book5PctGenerator);
 		addSignalCalc("bookRatioxRet", book5PctGenerator);
@@ -134,6 +138,7 @@ public class Alta implements ForecastCalculator {
 			new SignalCalculation("sumDownChange" + t, t, SUM, data ->
 				data.ret >= 0 ? 0 : data.lastPrice / (1 + data.ret) - data.lastPrice);
 		addSignalCalc("RSIRatio", sumUpGenerator);
+		addSignalCalc("RSIRatioxRet", lagPriceGenerator);
 		addSignalCalc("RSIRatioxRet", sumUpGenerator);
 		addSignalCalc("RSIRatio", sumDownGenerator);
 		addSignalCalc("RSIRatioxRet", sumDownGenerator);
@@ -165,9 +170,11 @@ public class Alta implements ForecastCalculator {
 	private void computeDerivedCalcs() {
 		variableMap.put("weightedMidRetLast", variableMap.get("weightedMidLast") / variableMap.get("lastPrice") - 1);
 
-		putDerivedCalc("lagRet", "lagRet", t ->
-			variableMap.get("lastPrice") / variableMap.get("price" + t + "h") - 1.0);
+		IntFunction<Double> lagRetGenerator = t ->
+			variableMap.get("lastPrice") / variableMap.get("price" + t + "h") - 1.0;
+		putDerivedCalc("lagRet", "lagRet", lagRetGenerator);
 
+		putDerivedCalc("bookRatioxRet", "lagRet", lagRetGenerator);
 		putDerivedCalc("bookRatioxRet", "bookRatioxRet", t ->
 			variableMap.get("bookRatio") * variableMap.get("lagRet" + t));
 
@@ -180,6 +187,7 @@ public class Alta implements ForecastCalculator {
 				variableMap.get("sumUpChange" + t) / variableMap.get("sumDownChange" + t);
 		};
 		putDerivedCalc("RSIRatio", "RSIRatio", RSIRatioGenerator);
+		putDerivedCalc("RSIRatioxRet", "lagRet", lagRetGenerator);
 		putDerivedCalc("RSIRatioxRet", "RSIRatio", RSIRatioGenerator);
 		putDerivedCalc("RSIRatioxRet", "RSIRatioxRet", t ->
 			variableMap.get("RSIRatio" + t) * variableMap.get("lagRet" + t));
@@ -206,7 +214,7 @@ public class Alta implements ForecastCalculator {
 		final double btcLastPrice = latest.getProductSnapshot(Product.BTC_USD).lastPrice;
 
 		for(int i = 1; i <= 12; i++)
-			if(signalsToUseSet.contains("btcRet" + i)) {
+			if(calcAllSignals || signalsToUseSet.contains("btcRet" + i)) {
 				double btcLagPrice = Double.NaN;
 				for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedHistory.inOrder((i + 1) * 3600)) {
 					if(consolidatedSnapshot.getTimeNanos() > latestTimeNanos - i * 3600000000000L)
@@ -218,7 +226,7 @@ public class Alta implements ForecastCalculator {
 
 		// intervals since max/min
 		for(int i = 1; i <= 12; i++)
-			if(signalsToUseSet.contains("timeToMaxMin" + i)) {
+			if(calcAllSignals || signalsToUseSet.contains("timeToMaxMin" + i)) {
 				double minPrice = Double.MAX_VALUE;
 				double maxPrice = 0.0;
 				int intervalsToMin = 0;

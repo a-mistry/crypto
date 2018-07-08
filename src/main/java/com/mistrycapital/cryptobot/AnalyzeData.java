@@ -67,8 +67,9 @@ public class AnalyzeData {
 //		optimizeVars(fullData);
 //		fitFullData(fullData, fcName);
 		compareInOut(fullData, fcName,
-			new String[] {"onBalVol2", "bookRatioxRet1", "bookSMA3", "weightedMidRetSMA1", "btcRet1", "cancelRatio4",
-				"upRatio12", "weightedMidRetLast", "newRatio6", "RSIRatioxRet2", "RSIRatio3", "lagRet5"}
+			new String[] {"bookSMA9", "onBalVol2", "RSIRatioxRet10", "btcRet2", "bookRatioxRet1", "newRatio9",
+				"cancelRatio8", "tradeRatio12", "upRatio3", "RSIRatio3", "timeToMaxMin10", "lagRet5",
+				"weightedMidRetLast"}
 		);
 	}
 

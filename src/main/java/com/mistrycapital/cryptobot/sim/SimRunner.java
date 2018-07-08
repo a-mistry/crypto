@@ -80,7 +80,7 @@ public class SimRunner implements Runnable {
 				simProperties.put("sim.logDecisions", "false");
 				simProperties.put("tactic.buyForecastProportion", "false");
 				List<ParameterSearchSpace> searchList = Arrays.asList(
-					new ParameterSearchSpace("tactic.buyThreshold", 0.001, 0.015, 100)
+					new ParameterSearchSpace("tactic.buyThreshold", 0.000, 0.005, 50)
 //					new ParameterSearchSpace("tactic.buyUpperThreshold", 0.01, 0.02, 6),
 //					new ParameterSearchSpace("tactic.tradeScaleFactor", 1.0, 10.0, 10)
 				);
