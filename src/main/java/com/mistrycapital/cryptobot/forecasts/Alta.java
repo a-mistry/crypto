@@ -29,11 +29,9 @@ public class Alta implements ForecastCalculator {
 	private final int maxLookbackHours;
 	private final List<SignalCalculation> signalCalcs;
 	public static final String[] signalsToUse =
-		new String[] {"lagRet5", "bookRatioxRet5", "bookSMA9", "upRatio2", "onBalVol3", "tradeRatio10",
-			"newRatio10", "weightedMidRetSMA3", "btcRet5", "timeToMaxMin8"};
-//		new String[] {"bookSMA9", "onBalVol2", "RSIRatioxRet10", "btcRet2", "bookRatioxRet1", "newRatio9",
-//			"cancelRatio8", "tradeRatio12", "upRatio3", "RSIRatio3", "timeToMaxMin10", "lagRet5",
-//			"weightedMidRetLast"};
+		new String[] {"bookSMA9", "onBalVol2", "RSIRatioxRet10", "btcRet2", "bookRatioxRet1", "newRatio9",
+			"cancelRatio8", "tradeRatio12", "upRatio3", "RSIRatio3", "timeToMaxMin10", "lagRet5",
+			"weightedMidRetLast"};
 	public static final Set<String> signalsToUseSet = Set.of(signalsToUse);
 
 	public Alta(MCProperties properties) {
