@@ -25,7 +25,7 @@ public class SimExecutionEngine implements ExecutionEngine {
 	private final Tactic tactic;
 	private final double takeTransactionCost;
 	private final double postFillRate;
-	private final double postSlippage;
+	private final double[] postSlippage;
 	private final double adverseFillPenalty;
 	private final ConsolidatedHistory history;
 	private final Random postFillRandomGen;
@@ -38,7 +38,13 @@ public class SimExecutionEngine implements ExecutionEngine {
 		this.history = history;
 		takeTransactionCost = properties.getDoubleProperty("sim.takeTransactionCostOnes", 0.0030);
 		postFillRate = properties.getDoubleProperty("sim.postFillRate", 1.0);
-		postSlippage = properties.getDoubleProperty("sim.postSlippage", 0.0);
+		postSlippage = new double[Product.count];
+		final var defaultPostSlippage = properties.getDoubleProperty("sim.postSlippage", 0.0010);
+		for(Product product : Product.FAST_VALUES) {
+			postSlippage[product.getIndex()] =
+				properties.getDoubleProperty("sim.postSlippage." + product, defaultPostSlippage);
+			log.info("Using post slippage " + postSlippage[product.getIndex()] + " for " + product);
+		}
 		adverseFillPenalty = properties.getDoubleProperty("sim.adverseFillPenalty", 0.10);
 		postFillRandomGen = new Random(0);
 	}
@@ -68,7 +74,7 @@ public class SimExecutionEngine implements ExecutionEngine {
 				final double fillRate = instruction.getOrderSide().sign() == Math.signum(instruction.getForecast())
 					? postFillRate * (1 - adverseFillPenalty) : postFillRate * (1 + adverseFillPenalty);
 				shouldFillOrder = postFillRandomGen.nextDouble() < fillRate;
-				transactionCost = postSlippage;
+				transactionCost = postSlippage[product.getIndex()];
 			}
 			if(shouldFillOrder) {
 				// fill if a market order or otherwise target fill rate
