@@ -244,7 +244,7 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 			final long timeNanos = timeKeeper.epochNanos();
 			for(WorkingOrder workingOrder : workingOrders) {
 				// remove any orders that should have been canceled but for some reason were not marked as such
-				if(workingOrder.origTimeNanos - timeNanos > ONE_HOUR_NANOS) {
+				if(timeNanos - workingOrder.origTimeNanos > ONE_HOUR_NANOS) {
 					if(markCanceled == null) markCanceled = new LinkedList<>();
 					markCanceled.add(workingOrder);
 					continue;
