@@ -385,4 +385,10 @@ public class DBRecorder {
 		con.commit();
 		con.close();
 	}
+
+	public Connection getConnection()
+		throws SQLException
+	{
+		return dataSource.getConnection();
+	}
 }
