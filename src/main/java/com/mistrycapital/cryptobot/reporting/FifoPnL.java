@@ -49,7 +49,23 @@ public class FifoPnL {
 	void runFifoPnL()
 		throws SQLException, IOException
 	{
-		PreparedStatement statement = dbConnection.prepareStatement("SELECT * FROM crypto_trades");
+		PreparedStatement statement = dbConnection.prepareStatement("SELECT" +
+			" a.row_id," +
+			" a.client_oid," +
+			" a.order_id," +
+			" a.time," +
+			" a.product," +
+			" a.side," +
+			" a.amount," +
+			" a.price," +
+			" a.executed_value," +
+			" a.orig_price," +
+			" a.slippage," +
+			" b.forecast" +
+			" FROM crypto_trades a" +
+			" LEFT JOIN crypto_posts b" +
+			" ON a.client_oid=b.client_oid" +
+			" ORDER BY a.time,a.row_id;");
 		ResultSet trades = statement.executeQuery();
 		PreparedStatement statement2 = dbConnection.prepareStatement("SELECT * FROM crypto_hourly");
 		ResultSet hourly = statement2.executeQuery();
@@ -93,7 +109,8 @@ public class FifoPnL {
 				trades.getDouble("price"),
 				trades.getDouble("executed_value"),
 				trades.getDouble("orig_price"),
-				trades.getDouble("slippage")
+				trades.getDouble("slippage"),
+				trades.getDouble("forecast")
 			));
 		} else {
 			final var sellPrice = trades.getDouble("price");
@@ -115,6 +132,7 @@ public class FifoPnL {
 						matchBuy.timeMillis,
 						product,
 						matchBuy.amount,
+						matchBuy.forecast,
 						matchBuy.price,
 						avgSellPrice,
 						matchBuy.origPrice,
@@ -150,13 +168,13 @@ public class FifoPnL {
 		return dateTime.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
 	}
 
-	private void logMatch(int rowId, UUID clientOid, long timeMillis, Product product, double amount,
+	private void logMatch(int rowId, UUID clientOid, long timeMillis, Product product, double amount, double forecast,
 		double buyPrice, double sellPrice, double buyOrigPrice, double sellOrigPrice)
 		throws IOException
 	{
 		if(!logMatchCalled) {
 			logMatchCalled = true;
-			csvWriter.append("rowId,clientOid,date,time,unixTimestamp,product,amount," +
+			csvWriter.append("rowId,clientOid,date,time,unixTimestamp,product,amount,forecast," +
 				"buyPrice,sellPrice,buyOrigPrice,sellOrigPrice,PnL,expectedPnL\n");
 		}
 		String clientOidString = clientOid == null ? "" : clientOid.toString();
@@ -169,6 +187,7 @@ public class FifoPnL {
 			timeMillis / 1000L,
 			product,
 			amount,
+			forecast,
 			buyPrice,
 			sellPrice,
 			buyOrigPrice,
@@ -189,12 +208,13 @@ public class FifoPnL {
 		final double executedValue;
 		final double origPrice;
 		final double slippage;
+		final double forecast;
 		double remainingAmount;
 		double crossedValue;
 		double crossedOrigValue;
 
 		public TradeInfo(int rowId, UUID clientOid, long timeMillis, Product product, double amount, double price,
-			double executedValue, double origPrice, double slippage)
+			double executedValue, double origPrice, double slippage, double forecast)
 		{
 			this.rowId = rowId;
 			this.clientOid = clientOid;
@@ -205,6 +225,7 @@ public class FifoPnL {
 			this.executedValue = executedValue;
 			this.origPrice = origPrice;
 			this.slippage = slippage;
+			this.forecast = forecast;
 			remainingAmount = amount;
 		}
 
