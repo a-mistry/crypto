@@ -91,7 +91,7 @@ public class SendExecutionTestTrades {
 		Thread.sleep(20000); // wait for order books to be built
 
 		TradeInstruction instruction =
-			new TradeInstruction(Product.LTC_USD, 0.1, OrderSide.SELL, Aggression.POST_ONLY, 0.01);
+			new TradeInstruction(Product.ETH_USD, 0.01, OrderSide.SELL, Aggression.POST_ONLY, 0.01);
 		log.debug("Instruction object is " + instruction);
 		executionEngine.trade(Collections.singletonList(instruction));
 

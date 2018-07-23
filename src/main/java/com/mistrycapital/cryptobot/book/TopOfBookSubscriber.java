@@ -1,5 +1,6 @@
 package com.mistrycapital.cryptobot.book;
 
+import com.mistrycapital.cryptobot.gdax.common.OrderSide;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 
 /**
@@ -7,7 +8,13 @@ import com.mistrycapital.cryptobot.gdax.common.Product;
  * bid/ask prices have changed
  */
 public interface TopOfBookSubscriber {
-	void onBidChanged(Product product, double bidPrice);
-
-	void onAskChanged(Product product, double askPrice);
+	/**
+	 * Called when top of book has changed
+	 *
+	 * @param product  Product
+	 * @param side     Side that changed
+	 * @param bidPrice (Potentially new) bid
+	 * @param askPrice (Potentiall new) ask
+	 */
+	void onChanged(Product product, OrderSide side, double bidPrice, double askPrice);
 }

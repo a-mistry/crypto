@@ -235,9 +235,10 @@ public class OrderBook implements BBOProvider {
 		final OrderLine orderLine;
 		final double topPrice; // top of book price before this insert
 		final double msgPrice = msg.getPrice();
+		final boolean isBuy = msg.getOrderSide() == OrderSide.BUY;
 
 		synchronized(this) {
-			if(msg.getOrderSide() == OrderSide.BUY) {
+			if(isBuy) {
 				topPrice = bids.getFirstPrice();
 				orderLine = bids.findOrCreate(msgPrice);
 			} else {
@@ -250,15 +251,17 @@ public class OrderBook implements BBOProvider {
 
 		// check if insert caused new top of book and fire subscribers
 		// this is done outside of synchronization
-		if(msg.getOrderSide() == OrderSide.BUY) {
-			if(Double.isNaN(topPrice) || msgPrice > topPrice + PRICE_EPSILON) {
+		final boolean isNewTop = (isBuy && msgPrice > topPrice + PRICE_EPSILON)
+			|| (!isBuy && msgPrice < topPrice - PRICE_EPSILON);
+		if(isNewTop || Double.isNaN(topPrice)) {
+			if(isBuy) {
+				final double askPrice = asks.getFirstPrice();
 				for(TopOfBookSubscriber subscriber : topOfBookSubscribers)
-					subscriber.onBidChanged(product, msgPrice);
-			}
-		} else {
-			if(Double.isNaN(topPrice) || msgPrice < topPrice - PRICE_EPSILON) {
+					subscriber.onChanged(product, OrderSide.BUY, msgPrice, askPrice);
+			} else {
+				final double bidPrice = bids.getFirstPrice();
 				for(TopOfBookSubscriber subscriber : topOfBookSubscribers)
-					subscriber.onAskChanged(product, msgPrice);
+					subscriber.onChanged(product, OrderSide.SELL, bidPrice, msgPrice);
 			}
 		}
 	}
@@ -371,11 +374,15 @@ public class OrderBook implements BBOProvider {
 
 		// trigger subscriptions outside of synchronized block
 		if(Math.abs(newTopPrice - prevTopPrice) > PRICE_EPSILON) {
-			for(TopOfBookSubscriber subscriber : topOfBookSubscribers)
-				if(isBuy)
-					subscriber.onBidChanged(product, newTopPrice);
-				else
-					subscriber.onAskChanged(product, newTopPrice);
+			if(isBuy) {
+				final double askPrice = asks.getFirstPrice();
+				for(TopOfBookSubscriber subscriber : topOfBookSubscribers)
+					subscriber.onChanged(product, OrderSide.BUY, newTopPrice, askPrice);
+			} else {
+				final double bidPrice = bids.getFirstPrice();
+				for(TopOfBookSubscriber subscriber : topOfBookSubscribers)
+					subscriber.onChanged(product, OrderSide.SELL, bidPrice, newTopPrice);
+			}
 		}
 	}
 
