@@ -78,6 +78,7 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 		double filledAmountxPrice;
 		double filledAmount;
 		WorkingOrderStatus status;
+		double bidThreshold;
 
 		WorkingOrder(final TradeInstruction instruction, final UUID clientOid, final double postedPrice) {
 			this.instruction = instruction;
@@ -86,6 +87,8 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 			origTimeNanos = timeKeeper.epochNanos();
 			origPrice = postedPrice;
 			status = POSTING;
+			bidThreshold = instruction.getOrderSide() == OrderSide.BUY
+				? origPrice * (1 + 0.5 * instruction.getForecast()) : Double.NaN;
 		}
 	}
 
@@ -359,7 +362,16 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 						&& workingOrder.postedPrice < bidPrice - OrderBook.PRICE_EPSILON;
 					final boolean askMovedAway = workingOrderSide == OrderSide.SELL
 						&& workingOrder.postedPrice > askPrice + OrderBook.PRICE_EPSILON;
-					shouldRepost = bidMovedAway || askMovedAway;
+
+					// Optimization - don't buy if bid moved too far away (1/2 forecast value)
+					if(bidMovedAway && bidPrice < workingOrder.bidThreshold - OrderBook.PRICE_EPSILON) {
+						shouldRepost = false;
+						if(markCanceled == null) markCanceled = new LinkedList<>();
+						markCanceled.add(workingOrder);
+						tactic.notifyReject(workingOrder.instruction);
+					} else {
+						shouldRepost = askMovedAway || bidMovedAway;
+					}
 				} else {
 					// Case 2 - reprice if spread has widened and so we can be aggressive
 					shouldRepost = spreadWidened;
