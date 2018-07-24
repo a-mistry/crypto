@@ -36,7 +36,7 @@ public class TwoHourTactic implements Tactic {
 	/** Percent allocation for each product */
 	private final double[] pctAllocation;
 	/** Buy above this threshold */
-	private final double forecastThreshold;
+	private final double[] forecastThreshold;
 	/** Are we using the version that buys in proportion to forecast */
 	private final boolean buyForecastProportion;
 	/** Do not buy extra above this threshold */
@@ -77,16 +77,20 @@ public class TwoHourTactic implements Tactic {
 		purchasedIndex = 0;
 		pctAllocation = new double[Product.count];
 		final double defaultPctAllocation = properties.getDoubleProperty("tactic.pctAllocation.default");
-		forecastThreshold = properties.getDoubleProperty("tactic.buyThreshold");
 		buyForecastProportion = properties.getBooleanProperty("tactic.buyForecastProportion");
 		forecastUpperThreshold = properties.getDoubleProperty("tactic.buyUpperThreshold");
 		tradeUsdThreshold = properties.getDoubleProperty("tactic.tradeUsdThreshold");
 		tradeScaleFactor = properties.getDoubleProperty("tactic.tradeScaleFactor");
+		final double defaultForecastThreshold = properties.getDoubleProperty("tactic.buyThreshold");
+		forecastThreshold = new double[Product.count];
 		for(Product product : Product.FAST_VALUES) {
 			int productIndex = product.getIndex();
 			pctAllocation[productIndex] =
 				properties.getDoubleProperty("tactic.pctAllocation." + product, defaultPctAllocation);
-			log.debug("Two hour tactic " + product + " alloc " + (100 * pctAllocation[productIndex]) + "%");
+			forecastThreshold[productIndex] =
+				properties.getDoubleProperty("tactic.buyThreshold." + product, defaultForecastThreshold);
+			log.debug("Two hour tactic " + product + " alloc " + (100 * pctAllocation[productIndex]) + "% threshold "
+				+ forecastThreshold[productIndex]);
 		}
 		activeOrders = new LinkedList<>();
 	}
@@ -102,7 +106,8 @@ public class TwoHourTactic implements Tactic {
 			purgeOlderThanOneHour();
 
 			final var maxLong = totalPositionUsd * pctAllocation[productIndex] / askPrice;
-			purchased[productIndex][purchasedIndex] = calcPurchase(maxLong, forecasts[productIndex]);
+			purchased[productIndex][purchasedIndex] =
+				calcPurchase(maxLong, forecasts[productIndex], forecastThreshold[productIndex]);
 
 			final var goalPosition = sum(purchased[productIndex]);
 			final var currentPosition = accountant.getBalance(product.getCryptoCurrency());
@@ -115,7 +120,7 @@ public class TwoHourTactic implements Tactic {
 			final double deltaPosition;
 			final double deltaPositionUsd;
 			final var dollarsAvailable = accountant.getAvailable(Currency.USD);
-			if(deltaToGoalPositionUsd>dollarsAvailable) {
+			if(deltaToGoalPositionUsd > dollarsAvailable) {
 				deltaPositionUsd = dollarsAvailable;
 				deltaPosition = deltaPositionUsd / askPrice;
 			} else {
@@ -157,19 +162,21 @@ public class TwoHourTactic implements Tactic {
 	}
 
 	/** @return Amount we want to go long this period, given the maximum long position and forecast */
-	private double calcPurchase(final double maxLong, final double forecast) {
-		return buyForecastProportion ? calcPurchaseProportionally(maxLong, forecast) :
-			calcPurchaseWithToggle(maxLong, forecast);
+	private double calcPurchase(final double maxLong, final double forecast, final double forecastThreshold) {
+		return buyForecastProportion ? calcPurchaseProportionally(maxLong, forecast, forecastThreshold) :
+			calcPurchaseWithToggle(maxLong, forecast, forecastThreshold);
 	}
 
-	private double calcPurchaseWithToggle(final double maxLong, final double forecast) {
+	private double calcPurchaseWithToggle(final double maxLong, final double forecast, final double forecastThreshold) {
 		if(Double.isNaN(forecast) || forecast < forecastThreshold)
 			return 0.0;
 
 		return maxLong * Math.min(1.0, tradeScaleFactor / lookback);
 	}
 
-	private double calcPurchaseProportionally(final double maxLong, final double forecast) {
+	private double calcPurchaseProportionally(final double maxLong, final double forecast,
+		final double forecastThreshold)
+	{
 		if(Double.isNaN(forecast) || forecast < forecastThreshold)
 			return 0.0;
 
@@ -235,7 +242,8 @@ public class TwoHourTactic implements Tactic {
 			final var productIndex = product.getIndex();
 			final var askPrice = snapshot.getProductSnapshot(product).askPrice;
 			final var maxLong = totalPositionUsd * pctAllocation[productIndex] / askPrice;
-			purchased[productIndex][purchasedIndex] = calcPurchase(maxLong, forecasts[productIndex]);
+			purchased[productIndex][purchasedIndex] =
+				calcPurchase(maxLong, forecasts[productIndex], forecastThreshold[productIndex]);
 		}
 		purchasedIndex = (purchasedIndex + 1) % lookback;
 	}

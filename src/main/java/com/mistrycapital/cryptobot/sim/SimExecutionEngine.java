@@ -43,7 +43,7 @@ public class SimExecutionEngine implements ExecutionEngine {
 		for(Product product : Product.FAST_VALUES) {
 			postSlippage[product.getIndex()] =
 				properties.getDoubleProperty("sim.postSlippage." + product, defaultPostSlippage);
-			log.info("Using post slippage " + postSlippage[product.getIndex()] + " for " + product);
+			log.debug("Using post slippage " + postSlippage[product.getIndex()] + " for " + product);
 		}
 		adverseFillPenalty = properties.getDoubleProperty("sim.adverseFillPenalty", 0.10);
 		postFillRandomGen = new Random(0);
