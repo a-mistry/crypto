@@ -202,7 +202,7 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 		try {
 			final OrderInfo orderInfo = orderFuture.get();
 			if(orderInfo.getStatus() == OrderStatus.REJECTED) {
-				if("post only".equals(orderInfo.getRejectedReason()) && workingOrder.attemptCount < MAX_TRIES) {
+				if("post only".equals(orderInfo.getRejectReason()) && workingOrder.attemptCount < MAX_TRIES) {
 
 					// Retry with new price up to MAX_TRIES times
 
@@ -220,7 +220,7 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 					final CompletableFuture<OrderInfo> newFuture = postWorkingOrder(workingOrder);
 					runInBackground(() -> processSentWorkingOrder(workingOrder, newFuture));
 
-				} else if("post only".equals(orderInfo.getRejectedReason())) {
+				} else if("post only".equals(orderInfo.getRejectReason())) {
 
 					log.error(
 						"Order to " + instruction +
@@ -229,7 +229,7 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 
 				} else {
 
-					log.error("Order to " + instruction + " was rejected due to " + orderInfo.getRejectedReason()
+					log.error("Order to " + instruction + " was rejected due to " + orderInfo.getRejectReason()
 						+ ", not retrying");
 					removeOrder = true;
 

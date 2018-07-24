@@ -56,7 +56,7 @@ public class OrderInfo {
 	/** Reason done (filled or canceled) */
 	private final Reason doneReason;
 	/** Reason rejected */
-	private final String rejectedReason;
+	private final String rejectReason;
 
 	public OrderInfo(JsonObject json) {
 		log.debug("Received order info from gdax " + json);
@@ -83,8 +83,8 @@ public class OrderInfo {
 			? parseTimeMicros(json.get("done_at").getAsString()) : 0L;
 		doneReason = json.has("done_reason")
 			? Reason.parse(json.get("done_reason").getAsString()) : null;
-		rejectedReason = status == OrderStatus.REJECTED && json.has("rejected_reason")
-			? json.get("rejected_reason").getAsString() : null;
+		rejectReason = status == OrderStatus.REJECTED && json.has("reject_reason")
+			? json.get("reject_reason").getAsString() : null;
 	}
 
 	/** @return Order id */
@@ -183,8 +183,8 @@ public class OrderInfo {
 	}
 
 	/** @return Reason rejected */
-	public final String getRejectedReason() {
-		return rejectedReason;
+	public final String getRejectReason() {
+		return rejectReason;
 	}
 
 	@Override
@@ -228,8 +228,8 @@ public class OrderInfo {
 		builder.append(doneMicros);
 		builder.append("\ndoneReason\t");
 		builder.append(doneReason);
-		builder.append("\nrejectedReason\t");
-		builder.append(rejectedReason);
+		builder.append("\nrejectReason\t");
+		builder.append(rejectReason);
 		return builder.toString();
 	}
 }
