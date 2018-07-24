@@ -1,10 +1,12 @@
 package com.mistrycapital.cryptobot.sim;
 
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
-import org.eclipse.jetty.util.IO;
 import org.slf4j.Logger;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -18,7 +20,6 @@ import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
-import java.util.zip.ZipInputStream;
 
 /**
  * Reads all gdax message files (in zips) sequentially and gets each message string
@@ -28,9 +29,11 @@ public class GdaxMessageFileReader implements Runnable {
 
 	private final Path dataDir;
 	private final BlockingQueue<String> messageStringQueue;
-	private final GdaxMessageTranslator writer;
+	private final DoneNotificationRecipient writer;
 
-	public GdaxMessageFileReader(Path dataDir, BlockingQueue<String> messageStringQueue, GdaxMessageTranslator writer) {
+	public GdaxMessageFileReader(Path dataDir, BlockingQueue<String> messageStringQueue,
+		DoneNotificationRecipient writer)
+	{
 		this.dataDir = dataDir;
 		this.messageStringQueue = messageStringQueue;
 		this.writer = writer;
@@ -94,7 +97,7 @@ public class GdaxMessageFileReader implements Runnable {
 	/**
 	 * Reads the zip file, sorts entries by hour, and reads the entries
 	 */
-	private void readZipFile(Path zipPath)
+	public void readZipFile(Path zipPath)
 		throws IOException
 	{
 		ZipFile zipFile = new ZipFile(zipPath.toFile());

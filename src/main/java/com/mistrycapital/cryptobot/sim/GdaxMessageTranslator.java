@@ -8,17 +8,17 @@ import org.slf4j.Logger;
 
 import java.util.concurrent.BlockingQueue;
 
-public class GdaxMessageTranslator implements Runnable {
+public class GdaxMessageTranslator implements Runnable, DoneNotificationRecipient {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
 	private final BlockingQueue<String> messageStringQueue;
 	private final BlockingQueue<GdaxMessage> messageQueue;
-	private final GdaxSampleWriter writer;
+	private final DoneNotificationRecipient writer;
 	private final JsonParser jsonParser;
 	private volatile boolean done;
 
 	public GdaxMessageTranslator(BlockingQueue<String> messageStringQueue, BlockingQueue<GdaxMessage> messageQueue,
-		GdaxSampleWriter writer)
+		DoneNotificationRecipient writer)
 	{
 		this.messageStringQueue = messageStringQueue;
 		this.messageQueue = messageQueue;
@@ -30,6 +30,7 @@ public class GdaxMessageTranslator implements Runnable {
 	/**
 	 * Mark that there are no further messages to be read beyond what is in the queue
 	 */
+	@Override
 	public void markDone() {
 		done = true;
 	}

@@ -12,7 +12,7 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.util.concurrent.BlockingQueue;
 
-public class GdaxSampleWriter {
+public class GdaxSampleWriter implements DoneNotificationRecipient {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
 	private final SimTimeKeeper timeKeeper;
@@ -40,6 +40,7 @@ public class GdaxSampleWriter {
 	/**
 	 * Mark that there are no further messages to be read beyond what is in the queue
 	 */
+	@Override
 	public void markDone() {
 		done = true;
 	}
