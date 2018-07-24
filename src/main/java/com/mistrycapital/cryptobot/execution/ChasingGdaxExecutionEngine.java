@@ -102,7 +102,7 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 		this.dbRecorder = dbRecorder;
 		this.twilioSender = twilioSender;
 		this.gdaxClient = gdaxClient;
-		executorService = Executors.newSingleThreadExecutor();
+		executorService = Executors.newFixedThreadPool(2);
 		lockObj = new Object();
 		workingOrders = new ArrayList<>();
 		workingOrdersByClientOid = new HashMap<>();
@@ -161,7 +161,6 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 
 		runInBackground(() -> {
 			dbRecorder.recordPostOnlyAttempt(instruction, clientOid, postedPrice);
-			accountant.refreshPositions(); // note the available balance change
 		});
 
 		CompletableFuture<OrderInfo> orderFuture = postWorkingOrder(workingOrder);
@@ -435,6 +434,8 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 			log.debug("Got RECEIVED message for post order to " + workingOrder.instruction + " client_oid " + clientOid
 				+ " maps to gdax order_id: " + workingOrder.orderId);
 			// No need to save in database here because we keep track of the client oid through fills
+
+			runInBackground(accountant::refreshPositions); // note the available balance change
 		}
 	}
 
