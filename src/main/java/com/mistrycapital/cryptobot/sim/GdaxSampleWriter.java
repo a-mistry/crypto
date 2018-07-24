@@ -24,7 +24,9 @@ public class GdaxSampleWriter {
 	private volatile boolean done;
 	private long nextIntervalMillis;
 
-	public GdaxSampleWriter(SimTimeKeeper timeKeeper, Intervalizer intervalizer, OrderBookManager orderBookManager, DynamicTracker dynamicTracker,		IntervalDataAppender intervalDataAppender, BlockingQueue<GdaxMessage> messageQueue)
+	public GdaxSampleWriter(SimTimeKeeper timeKeeper, Intervalizer intervalizer, OrderBookManager orderBookManager,
+		DynamicTracker dynamicTracker, IntervalDataAppender intervalDataAppender,
+		BlockingQueue<GdaxMessage> messageQueue)
 	{
 		this.timeKeeper = timeKeeper;
 		this.intervalizer = intervalizer;
