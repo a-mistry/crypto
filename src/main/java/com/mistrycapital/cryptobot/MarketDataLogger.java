@@ -23,7 +23,9 @@ import java.util.Properties;
 public class MarketDataLogger {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
-	public static void main(String[] args) throws Exception {
+	public static void main(String[] args)
+		throws Exception
+	{
 		MCProperties properties = new MCProperties();
 		Path dataDir = Paths.get(properties.getProperty("dataDir"));
 		log.debug("Saving message and sample data to " + dataDir);
@@ -34,7 +36,7 @@ public class MarketDataLogger {
 			credentials.load(reader);
 		}
 
-		final String BOOK_MESSAGE_FILE_NAME = properties.getProperty("output.filenameBase.bookMessages","gdax-orders");
+		final String BOOK_MESSAGE_FILE_NAME = properties.getProperty("output.filenameBase.bookMessages", "gdax-orders");
 
 		TimeKeeper timeKeeper = new SystemTimeKeeper();
 		OrderBookManager orderBookManager = new OrderBookManager(timeKeeper);
@@ -48,6 +50,7 @@ public class MarketDataLogger {
 		URI gdaxWebSocketURI = new URI("wss://ws-feed.gdax.com");
 		WebSocketClient socketClient = new WebSocketClient(new SslContextFactory());
 
+		int latencyCount = 0;
 		while(true) {
 			if(!gdaxWebSocket.isConnected()) {
 				socketClient.stop();
@@ -66,6 +69,12 @@ public class MarketDataLogger {
 				}
 			} else {
 				Thread.sleep(1000);
+				// Log latency every minute
+				if(latencyCount > 60) {
+					latencyCount = 0;
+					log.info("Feed latency is " + gdaxWebSocket.getLatencyMicros() / 1000.0 + " ms");
+				}
+				latencyCount++;
 			}
 		}
 	}

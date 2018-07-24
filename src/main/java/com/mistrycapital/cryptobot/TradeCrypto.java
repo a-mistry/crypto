@@ -125,6 +125,7 @@ public class TradeCrypto {
 		t.setDaemon(true);
 		t.start();
 
+		int latencyCount = 0;
 		while(true) {
 			if(!gdaxWebSocket.isConnected()) {
 				socketClient.stop();
@@ -143,6 +144,12 @@ public class TradeCrypto {
 				}
 			} else {
 				Thread.sleep(1000);
+				// Log latency every minute
+				if(latencyCount > 60) {
+					latencyCount = 0;
+					log.info("Feed latency is " + gdaxWebSocket.getLatencyMicros() / 1000.0 + " ms");
+				}
+				latencyCount++;
 			}
 //			// kill connection after 10s to test
 //			Thread.sleep(10000L);

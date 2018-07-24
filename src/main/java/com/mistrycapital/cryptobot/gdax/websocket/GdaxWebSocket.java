@@ -41,6 +41,10 @@ public class GdaxWebSocket extends SubmissionPublisher<GdaxMessage> {
 
 	private Session session;
 	private volatile boolean connected;
+	/** Latency of the websocket feed in microseconds */
+	private long latencyMicros;
+	/** Number of messages since last latency calc */
+	private int latencyCalcCount;
 
 	@SuppressWarnings("unchecked")
 	public GdaxWebSocket(final TimeKeeper timeKeeper, final FileAppender fileAppender) {
@@ -68,6 +72,10 @@ public class GdaxWebSocket extends SubmissionPublisher<GdaxMessage> {
 		if(session != null)
 			session.close();
 		connected = false;
+	}
+
+	public long getLatencyMicros() {
+		return latencyMicros;
 	}
 
 	@OnWebSocketConnect
@@ -115,6 +123,14 @@ public class GdaxWebSocket extends SubmissionPublisher<GdaxMessage> {
 			if(msg == null) {
 				log.debug("Unknown msg: " + msgStr);
 			} else {
+				// We want to measure latency but it's not necessary to check every single time and incur
+				// the method call penalty. Check every 2000 messages, which should amount to every few seconds
+				if(latencyCalcCount > 2000) {
+					latencyCalcCount = 0;
+					latencyMicros = timeKeeper.epochNanos() / 1000L - msg.getTimeMicros();
+				}
+				latencyCalcCount++;
+
 				Product product = msg.getProduct();
 				final int index = product.getIndex();
 				pending[index].add(msg);
