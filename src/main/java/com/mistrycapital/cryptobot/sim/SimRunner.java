@@ -76,6 +76,7 @@ public class SimRunner implements Runnable {
 			log.info("Caching forecasts took " + ((System.nanoTime() - startNanos) / 1000000000.0) + "sec");
 
 			boolean search = simProperties.getBooleanProperty("sim.searchParameters", false);
+			Boolean logDecisions = simProperties.getBooleanProperty("sim.logDecisions");
 			if(search) {
 				simProperties.put("sim.logDecisions", "false");
 				simProperties.put("tactic.buyForecastProportion", "false");
@@ -118,7 +119,7 @@ public class SimRunner implements Runnable {
 						+ " tradeScaleFactor=" + simProperties.getDoubleProperty("tactic.tradeScaleFactor"));
 				}
 			}
-			simProperties.put("sim.logDecisions", "true");
+			simProperties.put("sim.logDecisions", logDecisions.toString());
 			startNanos = System.nanoTime();
 			SimResult result = simulate(consolidatedSnapshots, forecastCache, simProperties);
 			log.info("Simulation treatment ended in " + ((System.nanoTime() - startNanos) / 1000000.0) + "ms");
