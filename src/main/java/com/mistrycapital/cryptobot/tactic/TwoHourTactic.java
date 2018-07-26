@@ -37,10 +37,6 @@ public class TwoHourTactic implements Tactic {
 	private final double[] pctAllocation;
 	/** Buy above this threshold */
 	private final double[] forecastThreshold;
-	/** Are we using the version that buys in proportion to forecast */
-	private final boolean buyForecastProportion;
-	/** Do not buy extra above this threshold */
-	private final double forecastUpperThreshold;
 	/** Do not trade if we are not trading at least a minimum number of dollars */
 	private final double tradeUsdThreshold;
 	/** Scales our trades */
@@ -77,8 +73,6 @@ public class TwoHourTactic implements Tactic {
 		purchasedIndex = 0;
 		pctAllocation = new double[Product.count];
 		final double defaultPctAllocation = properties.getDoubleProperty("tactic.pctAllocation.default");
-		buyForecastProportion = properties.getBooleanProperty("tactic.buyForecastProportion");
-		forecastUpperThreshold = properties.getDoubleProperty("tactic.buyUpperThreshold");
 		tradeUsdThreshold = properties.getDoubleProperty("tactic.tradeUsdThreshold");
 		tradeScaleFactor = properties.getDoubleProperty("tactic.tradeScaleFactor");
 		final double defaultForecastThreshold = properties.getDoubleProperty("tactic.buyThreshold");
@@ -163,25 +157,10 @@ public class TwoHourTactic implements Tactic {
 
 	/** @return Amount we want to go long this period, given the maximum long position and forecast */
 	private double calcPurchase(final double maxLong, final double forecast, final double forecastThreshold) {
-		return buyForecastProportion ? calcPurchaseProportionally(maxLong, forecast, forecastThreshold) :
-			calcPurchaseWithToggle(maxLong, forecast, forecastThreshold);
-	}
-
-	private double calcPurchaseWithToggle(final double maxLong, final double forecast, final double forecastThreshold) {
 		if(Double.isNaN(forecast) || forecast < forecastThreshold)
 			return 0.0;
 
 		return maxLong * Math.min(1.0, tradeScaleFactor / lookback);
-	}
-
-	private double calcPurchaseProportionally(final double maxLong, final double forecast,
-		final double forecastThreshold)
-	{
-		if(Double.isNaN(forecast) || forecast < forecastThreshold)
-			return 0.0;
-
-		return maxLong * Math.min(1.0, tradeScaleFactor / lookback * 1000 *
-			Math.min(forecastUpperThreshold, forecast - forecastThreshold));
 	}
 
 	/** @return Sum of the given array */
