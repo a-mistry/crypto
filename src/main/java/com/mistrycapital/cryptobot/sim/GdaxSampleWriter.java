@@ -83,5 +83,14 @@ public class GdaxSampleWriter implements DoneNotificationRecipient {
 				}
 			}
 		}
+		timeKeeper.advanceTime(nextIntervalMillis * 1000000L);
+		final ConsolidatedSnapshot consolidatedSnapshot =
+			ConsolidatedSnapshot.getSnapshot(orderBookManager, dynamicTracker, timeKeeper);
+		try {
+			intervalDataAppender.recordSnapshot(timeKeeper.epochMs(), consolidatedSnapshot);
+		} catch(IOException e) {
+			log.error("Could not store final snapshot, time=" + timeKeeper.epochNanos() + " " + timeKeeper.iso8601(),
+				e);
+		}
 	}
 }
