@@ -21,6 +21,7 @@ import com.mistrycapital.cryptobot.twilio.TwilioSender;
 import com.mistrycapital.cryptobot.util.MCLoggerFactory;
 import org.slf4j.Logger;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -237,7 +238,8 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 			}
 
 		} catch(ExecutionException | InterruptedException e) {
-			if(e.getCause().getClass().isAssignableFrom(GdaxClient.GdaxException.class)) {
+			Class<?> clazz = e.getCause().getClass();
+			if(clazz.isAssignableFrom(GdaxClient.GdaxException.class) || clazz.isAssignableFrom(IOException.class)) {
 				log.error("Could not post order to " + workingOrder.instruction, e.getCause());
 				removeOrder = true;
 			} else {
