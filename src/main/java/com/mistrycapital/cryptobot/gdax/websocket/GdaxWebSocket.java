@@ -27,7 +27,7 @@ import jdk.incubator.http.HttpRequest;
 import jdk.incubator.http.HttpResponse;
 
 @WebSocket(maxTextMessageSize = 4096 * 1024)
-public class GdaxWebSocket extends SubmissionPublisher<GdaxMessage> {
+public class GdaxWebSocket extends SynchronousPublisher<GdaxMessage> {
 	private static final Logger log = MCLoggerFactory.getLogger();
 
 	private final TimeKeeper timeKeeper;
