@@ -6,9 +6,11 @@ public class SystemTimeKeeper implements TimeKeeper {
 	private final long nanoOffset;
 
 	public SystemTimeKeeper() {
-		final Instant instant = Instant.now();
-		final long startEpochNanos = instant.getEpochSecond()*1000000000L + instant.getNano();
-		nanoOffset = startEpochNanos - System.nanoTime();
+		// need to capture System.nanoTime() right after millisecond switch to be as accurate as we can get
+		long timeMs = System.currentTimeMillis() + 1;
+		while(System.currentTimeMillis() < timeMs)
+			; // wait
+		nanoOffset = timeMs * 1000000L - System.nanoTime();
 	}
 
 	@Override
