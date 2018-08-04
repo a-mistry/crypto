@@ -1,5 +1,8 @@
 package com.mistrycapital.cryptobot.gdax.websocket;
 
+import com.mistrycapital.cryptobot.util.MCLoggerFactory;
+import org.slf4j.Logger;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Flow;
@@ -7,6 +10,8 @@ import java.util.concurrent.Flow.Publisher;
 import java.util.concurrent.Flow.Subscriber;
 
 class SynchronousPublisher<T> implements Publisher<T> {
+	private static final Logger log = MCLoggerFactory.getLogger();
+
 	private final List<Subscriber<? super T>> subscribers = new ArrayList<>();
 
 	@Override
@@ -17,7 +22,14 @@ class SynchronousPublisher<T> implements Publisher<T> {
 
 	void submit(final T message) {
 		for(int i = 0; i < subscribers.size(); i++) {
-			subscribers.get(i).onNext(message);
+			try {
+				subscribers.get(i).onNext(message);
+			} catch(Exception e) {
+				log.error("Error thrown by SynchronousPublisher subscriber", e);
+				try {
+					subscribers.get(i).onError(e);
+				} catch(Exception e2) {}
+			}
 		}
 	}
 
