@@ -15,6 +15,7 @@ public class DynamicTracker implements GdaxMessageProcessor {
 		productTrackers = new ProductTracker[Product.count];
 		for(Product product : Product.FAST_VALUES) {
 			productTrackers[product.getIndex()] = new ProductTracker(
+				product,
 				snapshot == null ? null : snapshot.getProductSnapshot(product)
 			);
 		}

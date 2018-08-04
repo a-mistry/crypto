@@ -1,6 +1,7 @@
 package com.mistrycapital.cryptobot.dynamic;
 
 import com.google.gson.JsonObject;
+import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.gdax.websocket.Done;
 import com.mistrycapital.cryptobot.gdax.websocket.Match;
 import com.mistrycapital.cryptobot.gdax.websocket.Open;
@@ -85,7 +86,7 @@ class ProductTrackerTest {
 
 	@Test
 	void shouldTrackNewOrder() {
-		ProductTracker tracker = new ProductTracker();
+		ProductTracker tracker = new ProductTracker(Product.BTC_USD);
 
 		// first do new/canceled orders
 		tracker.process(openBid);

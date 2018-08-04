@@ -240,7 +240,8 @@ public class ChasingGdaxExecutionEngine implements ExecutionEngine, GdaxMessageP
 		} catch(ExecutionException | InterruptedException e) {
 			Class<?> clazz = e.getCause().getClass();
 			if(clazz.isAssignableFrom(GdaxClient.GdaxException.class) || clazz.isAssignableFrom(IOException.class)) {
-				log.error("Could not post order to " + workingOrder.instruction, e.getCause());
+				log.error("Could not post order to " + workingOrder.instruction, e);
+				log.error("Caused by", e.getCause());
 				removeOrder = true;
 			} else {
 				throw new RuntimeException(e);

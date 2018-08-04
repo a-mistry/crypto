@@ -2,10 +2,16 @@ package com.mistrycapital.cryptobot.dynamic;
 
 import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
 import com.mistrycapital.cryptobot.gdax.common.OrderSide;
+import com.mistrycapital.cryptobot.gdax.common.Product;
 import com.mistrycapital.cryptobot.gdax.common.Reason;
 import com.mistrycapital.cryptobot.gdax.websocket.*;
+import com.mistrycapital.cryptobot.util.MCLoggerFactory;
+import org.slf4j.Logger;
 
 class ProductTracker implements GdaxMessageProcessor {
+	private static final Logger log = MCLoggerFactory.getLogger();
+
+	private final Product product;
 	/** Current interval data */
 	private IntervalData curInterval;
 	// extra values we need to keep track of
@@ -14,14 +20,15 @@ class ProductTracker implements GdaxMessageProcessor {
 	/** Volume times price, used for VWAP calculation */
 	private double volumeTimesPrice;
 
-	ProductTracker() {
+	ProductTracker(Product product) {
+		this.product = product;
 		curInterval = new IntervalData();
 		prevLastPrice = Double.NaN;
 		volumeTimesPrice = 0.0;
 	}
 
-	ProductTracker(ProductSnapshot lastSnapshot) {
-		this();
+	ProductTracker(Product product, ProductSnapshot lastSnapshot) {
+		this(product);
 		if(lastSnapshot != null) prevLastPrice = lastSnapshot.lastPrice;
 	}
 
@@ -68,6 +75,9 @@ class ProductTracker implements GdaxMessageProcessor {
 			curInterval.ret = curInterval.lastPrice / prevLastPrice - 1.0;
 		curInterval.vwap = curInterval.volume > 0.0 ? volumeTimesPrice / curInterval.volume : Double.NaN;
 		IntervalData retValue = curInterval;
+
+		if(Double.isNaN(retValue.lastPrice))
+			log.debug("NaN last price in product tracker for " + product);
 
 		// set up next interval
 		prevLastPrice = curInterval.lastPrice;
