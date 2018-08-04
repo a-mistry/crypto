@@ -136,4 +136,21 @@ class OrderLineList extends OrderLine {
 			next.remove();
 		}
 	}
+
+	/**
+	 * Searches all order lines for any with no orders and removes them. This should be used sparingly for cleanup
+	 * purposes if at all since it is a heavyweight O(n) operation
+	 */
+	public void removeEmptyLines() {
+		OrderLine cur = getNext();
+		while(cur != null) {
+			if(cur.getOrders().isEmpty()) {
+				OrderLine toRemove = cur;
+				cur = cur.getNext();
+				toRemove.remove();
+			} else {
+				cur = cur.getNext();
+			}
+		}
+	}
 }

@@ -284,8 +284,10 @@ public class OrderBook implements BBOProvider {
 		order.reset(orderId, price, size, timeMicros, side);
 
 		// if we see locked/crossed markets, remove resting orders as they are likely invalid
-		boolean bidCrossed = order.getSide() == OrderSide.BUY && order.getPrice() >= asks.getFirstPrice();
-		boolean askCrossed = order.getSide() == OrderSide.SELL && order.getPrice() <= bids.getFirstPrice();
+		boolean bidCrossed =
+			order.getSide() == OrderSide.BUY && order.getPrice() > asks.getFirstPrice() + PRICE_EPSILON;
+		boolean askCrossed =
+			order.getSide() == OrderSide.SELL && order.getPrice() < bids.getFirstPrice() - PRICE_EPSILON;
 		if(bidCrossed || askCrossed) removeLockedCrossed(order);
 
 		// now add to map and to order line
@@ -301,7 +303,8 @@ public class OrderBook implements BBOProvider {
 	private void removeLockedCrossed(final Order order) {
 		log.debug("Removing locked/crossed orders on " + product + " at " + timeKeeper.iso8601() + " " + order.getId()
 			+ " " + order.getSide() + " " + order.getPrice()
-			+ " bidSize=" + bids.getFirstSize() + " askSize=" + asks.getFirstSize());
+			+ " TOB " + bids.getFirstPrice() + "(" + bids.getFirstSize()
+			+ ")-" + asks.getFirstPrice() + "(" + asks.getFirstSize() + ")");
 
 		int levelsCleared = 0;
 		boolean bidCrossed;
@@ -323,9 +326,13 @@ public class OrderBook implements BBOProvider {
 				break; // in case of bug, don't loop forever
 			}
 
-			bidCrossed = order.getSide() == OrderSide.BUY && order.getPrice() >= asks.getFirstPrice();
-			askCrossed = order.getSide() == OrderSide.SELL && order.getPrice() <= bids.getFirstPrice();
+			bidCrossed = order.getSide() == OrderSide.BUY && order.getPrice() > asks.getFirstPrice() + PRICE_EPSILON;
+			askCrossed = order.getSide() == OrderSide.SELL && order.getPrice() < bids.getFirstPrice() - PRICE_EPSILON;
 		} while(bidCrossed || askCrossed);
+
+		if(levelsCleared > 0) {
+			log.error("Cleared " + levelsCleared + " levels in locked/crossed order removal");
+		}
 	}
 
 	/**
@@ -405,18 +412,24 @@ public class OrderBook implements BBOProvider {
 		Map<Double,OrderLine> orderLineMap = new HashMap<>(1000);
 		for(final Book.Order bookOrder : book.getBids()) {
 			OrderLine orderLine =
-				orderLineMap.computeIfAbsent(bookOrder.price, key -> bids.findOrCreate(bookOrder.price));
+				orderLineMap.computeIfAbsent(bookOrder.price, bids::findOrCreate);
 			insertNonSynchronized(bookOrder.orderId, bookOrder.price, bookOrder.size, book.getTimeMicros(),
 				OrderSide.BUY, orderLine);
 		}
 		orderLineMap.clear();
 		for(Book.Order bookOrder : book.getAsks()) {
 			OrderLine orderLine =
-				orderLineMap.computeIfAbsent(bookOrder.price, key -> asks.findOrCreate(bookOrder.price));
+				orderLineMap.computeIfAbsent(bookOrder.price, asks::findOrCreate);
 			insertNonSynchronized(bookOrder.orderId, bookOrder.price, bookOrder.size, book.getTimeMicros(),
 				OrderSide.SELL, orderLine);
 		}
 		orderLineMap = null; // mark for GC
+
+		// We may have tried to add orders that were in the previously removed set and hence were not actually added
+		// This creates the possibility of having lines with no orders
+		// Remove these lines here to avoid locked/crossed markets
+		bids.removeEmptyLines();
+		asks.removeEmptyLines();
 	}
 
 	@Override
