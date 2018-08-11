@@ -289,7 +289,7 @@ class DBRecorderTest {
 	{
 		UUID clientOid = UUID.randomUUID();
 		TradeInstruction instruction =
-			new TradeInstruction(Product.ETH_USD, 3.14, OrderSide.BUY, Aggression.POST_ONLY, 0.005);
+			new TradeInstruction(Product.ETH_USD, 3.14, OrderSide.BUY, Aggression.POST_ONLY, Double.NaN);
 		dbRecorder.recordPostOnlyAttempt(instruction, clientOid, 50.0);
 
 		UUID orderId = UUID.randomUUID();
@@ -340,7 +340,8 @@ class DBRecorderTest {
 		assertEquals("BUY", results.getString("side"));
 		assertEquals(3.14, results.getDouble("amount"), EPSILON);
 		assertEquals(50.0, results.getDouble("price"), EPSILON);
-		assertEquals(0.005, results.getDouble("forecast"), EPSILON);
+		results.getDouble("forecast");
+		assertTrue(results.wasNull());
 		assertEquals(2.0, results.getDouble("filled_amount"), EPSILON);
 		assertEquals(50.0, results.getDouble("filled_price"), EPSILON);
 		assertEquals(0.1, results.getDouble("slippage"), EPSILON);

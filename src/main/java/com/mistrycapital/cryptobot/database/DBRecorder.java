@@ -211,7 +211,11 @@ public class DBRecorder {
 			statement.setString(4, instruction.getOrderSide().toString());
 			statement.setDouble(5, instruction.getAmount());
 			statement.setDouble(6, price);
-			statement.setDouble(7, instruction.getForecast());
+			final double forecast = instruction.getForecast();
+			if(Double.isNaN(forecast))
+				statement.setNull(7, Types.DOUBLE);
+			else
+				statement.setDouble(7, instruction.getForecast());
 			statement.executeUpdate();
 			statement.close();
 			con.commit();
