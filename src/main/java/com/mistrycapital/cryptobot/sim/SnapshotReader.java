@@ -40,6 +40,7 @@ public class SnapshotReader {
 
 	/**
 	 * Reads given sample files in order and creates a list of snapshots
+	 *
 	 * @return Snapshots read from the files in order
 	 */
 	public static List<ConsolidatedSnapshot> readSnapshots(Collection<Path> sampleFiles)
@@ -48,26 +49,31 @@ public class SnapshotReader {
 		List<ConsolidatedSnapshot> consolidatedSnapshots = new ArrayList<>(365 * 24 * 12); // 1 year
 		ProductSnapshot[] productSnapshots = new ProductSnapshot[Product.count];
 		SimTimeKeeper timeKeeper = new SimTimeKeeper();
+		long prevTime = 0;
 
 		// TODO: Improve performance by using a faster CSV reader
 		for(Path sampleFile : sampleFiles) {
 			try(
 				Reader in = Files.newBufferedReader(sampleFile);
-				CSVParser parser = CSVFormat.EXCEL.withFirstRecordAsHeader().parse(in);
-			) {
+				CSVParser parser = CSVFormat.EXCEL.withFirstRecordAsHeader().parse(in)
+			)
+			{
 				for(CSVRecord record : parser) {
 					long timeNanos = Long.parseLong(record.get("unixTimestamp")) * 1000000000L;
 					timeKeeper.advanceTime(timeNanos);
-					log.debug("Restoring snapshot from " + timeKeeper.iso8601());
 					ProductSnapshot productSnapshot = new ProductSnapshot(record);
 					productSnapshots[productSnapshot.product.getIndex()] = productSnapshot;
 
-					if(isFull(productSnapshots)) {
-						ConsolidatedSnapshot consolidatedSnapshot =
-							new ConsolidatedSnapshot(productSnapshots, timeNanos);
-						consolidatedSnapshots.add(consolidatedSnapshot);
-						productSnapshots = new ProductSnapshot[Product.count];
+					if(timeNanos > prevTime) {
+						log.debug("Restoring snapshot from " + timeKeeper.iso8601());
+						if(prevTime > 0) {
+							ConsolidatedSnapshot consolidatedSnapshot =
+								new ConsolidatedSnapshot(productSnapshots, timeNanos);
+							consolidatedSnapshots.add(consolidatedSnapshot);
+							productSnapshots = new ProductSnapshot[Product.count];
+						}
 					}
+					prevTime = timeNanos;
 				}
 			}
 		}

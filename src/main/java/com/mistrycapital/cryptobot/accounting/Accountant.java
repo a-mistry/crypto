@@ -1,6 +1,7 @@
 package com.mistrycapital.cryptobot.accounting;
 
 import com.mistrycapital.cryptobot.aggregatedata.ConsolidatedSnapshot;
+import com.mistrycapital.cryptobot.aggregatedata.ProductSnapshot;
 import com.mistrycapital.cryptobot.gdax.common.Currency;
 import com.mistrycapital.cryptobot.gdax.common.Product;
 
@@ -46,7 +47,10 @@ public class Accountant {
 		double value = balance[Currency.USD.getIndex()];
 		for(Product product : Product.FAST_VALUES) {
 			Currency crypto = product.getCryptoCurrency();
-			final double midPrice = snapshot.getProductSnapshot(product).midPrice;
+			final ProductSnapshot productSnapshot = snapshot.getProductSnapshot(product);
+			// If book data is not available, assume any position is worth zero conservatively
+			final double midPrice = productSnapshot == null || Double.isNaN(productSnapshot.midPrice)
+				? 0.0 : productSnapshot.midPrice;
 			value += balance[crypto.getIndex()] * midPrice;
 		}
 		return value;

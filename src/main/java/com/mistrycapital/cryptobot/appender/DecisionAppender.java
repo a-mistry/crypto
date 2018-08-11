@@ -55,7 +55,8 @@ public class DecisionAppender extends CommonFileAppender {
 		builder.append(accountant.getAvailable(Currency.USD));
 		builder.append(',');
 		for(Product product : Product.FAST_VALUES) {
-			builder.append(snapshot.getProductSnapshot(product).midPrice);
+			final var productSnapshot = snapshot.getProductSnapshot(product);
+			builder.append(productSnapshot == null ? Double.NaN : productSnapshot.midPrice);
 			builder.append(',');
 			builder.append(forecasts[product.getIndex()]);
 			builder.append(',');

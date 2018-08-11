@@ -209,7 +209,8 @@ public class Alta implements ForecastCalculator {
 		// lag BTC return
 		final ConsolidatedSnapshot latest = consolidatedHistory.latest();
 		final long latestTimeNanos = latest.getTimeNanos();
-		final double btcLastPrice = latest.getProductSnapshot(Product.BTC_USD).lastPrice;
+		final ProductSnapshot latestBtc = latest.getProductSnapshot(Product.BTC_USD);
+		final double btcLastPrice = latestBtc == null ? Double.NaN : latestBtc.lastPrice;
 
 		for(int i = 1; i <= 12; i++)
 			if(calcAllSignals || signalsToUseSet.contains("btcRet" + i)) {
@@ -217,7 +218,8 @@ public class Alta implements ForecastCalculator {
 				for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedHistory.inOrder((i + 1) * 3600)) {
 					if(consolidatedSnapshot.getTimeNanos() > latestTimeNanos - i * 3600000000000L)
 						break;
-					btcLagPrice = consolidatedSnapshot.getProductSnapshot(Product.BTC_USD).lastPrice;
+					final ProductSnapshot btc = consolidatedSnapshot.getProductSnapshot(Product.BTC_USD);
+					btcLagPrice = btc == null ? Double.NaN : btc.lastPrice;
 				}
 				variableMap.put("btcRet" + i, btcLagPrice / btcLastPrice - 1);
 			}
@@ -231,6 +233,7 @@ public class Alta implements ForecastCalculator {
 				int intervalsToMax = 0;
 				for(ConsolidatedSnapshot consolidatedSnapshot : consolidatedHistory.inOrder(i * 3600)) {
 					ProductSnapshot snapshot = consolidatedSnapshot.getProductSnapshot(product);
+					if(snapshot == null) continue;
 
 					if(snapshot.vwap < minPrice) {
 						minPrice = snapshot.vwap;
@@ -272,139 +275,6 @@ public class Alta implements ForecastCalculator {
 		return fcVal;
 	}
 
-	private class SnapshotCalc {
-		double[][] values;
-
-		SnapshotCalc(ConsolidatedSnapshot snapshot) {
-			values = new double[Product.count][signalCalcs.size()];
-
-			for(Product product : Product.FAST_VALUES) {
-				double[] productValues = values[product.getIndex()];
-				ProductSnapshot productSnapshot = snapshot.getProductSnapshot(product);
-				for(int i = 0; i < signalCalcs.size(); i++) {
-					productValues[i] = signalCalcs.get(i).calculate.applyAsDouble(productSnapshot);
-				}
-			}
-		}
-	}
-
-	/**
-	 * Contains the consolidated snapshot history we care about, along with all the product calculations for
-	 * each datapoint. Sorted by increasing time so it can be iterated to calculate MAs and such
-	 */
-	private SortedMap<ConsolidatedSnapshot,SnapshotCalc> snapshotCalcMap =
-		new TreeMap<>(Comparator.comparingLong(ConsolidatedSnapshot::getTimeNanos));
-
-	public Map<String,Double> getInputVariablesAttempt2(final ConsolidatedHistory consolidatedHistory,
-		final Product product)
-	{
-		final int productIndex = product.getIndex();
-		final long latestTimeNanos = consolidatedHistory.latest().getTimeNanos();
-
-		// Add any new snapshots
-		Set<ConsolidatedSnapshot> useOnlySet = new HashSet<>();
-		for(ConsolidatedSnapshot snapshot : consolidatedHistory.inOrder(13 * 3600)) {
-			useOnlySet.add(snapshot);
-			snapshotCalcMap.computeIfAbsent(snapshot, SnapshotCalc::new);
-		}
-
-		// Remove any snapshots not in history
-		snapshotCalcMap.entrySet().removeIf(entry -> !useOnlySet.contains(entry.getKey()));
-
-		// Initialize signals
-		for(SignalCalculation signalCalc : signalCalcs) {
-			signalCalc.numDatapoints = 0;
-			signalCalc.multiplier = 0.0;
-			signalCalc.snapshot = null;
-			signalCalc.value = Double.NaN;
-		}
-
-		// In first pass, get number of datapoints for MAs and calculate multipliers
-		for(final var entry : snapshotCalcMap.entrySet()) {
-			final var snapshot = entry.getKey();
-			final var snapshotTimeNanos = snapshot.getTimeNanos();
-
-			for(int i = 0; i < signalCalcs.size(); i++) {
-				final var signalCalc = signalCalcs.get(i);
-				final var timeCompare = Long.compare(
-					snapshotTimeNanos,
-					latestTimeNanos - signalCalc.lookbackHours * 3600000000000L
-				);
-				if(timeCompare >= 0)
-					signalCalc.numDatapoints++;
-			}
-		}
-		for(int i = 0; i < signalCalcs.size(); i++) {
-			final var signalCalc = signalCalcs.get(i);
-			switch(signalCalc.signalType) {
-				case SMA:
-					signalCalc.multiplier = 1.0 / signalCalc.numDatapoints;
-					break;
-				case EMA:
-					signalCalc.multiplier = 2.0 / (signalCalc.numDatapoints + 1);
-					break;
-			}
-		}
-
-		// In second pass, calculate values
-		for(final var entry : snapshotCalcMap.entrySet()) {
-			final var snapshot = entry.getKey();
-			final var snapshotTimeNanos = snapshot.getTimeNanos();
-			final var calcValues = entry.getValue().values[productIndex];
-
-			for(int i = 0; i < signalCalcs.size(); i++) {
-				final var curValue = calcValues[i];
-				if(Double.isNaN(curValue)) continue;
-
-				final var signalCalc = signalCalcs.get(i);
-				final var timeCompare = Long.compare(
-					snapshotTimeNanos,
-					latestTimeNanos - signalCalc.lookbackHours * 3600000000000L
-				);
-				switch(signalCalc.signalType) {
-					case SMA:
-						if(timeCompare >= 0) {
-							if(Double.isNaN(signalCalc.value)) signalCalc.value = 0.0;
-							signalCalc.value += signalCalc.multiplier * curValue;
-						}
-						break;
-
-					case EMA:
-						if(timeCompare >= 0) {
-							if(Double.isNaN(signalCalc.value)) signalCalc.value = curValue;
-							signalCalc.value =
-								(1 - signalCalc.multiplier) * signalCalc.value + signalCalc.multiplier * curValue;
-						}
-						break;
-
-					case SUM:
-						if(timeCompare >= 0) {
-							if(Double.isNaN(signalCalc.value)) signalCalc.value = 0.0;
-							signalCalc.value += curValue;
-						}
-
-					case STATIC:
-						if(timeCompare <= 0) {
-							signalCalc.value = curValue;
-						}
-				}
-			}
-		}
-
-		// put in map
-		for(final SignalCalculation signalCalc : signalCalcs) {
-			variableMap.put(signalCalc.name, signalCalc.value);
-		}
-
-		// compute any signals derived from earlier calcs
-		computeDerivedCalcs();
-
-		// other calcs that don't fit the framework
-		computeExtraCalcs(consolidatedHistory, product);
-
-		return variableMap;
-	}
-
 	@Override
 	public Map<String,Double> getInputVariables(final ConsolidatedHistory consolidatedHistory,
 		final Product product)
@@ -421,6 +291,7 @@ public class Alta implements ForecastCalculator {
 		// in first pass, get number of datapoints and snapshots
 		for(final ConsolidatedSnapshot consolidatedSnapshot : consolidatedHistory.inOrder(maxLookbackHours * 3600)) {
 			final ProductSnapshot snapshot = consolidatedSnapshot.getProductSnapshot(product);
+			if(snapshot == null) continue;
 
 			for(final SignalCalculation signalCalc : signalCalcs) {
 				final var timeCompare = Long.compare(
@@ -467,6 +338,7 @@ public class Alta implements ForecastCalculator {
 		// calc MAs
 		for(final ConsolidatedSnapshot consolidatedSnapshot : consolidatedHistory.inOrder(maxLookbackHours * 3600)) {
 			final ProductSnapshot snapshot = consolidatedSnapshot.getProductSnapshot(product);
+			if(snapshot == null) continue;
 
 			for(final SignalCalculation signalCalc : signalCalcs) {
 				if(consolidatedSnapshot.getTimeNanos() < latestTimeNanos - signalCalc.lookbackHours * 3600000000000L)

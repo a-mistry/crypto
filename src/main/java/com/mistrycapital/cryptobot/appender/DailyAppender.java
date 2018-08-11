@@ -69,7 +69,8 @@ public class DailyAppender extends CommonFileAppender {
 		for(Product product : Product.FAST_VALUES) {
 			builder.append(accountant.getAvailable(product.getCryptoCurrency()));
 			builder.append(',');
-			builder.append(snapshot.getProductSnapshot(product).midPrice);
+			final var productSnapshot = snapshot.getProductSnapshot(product);
+			builder.append(productSnapshot == null ? Double.NaN : productSnapshot.midPrice);
 			builder.append(',');
 		}
 		builder.append(dailyTradeCount);

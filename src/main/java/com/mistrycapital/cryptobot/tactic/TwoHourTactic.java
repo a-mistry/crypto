@@ -95,7 +95,9 @@ public class TwoHourTactic implements Tactic {
 		List<TradeInstruction> trades = null;
 		for(Product product : Product.FAST_VALUES) {
 			final var productIndex = product.getIndex();
-			final var askPrice = snapshot.getProductSnapshot(product).askPrice;
+			final var productSnapshot = snapshot.getProductSnapshot(product);
+			if(productSnapshot == null) continue; // nothing to do if we have no book data
+			final var askPrice = productSnapshot.askPrice;
 
 			purgeOlderThanOneHour();
 
