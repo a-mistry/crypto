@@ -7,7 +7,8 @@ public enum Currency {
 	BCH(3,true),
 	BTC(4,true),
 	ETH(5,true),
-	LTC(6,true);
+	LTC(6,true),
+	ETC(7,false); // TODO: Set true when we trade ETC
 
 	private final int index;
 	private final boolean isCrypto;
