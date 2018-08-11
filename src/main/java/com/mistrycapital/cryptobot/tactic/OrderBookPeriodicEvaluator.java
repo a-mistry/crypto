@@ -67,7 +67,6 @@ public class OrderBookPeriodicEvaluator implements Runnable {
 				// evaluate if needed
 				long remainingMs = nextIntervalMillis - timeKeeper.epochMs();
 				if(remainingMs <= 0) {
-					log.trace("snapshot");
 					if(recordData())
 						tradeEvaluator.evaluate();
 					final long timeMs = timeKeeper.epochMs();
@@ -97,11 +96,12 @@ public class OrderBookPeriodicEvaluator implements Runnable {
 				} else {
 					sleepMs = remainingMs;
 				}
-				log.trace("Sleeping for " + sleepMs + "ms");
 				Thread.sleep(sleepMs);
 
 			} catch(InterruptedException e) {
 				log.error("Sampling/trading thread interrupted", e);
+			} catch(Exception e) {
+				log.error("Sampling/trading thread error", e);
 			}
 		}
 	}
