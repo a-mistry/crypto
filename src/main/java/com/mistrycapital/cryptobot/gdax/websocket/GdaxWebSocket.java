@@ -1,30 +1,27 @@
 package com.mistrycapital.cryptobot.gdax.websocket;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.mistrycapital.cryptobot.appender.FileAppender;
+import com.mistrycapital.cryptobot.gdax.common.Product;
+import com.mistrycapital.cryptobot.gdax.websocket.GdaxMessage.Type;
+import com.mistrycapital.cryptobot.time.TimeKeeper;
+import com.mistrycapital.cryptobot.util.MCLoggerFactory;
+import jdk.incubator.http.HttpClient;
+import jdk.incubator.http.HttpRequest;
+import jdk.incubator.http.HttpResponse;
+import org.eclipse.jetty.websocket.api.Session;
+import org.eclipse.jetty.websocket.api.annotations.*;
+import org.slf4j.Logger;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayDeque;
 import java.util.Queue;
-import java.util.concurrent.SubmissionPublisher;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-
-import com.mistrycapital.cryptobot.gdax.common.Product;
-import org.eclipse.jetty.websocket.api.Session;
-import org.eclipse.jetty.websocket.api.annotations.*;
-import org.slf4j.Logger;
-
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import com.mistrycapital.cryptobot.appender.FileAppender;
-import com.mistrycapital.cryptobot.gdax.websocket.GdaxMessage.Type;
-import com.mistrycapital.cryptobot.time.TimeKeeper;
-import com.mistrycapital.cryptobot.util.MCLoggerFactory;
-
-import jdk.incubator.http.HttpClient;
-import jdk.incubator.http.HttpRequest;
-import jdk.incubator.http.HttpResponse;
 
 @WebSocket(maxTextMessageSize = 4096 * 1024)
 public class GdaxWebSocket extends SynchronousPublisher<GdaxMessage> {
@@ -41,8 +38,8 @@ public class GdaxWebSocket extends SynchronousPublisher<GdaxMessage> {
 
 	private Session session;
 	private volatile boolean connected;
-	/** Latency of the websocket feed in microseconds */
-	private long latencyMicros;
+	/** Latency of the websocket feed in milliseconds */
+	private long latencyMillis;
 	/** Number of messages since last latency calc */
 	private int latencyCalcCount;
 
@@ -57,7 +54,7 @@ public class GdaxWebSocket extends SynchronousPublisher<GdaxMessage> {
 		sequence = new AtomicLong[Product.count];
 		for(Product product : Product.FAST_VALUES) {
 			int index = product.getIndex();
-			pending[index] = new ArrayDeque<GdaxMessage>(1000);
+			pending[index] = new ArrayDeque<>(1000);
 			building[index] = new AtomicBoolean(false);
 			sequence[index] = new AtomicLong(0L);
 		}
@@ -74,8 +71,8 @@ public class GdaxWebSocket extends SynchronousPublisher<GdaxMessage> {
 		connected = false;
 	}
 
-	public long getLatencyMicros() {
-		return latencyMicros;
+	public long getLatencyMillis() {
+		return latencyMillis;
 	}
 
 	@OnWebSocketConnect
@@ -127,7 +124,7 @@ public class GdaxWebSocket extends SynchronousPublisher<GdaxMessage> {
 				// the method call penalty. Check every 2000 messages, which should amount to every few seconds
 				if(latencyCalcCount > 2000) {
 					latencyCalcCount = 0;
-					latencyMicros = timeKeeper.epochNanos() / 1000L - msg.getTimeMicros();
+					latencyMillis = timeKeeper.epochMs() - msg.getTimeMicros() / 1000L;
 				}
 				latencyCalcCount++;
 

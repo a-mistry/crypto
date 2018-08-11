@@ -1,6 +1,7 @@
 package com.mistrycapital.cryptobot;
 
-import com.mistrycapital.cryptobot.appender.*;
+import com.mistrycapital.cryptobot.appender.FileAppender;
+import com.mistrycapital.cryptobot.appender.GdaxMessageAppender;
 import com.mistrycapital.cryptobot.book.OrderBookManager;
 import com.mistrycapital.cryptobot.gdax.websocket.GdaxWebSocket;
 import com.mistrycapital.cryptobot.time.SystemTimeKeeper;
@@ -72,7 +73,7 @@ public class MarketDataLogger {
 				// Log latency every minute
 				if(latencyCount > 60) {
 					latencyCount = 0;
-					log.info("Feed latency is " + gdaxWebSocket.getLatencyMicros() / 1000.0 + " ms");
+					log.info("Feed latency is " + gdaxWebSocket.getLatencyMillis() + " ms");
 				}
 				latencyCount++;
 			}

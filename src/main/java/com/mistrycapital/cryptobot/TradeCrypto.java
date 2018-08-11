@@ -147,7 +147,7 @@ public class TradeCrypto {
 				// Log latency every minute
 				if(latencyCount > 60) {
 					latencyCount = 0;
-					log.info("Feed latency is " + gdaxWebSocket.getLatencyMicros() / 1000.0 + " ms");
+					log.info("Feed latency is " + gdaxWebSocket.getLatencyMillis() + " ms");
 				}
 				latencyCount++;
 			}
