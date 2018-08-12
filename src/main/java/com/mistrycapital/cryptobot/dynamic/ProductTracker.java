@@ -76,7 +76,8 @@ class ProductTracker implements GdaxMessageProcessor {
 		curInterval.vwap = curInterval.volume > 0.0 ? volumeTimesPrice / curInterval.volume : Double.NaN;
 		IntervalData retValue = curInterval;
 
-		if(Double.isNaN(retValue.lastPrice))
+		// TODO: Remove check for ETC when we start trading it
+		if(product != Product.ETC_USD && Double.isNaN(retValue.lastPrice))
 			log.debug("NaN last price in product tracker for " + product);
 
 		// set up next interval
