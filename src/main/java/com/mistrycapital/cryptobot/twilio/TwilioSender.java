@@ -45,6 +45,11 @@ public class TwilioSender {
 	}
 
 	public void sendMessage(String msg) {
+		// stop sending texts
+//		sendMessageActual(msg);
+	}
+
+	public void sendMessageActual(String msg) {
 		final String to = "+19144660063";
 		final String from = "+16469923687";
 		final String bodyString = "From=" + URLEncoder.encode(from, StandardCharsets.UTF_8)
