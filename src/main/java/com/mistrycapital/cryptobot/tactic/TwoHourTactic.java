@@ -221,7 +221,8 @@ public class TwoHourTactic implements Tactic {
 		final var totalPositionUsd = accountant.getPositionValueUsd(snapshot);
 		for(Product product : Product.FAST_VALUES) {
 			final var productIndex = product.getIndex();
-			final var askPrice = snapshot.getProductSnapshot(product).askPrice;
+			final var productSnapshot = snapshot.getProductSnapshot(product);
+			final var askPrice = productSnapshot == null ? 0 : productSnapshot.askPrice;
 			final var maxLong = totalPositionUsd * pctAllocation[productIndex] / askPrice;
 			purchased[productIndex][purchasedIndex] =
 				calcPurchase(maxLong, forecasts[productIndex], forecastThreshold[productIndex]);
