@@ -55,7 +55,10 @@ public class TradeRiskValidator {
 		return instructions;
 	}
 
-	/** Validate that we are placing no more than the limit of trades in 24 hours */
+	/**
+	 * Validate that we are placing no more than the limit of trades in 24 hours. Allow selling even if limit
+	 * hit but no further buying
+	 */
 	List<TradeInstruction> validateTradeCount(List<TradeInstruction> instructions) {
 		long oneDayAgoTimeInNanos = timeKeeper.epochNanos() - 24 * 60 * 60 * 1000000000L;
 		while(!lastDayTradeTimesInNanos.isEmpty() && lastDayTradeTimesInNanos.peek() < oneDayAgoTimeInNanos)
@@ -63,7 +66,7 @@ public class TradeRiskValidator {
 
 		List<TradeInstruction> validated = new ArrayList<>(instructions.size());
 		for(TradeInstruction instruction : instructions) {
-			if(lastDayTradeTimesInNanos.size() >= max24HourTrades) {
+			if(instruction.getOrderSide() == OrderSide.BUY && lastDayTradeTimesInNanos.size() >= max24HourTrades) {
 				log.debug("Skipping trade " + instruction + " because max trade count hit");
 				continue; // trade count limit
 			}
